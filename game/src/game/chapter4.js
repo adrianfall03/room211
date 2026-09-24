@@ -52,7 +52,7 @@ export const CH4 = {
     const R = g.refs, S = g.S;
     ensureToonStyle(g.ch.root, 'anime');
     // 动画里的黑头发带一点蓝紫色的光泽，不然背光时是一整块黑
-    g.ch.root.traverse((o) => { if (o.isMesh && o.userData.origMat === g.ch.mats.hairMat && o.material.isMeshToonMaterial) o.material.color.set('#3d3550'); });
+    g.ch.root.traverse((o) => { if (o.isMesh && o.userData.origMat === g.ch.mats.hairMat && o.material.isMeshToonMaterial) o.material.color.set('#2b2636'); });
     g.ctrl.float = 1; g.ctrl.floatTarget = 0.35;
     g.scene.fog = null;
     g.lightMode = 'game';
@@ -109,7 +109,7 @@ export const CH4 = {
     g.after(5.0, () => {
       const rp = R.robot.root.position;
       g._cutPose = { lookYaw: 0.9, lookPitch: 0.35 };
-      g._cineTo(V(0.55, 2.0, 3.1), rp.clone(), 1.6);
+      g._cineTo(rp.clone().add(V(0.5, -0.12, 0.75)), rp.clone(), 1.6);
       R.robot.emote.show('!', 1.4); g.audio.robotBeep(3);
     });
     g.after(5.8, () => g.ui.subtitle('警……警告……陀螺仪……失、失、失控……', 2.4, '？？？（机器人）'));
@@ -191,6 +191,16 @@ export const CH4 = {
     g.refs.robot.emote.show('!', 1.5);
     for (const s of g.refs.sleepers) s.emote.show('!', 1.2, 0.24);
     g.after(1.2, () => g.ui.subtitle('哇啊啊啊——！！', 1.6, g.S.name));
+  },
+  // 动画里的"眼缘"：找到一位密码时，屏幕上"啪"地弹出一格漫画分镜
+  eyecatch(g, icon, digit, text = 'GET!') {
+    const el = document.createElement('div');
+    el.className = 'eyecatch';
+    el.innerHTML = `<div class="ec-burst"></div><div class="ec-ic">${icon}</div><div class="ec-d">${digit}</div><div class="ec-get">${text}</div>`;
+    document.body.appendChild(el);
+    g.audio.sparkle();
+    setTimeout(() => el.classList.add('out'), 1500);
+    setTimeout(() => el.remove(), 2100);
   },
   speedLines(g, dur = 1) {
     const G = g.gfx.grade;
@@ -365,7 +375,7 @@ export const CH4 = {
     g.after(6.8, () => {
       rb.mode = 'talk'; rb.talkT = 3.6;
       g.ui.subtitle(`作为报答——气闸授权码🤖那一位是 ${S.digits[0]}！`, 3.6, '小圆（机器人）');
-      g.after(0.4, () => g.foundDigit(0, '重启之后的机器人小圆'));
+      g.after(0.4, () => { g.foundDigit(0, '重启之后的机器人小圆'); this.eyecatch(g, '🤖', S.digits[0]); });
     });
     g.after(10.6, () => {
       rb.state = 'follow'; rb.talkT = 3.6;
@@ -404,7 +414,7 @@ export const CH4 = {
     const S = g.S, [A, B] = S.mates;
     const node = g.ui.doc({ title: '防水便签', html: `<div style="font-size:18px;line-height:1.8">气闸授权码<br><b style="font-size:26px">💧 = ${S.digits[1]}</b><br><span style="color:#888">——${B}（泡在水球里，谁也找不到 😎）</span></div>`, variant: 'note' });
     g.openModal(node);
-    if (!S.found[1]) g.after(0.3, () => g.foundDigit(1, `${B}泡在水球里的纸条`));
+    if (!S.found[1]) g.after(0.3, () => { g.foundDigit(1, `${B}泡在水球里的纸条`); this.eyecatch(g, '💧', S.digits[1]); });
   },
 
   // ---------- 🌍 ----------
@@ -446,6 +456,7 @@ export const CH4 = {
       g.audio.sparkle(); g._shake(0.08);
       g.say(`地球"关灯"了……城市的灯光拼出了一个数字：${S.digits[2]}？！`, 3.6);
       g.foundDigit(2, '地球夜景里的城市灯光');
+      this.eyecatch(g, '🌍', S.digits[2]);
       S.ach.add('earth');
     });
     g.after(auto ? 3.6 : 7.8, () => g.ui.subtitle(`嘿嘿……🌍那一位……我用城市的灯光写的……zzz`, 3, `${S.mates[0]}（梦话）`));
@@ -527,7 +538,7 @@ export const CH4 = {
 
   update(g, dt) {
     const S = g.S;
-    if (g.ctrl.floatTarget > 1.1 && !S.ach.has('spacewalk')) { S.ach.add('spacewalk'); g.ui.toast('飘到了天花板！', '', '🧑‍🚀'); }
+    if (g.ctrl.floatTarget > 1.08 && !S.ach.has('spacewalk')) { S.ach.add('spacewalk'); g.ui.toast('飘到了天花板！', '', '🧑‍🚀'); }
     // 窗外正好是日食（地球全黑）的时候盯着地球看，也能自己发现
     if (!S.found[2] && S.f.curtainOpen && !this._lapse && g.state === 'play' && !g.cine) {
       const sky = g.refs.spaceSky;
@@ -630,10 +641,12 @@ export const CH4 = {
         if (g.state === 'play' && r.position.distanceTo(g.camera.position) < 5) g.audio.robotBeep(1, 600 + Math.random() * 900);
       }
     } else {
-      // 救下来之后：跟在主角右肩上方，转过来看着镜头
+      // 救下来之后：飘在主角右手边、肩膀高度，转过来看着镜头；别挡在镜头前面，也别钻进天花板
       const C = g.ctrl;
       const yaw = C.charYaw;
-      _p.set(C.pos.x - Math.cos(yaw) * 0.45 + Math.sin(yaw) * 0.1, C.pos.y + 1.95 + Math.sin(t * 1.6) * 0.05, C.pos.z + Math.sin(yaw) * 0.45 + Math.cos(yaw) * 0.1);
+      _p.set(C.pos.x - Math.cos(yaw) * 0.6 + Math.sin(yaw) * 0.3, clamp(C.pos.y + 1.5 + Math.sin(t * 1.6) * 0.05, 0.4, 2.7), C.pos.z + Math.sin(yaw) * 0.6 + Math.cos(yaw) * 0.3);
+      const cp = g.camera.position;
+      if (_p.distanceTo(cp) < 0.7) { _q.subVectors(_p, cp).setY(0); if (_q.lengthSq() < 1e-4) _q.set(1, 0, 0); _p.addScaledVector(_q.normalize(), 0.7 - _p.distanceTo(cp)); }
       if (rb.state === 'rescue') {
         rb.rescueT += dt;
         const k = clamp(rb.rescueT / 1.2, 0, 1);

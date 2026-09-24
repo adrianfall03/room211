@@ -82,7 +82,7 @@ export class Controller {
         if (inp.down('Space')) this.floatTarget += dt * 1.1;
         if (inp.down('KeyC') || inp.down('ControlLeft')) this.floatTarget -= dt * 1.1;
         else if (inp.hit('KeyC')) this.floatTarget = this.floatTarget > 0.7 ? 0.3 : 1.15;
-        this.floatTarget = clamp(this.floatTarget, 0.12, 1.25);
+        this.floatTarget = clamp(this.floatTarget, 0.12, 1.15);
         this.crouch = false;
       } else if (inp.hit('KeyC')) this.crouch = !this.crouch;
     }

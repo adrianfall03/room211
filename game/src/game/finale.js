@@ -96,6 +96,7 @@ export class FinaleDirector {
         g.audio.fanfare(); g.audio.cheer(4);
         this.R.excite = 1;
         this.confetti(8);
+        this.flashes(14);
         this.card();
       }],
       [31.0, () => { this.tw.pSalute = 0; this.tw.oSalute = 0; this.tw.sSalute = 0; this.orbit = 0; }],
@@ -110,6 +111,16 @@ export class FinaleDirector {
     for (let i = 0; i < n; i++) g.after(i * 0.35, () => {
       const p = V((Math.random() - 0.5) * 6, 4.5 + Math.random() * 1.5, -1 + Math.random() * 4);
       g.fx.emit('confetti', p, { count: 40, speed: 1.6, spread: 1.4, up: 0.6, gravity: -0.9, drag: 1.1, life: 5, size: 0.07, colors: ['#b22234', '#ffffff', '#3c3b6e', '#e8b830'], spin: 8, sway: 0.6 });
+    });
+  }
+  // 看台上的家人们举着手机拍照：一闪一闪的闪光灯
+  flashes(n = 10) {
+    const g = this.g;
+    for (let i = 0; i < n; i++) g.after(Math.random() * 2.6, () => {
+      const s = Math.random() < 0.5 ? -1 : 1;
+      const p = V(s * (4.8 + Math.random() * 2), 1.7 + Math.random() * 1.1, -0.4 + Math.random() * 5.5);
+      g.fx.emit('star', p, { count: 1, speed: 0, spread: 0, up: 0, gravity: 0, drag: 0, life: 0.18, size: 0.45, colors: ['#ffffff'], spin: 0 });
+      g.audio.tick();
     });
   }
   card() {
