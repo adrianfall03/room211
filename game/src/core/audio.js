@@ -239,6 +239,74 @@ export class Audio {
     this.tone({ f: f * 1.1, f2: f * 0.9, dur: 0.09, type: 'sine', gain: 0.03, delay: 0.1, rev: true });
   }
 
+  // ----- 第二、三章 -----
+  // 时空穿越：往上滑的呼啸 + 一串闪烁的高音
+  warp() {
+    this.noise({ dur: 2.2, gain: 0.35, type: 'bandpass', freq: 200, freq2: 5000, Q: 0.7, curve: [[0.2, 0.6], [0.75, 1], [1, 0]] });
+    this.tone({ f: 80, f2: 600, dur: 2.0, type: 'sawtooth', gain: 0.05 });
+    [1319, 1568, 1976, 2637, 3136].forEach((f, i) => this.tone({ f, dur: 0.6, type: 'sine', gain: 0.05, delay: 0.9 + i * 0.14 }));
+  }
+  chime() { [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone({ f, dur: 1.2, type: 'sine', gain: 0.08, delay: i * 0.12 })); }
+  creak() {
+    const c = this.ctx; if (!c) return;
+    const t0 = this.t, o = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(90 + Math.random() * 40, t0);
+    for (let i = 0; i < 10; i++) o.frequency.linearRampToValueAtTime(70 + Math.random() * 90, t0 + i * 0.09);
+    f.type = 'bandpass'; f.frequency.value = 700; f.Q.value = 5;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.06, t0 + 0.15); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.95);
+    o.connect(f).connect(g); this._out(g); o.start(t0); o.stop(t0 + 1);
+  }
+  drip() { this.tone({ f: 1400 + Math.random() * 500, f2: 600, dur: 0.12, type: 'sine', gain: 0.06 }); }
+  caw(pitch = 1) {
+    for (let i = 0; i < 2; i++) {
+      this.noise({ dur: 0.22, gain: 0.16, type: 'bandpass', freq: 1100 * pitch, freq2: 700 * pitch, Q: 3, delay: i * 0.28 });
+      this.tone({ f: 560 * pitch, f2: 380 * pitch, dur: 0.22, type: 'sawtooth', gain: 0.04, delay: i * 0.28 });
+    }
+  }
+  squeak() { for (let i = 0; i < 3; i++) this.tone({ f: 3200 + Math.random() * 800, f2: 2600, dur: 0.06, type: 'sine', gain: 0.05, delay: i * 0.09 }); }
+  spark() {
+    for (let i = 0; i < 8; i++) this.noise({ dur: 0.04, gain: 0.4, type: 'highpass', freq: 3000, delay: i * 0.03 + Math.random() * 0.03 });
+    this.tone({ f: 120, dur: 0.5, type: 'sawtooth', gain: 0.06 });
+  }
+  clunk() { this.noise({ dur: 0.18, gain: 0.5, type: 'lowpass', freq: 600, brown: true }); this.tone({ f: 90, f2: 50, dur: 0.2, type: 'square', gain: 0.1 }); }
+  chainDrop() { for (let i = 0; i < 9; i++) this.noise({ dur: 0.05, gain: 0.3, type: 'bandpass', freq: 2600 + Math.random() * 1500, Q: 6, delay: i * 0.06 + Math.random() * 0.03 }); this.noise({ dur: 0.3, gain: 0.3, type: 'lowpass', freq: 500, delay: 0.5 }); }
+  wipe() { for (let i = 0; i < 6; i++) this.noise({ dur: 0.18, gain: 0.12, type: 'bandpass', freq: 1800 + (i % 2) * 600, Q: 1.2, delay: i * 0.22 }); }
+  bulbPop() { this.noise({ dur: 0.08, gain: 0.6, type: 'highpass', freq: 2000 }); this.noise({ dur: 0.6, gain: 0.15, type: 'highpass', freq: 5000, delay: 0.06 }); }
+  // 破收音机：隔着沙沙的杂音放一段老歌
+  radio(dur = 6) {
+    this.noise({ dur, gain: 0.05, type: 'bandpass', freq: 3000, Q: 0.5, curve: [[0.05, 1], [0.9, 1], [1, 0]] });
+    const mel = [392, 440, 494, 587, 494, 440, 392, 330, 294, 330, 392, 440, 392];
+    mel.forEach((f, i) => { this.tone({ f, dur: 0.42, type: 'triangle', gain: 0.07, delay: 0.3 + i * 0.42 }); this.tone({ f: f / 2, dur: 0.4, type: 'sine', gain: 0.03, delay: 0.3 + i * 0.42 }); });
+  }
+  // 动物们
+  cluck(pitch = 1) {
+    const n = 2 + ((Math.random() * 3) | 0);
+    for (let i = 0; i < n; i++) {
+      this.tone({ f: 700 * pitch, f2: 420 * pitch, dur: 0.07, type: 'square', gain: 0.03, delay: i * 0.11 });
+      this.noise({ dur: 0.05, gain: 0.08, type: 'bandpass', freq: 1500 * pitch, Q: 4, delay: i * 0.11 });
+    }
+  }
+  bawk() { // 咯咯哒！
+    [[620, 420, 0.08], [620, 420, 0.08], [880, 1180, 0.28]].forEach(([f, f2, d], i) => this.tone({ f, f2, dur: d, type: 'square', gain: 0.045, delay: [0, 0.13, 0.28][i] }));
+  }
+  neigh() {
+    const c = this.ctx; if (!c) return;
+    const t0 = this.t, o = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(700, t0); o.frequency.linearRampToValueAtTime(1100, t0 + 0.25); o.frequency.linearRampToValueAtTime(420, t0 + 0.9);
+    lfo.frequency.value = 22; lg.gain.value = 60; lfo.connect(lg).connect(o.frequency);
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.05, t0 + 0.05); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.95);
+    o.connect(f).connect(g); this._out(g); o.start(t0); lfo.start(t0); o.stop(t0 + 1); lfo.stop(t0 + 1);
+  }
+  giggle() { for (let i = 0; i < 4; i++) this.tone({ f: 520 + i * 30, f2: 380, dur: 0.1, type: 'triangle', gain: 0.04, delay: i * 0.13 }); }
+  pew() { this.tone({ f: 1800, f2: 300, dur: 0.12, type: 'square', gain: 0.025, rev: false }); }
+  poof() { this.noise({ dur: 0.5, gain: 0.3, type: 'bandpass', freq: 800, freq2: 3000, Q: 0.6, curve: [[0.05, 1], [1, 0]] }); }
+  sparkle() { [1568, 2093, 2637, 3136].forEach((f, i) => this.tone({ f, dur: 0.3, type: 'sine', gain: 0.04, delay: i * 0.06 })); }
+  pa(text = 0) { // 宿管阿姨的广播："叮咚——"
+    this.tone({ f: 988, dur: 0.5, type: 'sine', gain: 0.1 });
+    this.tone({ f: 784, dur: 0.7, type: 'sine', gain: 0.1, delay: 0.45 });
+  }
+
   // ----- 循环环境音 -----
   startLoop(name, { type = 'noise', freq = 300, Q = 0.7, gain = 0.05, brown = true, osc = null } = {}) {
     if (!this.ctx || this.loops[name]) return;
@@ -258,6 +326,7 @@ export class Audio {
     src.start();
     this.loops[name] = { src, g };
   }
+  stopAllLoops(fade = 0.6) { for (const k of Object.keys(this.loops)) this.stopLoop(k, fade); }
   stopLoop(name, fade = 0.6) {
     const l = this.loops[name];
     if (!l || !this.ctx) return;
@@ -269,8 +338,10 @@ export class Audio {
   }
 
   // ----- 背景音乐（程序生成的低沉氛围 + 紧张度）-----
-  startMusic() {
+  startMusic(theme = 'normal') {
     if (!this.ctx || this._musicTimer) return;
+    if (theme === 'ruin') return this._musicRuin();
+    if (theme === 'toon') return this._musicToon();
     const chords = [[220, 261.6, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 233.1, 293.7]];
     let i = 0;
     const play = () => {
@@ -300,6 +371,44 @@ export class Audio {
     };
     play();
     this._musicTimer = setInterval(play, 7600);
+  }
+  // 废墟：走调的八音盒，慢、长混响
+  _musicRuin() {
+    const notes = [659, 587, 523, 494, 440, 494, 523, 392];
+    let i = 0;
+    const play = () => {
+      const c = this.ctx, t0 = this.t;
+      for (let k = 0; k < 8; k++) {
+        const f = notes[(i + k) % notes.length] * (1 + (Math.random() - 0.5) * 0.012);
+        this.tone({ f, dur: 1.6, type: 'sine', gain: 0.03 + this.tension * 0.015, delay: k * 0.9, dest: this.mus });
+        this.tone({ f: f * 2.01, dur: 0.8, type: 'sine', gain: 0.008, delay: k * 0.9, dest: this.mus });
+      }
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.value = 55 + this.tension * 10;
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.06, t0 + 2); g.gain.linearRampToValueAtTime(0.0001, t0 + 7.4);
+      o.connect(g).connect(this.mus); o.start(t0); o.stop(t0 + 7.5);
+      i += 3;
+    };
+    play();
+    this._musicTimer = setInterval(play, 7200);
+  }
+  // 卡通：蹦蹦跳跳的尤克里里 + 低音
+  _musicToon() {
+    const prog = [[262, 330, 392], [220, 262, 330], [175, 220, 262], [196, 247, 294]];
+    const mel = [0, 2, 1, 2, 0, 1, 2, 1];
+    let i = 0;
+    const play = () => {
+      const ch = prog[i % prog.length];
+      for (let k = 0; k < 8; k++) {
+        const f = ch[mel[k]] * 2;
+        this.tone({ f, dur: 0.22, type: 'triangle', gain: 0.03, delay: k * 0.25, dest: this.mus });
+        if (k % 2 === 0) this.tone({ f: ch[0] / 2, dur: 0.3, type: 'sine', gain: 0.05, delay: k * 0.25, dest: this.mus });
+      }
+      if (this.tension > 0.5) for (let k = 0; k < 8; k++) this.noise({ dur: 0.02, gain: 0.03 * this.tension, type: 'highpass', freq: 7000, delay: k * 0.25, rev: false });
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 2000);
   }
   stopMusic() {
     if (this._musicTimer) clearInterval(this._musicTimer);

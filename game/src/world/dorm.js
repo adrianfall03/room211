@@ -8,6 +8,7 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { Kit } from './kit.js';
 import { buildOutside } from './outside.js';
+import { LightShafts } from './fx.js';
 import * as TX from '../core/textures.js';
 import { mulberry32 } from '../core/util.js';
 
@@ -19,6 +20,7 @@ const WC = { x0: -0.39, x1: 0.39, h: 2.03, top: 2.62 }; // 洗手间玻璃门：
 const WR = { x0: -1.8, x1: 1.8, z0: SZ + TW, z1: 6.3, h: 2.7 }; // 洗手间（和房间一样宽）
 const WW = { x0: -0.45, x1: 0.45, y0: 1.0, y1: 2.42 }; // 洗手间后墙上的窗
 const CUB = { x: -0.6, dz0: 4.74, dz1: 5.44 }; // 厕所隔间：隔墙位置 + 隔间门的范围
+export const LAYOUT = { ROOM, SZ, TW, DOOR, WC, WR, WW, CUB };
 
 const UV_VERT = /* glsl */ `
 varying vec2 vUv; varying vec3 vWorld;
@@ -35,14 +37,17 @@ void main(){
   gl_FragColor = vec4(c.rgb * 3.2 * a, a);
 }`;
 
-export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
+// theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'toon' 卡通动物 211。
+//   三个版本共用同一套布局；decorate(ctx) 在布局搭好之后替换材质、增减道具（见 ruin.js / toon.js）
+export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null } = {}) {
   RectAreaLightUniformsLib.init();
   const K = new Kit(T);
   const M = K.M;
   const rnd = mulberry32(404);
-  const refs = { K, interact: {}, occluders: [], camBoxes: [], lights: {}, dyn: {}, mirrors: [] };
+  const refs = { K, T, theme, interact: {}, occluders: [], camBoxes: [], lights: {}, dyn: {}, mirrors: [], updaters: [] };
   const root = new THREE.Group();
   root.name = 'dorm';
+  refs.root = root;
   scene.add(root);
   const add = (o, p = root) => { p.add(o); return o; };
   const mark = (id, o) => {
@@ -137,6 +142,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   win.add(K.mesh(K.box(2.8, 0.035, 0.18), K.std('#dcd6ca', 0.5), { y: 0.94, z: 0.07 }));
   const view = K.mesh(new THREE.PlaneGeometry(10, 5), new THREE.MeshBasicMaterial({ map: T.windowView, fog: false }), { y: 1.9, z: -3.2, cast: false, recv: false });
   win.add(view);
+  refs.win = win; refs.view = view;
   // 雾气层（哈气显字）
   const fogC = TX.makeCanvas(512, 320);
   const fogTex = TX.toTex(fogC, { wrap: false });
@@ -144,6 +150,13 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const fog = K.mesh(new THREE.PlaneGeometry(2.58, 1.48), fogMat, { y: 1.75, z: 0.012, cast: false, recv: false });
   win.add(fog);
   refs.fog = { canvas: fogC, tex: fogTex, mat: fogMat, mesh: fog };
+  refs.glassPane = win.children.find((o) => o.material === M.glass);
+  // 拉开窗帘后，阳光斜着照进来的光柱（第一章）
+  if (theme === 'normal') {
+    const sunDir = new THREE.Vector3(-2.1, -6.5, 10.2).normalize();
+    refs.shafts = new LightShafts({ rects: [{ cx: -0.66, cy: 1.75, w: 1.22, h: 1.45 }, { cx: 0.66, cy: 1.75, w: 1.22, h: 1.45 }], planeZ: -3.56, dir: sunDir, length: 4.4, color: '#ffe0a8', intensity: 0.028, slices: 6 });
+    add(refs.shafts.group);
+  }
   const glassHit = K.mesh(new THREE.PlaneGeometry(2.6, 1.5), new THREE.MeshBasicMaterial({ visible: false }), { y: 1.75, z: 0.02 });
   win.add(glassHit);
   mark('window', glassHit);
@@ -184,7 +197,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   refs.curtain = { left: cL, right: cR, layout: (f) => { layoutCurtain(cL, f); layoutCurtain(cR, f); }, f: 1 };
   mark('curtain', cL); mark('curtain', cR); refs.interact.curtain = cL;
   occl(cL); occl(cR);
-  add(K.mesh(K.cyl(0.013, 0.013, 3.6, 10), M.chrome, { y: 2.94, z: -3.46, rz: Math.PI / 2 }));
+  refs.curtainRod = add(K.mesh(K.cyl(0.013, 0.013, 3.6, 10), M.chrome, { y: 2.94, z: -3.46, rz: Math.PI / 2 }));
 
   // ================= 宿舍门：西墙最里头（面朝洗手间门时的右手边）+ 自行车锁 =================
   // 合页在南边：门往屋里开，开到头贴着南墙。门扇沿本地 -x 展开（= 世界 -z，朝北），本地 -z 是屋里那一面
@@ -233,7 +246,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   for (let i = 0; i < 4; i++) lockBody.add(K.mesh(K.cyl(0.018, 0.018, 0.018, 12), K.std('#c8c8c8', 0.3, 0.9), { y: 0.045 - i * 0.03, z: 0.02 }));
   lockG.add(lockBody);
   mark('door', lockG);
-  refs.lock = { group: lockG, body: lockBody };
+  refs.lock = { group: lockG, body: lockBody, curve: new THREE.CatmullRomCurve3(cablePts) };
   collision.add(-1.8, -1.52, 3.6, 3.82, 'lockCable');
   const droppedLock = add(K.group({ visible: false }));
   const coil = [];
@@ -272,6 +285,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   mirror.rotation.y = Math.PI;
   mirrorG.add(mirror);
   mark('mirror', mirrorG);
+  refs.mirrorG = mirrorG; refs.mirror = mirror;
 
   // ================= 洗手间白框玻璃门（南墙正中间，能推开走进去）=================
   const wcw = WC.x1 - WC.x0;
@@ -311,10 +325,11 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   collision.add(WC.x1 - 0.1, WC.x1 + 0.02, SZ + 0.12, lz + lw, 'wcOpen');
   collision.setEnabled('wcOpen', false);
   const wcCam = camBox(WC.x0, WC.x1, 0, WC.h, SZ, SZ + TW);
-  refs.wcDoor = { pivot: leaf, open: false, openAngle: 1.5, camBox: wcCam, closedBox: wcCam.clone() };
+  refs.wcDoor = { pivot: leaf, group: wcDoor, open: false, openAngle: 1.5, camBox: wcCam, closedBox: wcCam.clone(), glass: [doorGlass, frostGlass] };
 
   // ================= 洗手间（南墙背后，可以走进去）=================
   const wcRoom = add(K.group({ name: 'washroom' }));
+  refs.wcRoom = wcRoom;
   const wcx = (WR.x0 + WR.x1) / 2, wcz = (WR.z0 + WR.z1) / 2, tileH = 1.6;
   // 有真灯照着；材质只留一点自发光，让隔间角落不至于死黑
   const lit = (o, k) => new THREE.MeshStandardMaterial({ roughness: 0.5, ...o, emissive: o.map ? '#fff3de' : o.color, emissiveMap: o.map || null, emissiveIntensity: k });
@@ -385,6 +400,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   wcWin.add(winHit);
   wcRoom.add(wcWin);
   mark('wcWindow', wcWin);
+  refs.wcWin = wcWin;
 
   // ---- 洗漱台（后墙东半边）：瓷砖台面、两个白瓷盆、龙头、镜子、牙杯 ----
   const sx0 = 0.55, sx1 = WR.x1 - 0.02, sxc = (sx0 + sx1) / 2, sz = WR.z1 - 0.26, sTop = 0.82;
@@ -422,7 +438,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   wcRoom.add(sink);
   mark('sink', sink);
   occl(sink);
-  refs.sink = { streams };
+  refs.sink = { streams, group: sink, top: sTop, x0: sx0, x1: sx1 };
   block(sx0, WR.x1, WR.z1 - 0.54, WR.z1, '', sTop + 0.04);
   // 洗漱台上方的镜子（只在人进了洗手间时才算真反射）
   const wcMirror = makeMirror(1.1, 0.56, { inZone: (cam) => cam.position.z > SZ + 0.05 });
@@ -430,6 +446,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   wcRoom.add(wcMirror);
   wcRoom.add(K.mesh(K.box(1.14, 0.6, 0.012), K.std('#d9dde0', 0.3, 0.6), { x: sxc, y: 1.48, z: WR.z1 - 0.008, cast: false }));
   mark('wcMirror', wcMirror);
+  refs.wcMirror = wcMirror;
   wcRoom.add(K.mesh(K.box(1.1, 0.012, 0.11), doorGlass, { x: sxc, y: 1.16, z: WR.z1 - 0.06, cast: false }));
   [['#e24b4b', '#3a8ee8'], ['#3a8ee8', '#f2c230'], ['#57b86a', '#e24b4b'], ['#f2efe6', '#57b86a']].forEach(([cc, bc], i) => {
     const cup = K.cup(cc);
@@ -526,12 +543,13 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   wcRoom.add(K.mesh(K.box(0.12, 0.004, 0.12), K.std('#8f9296', 0.3, 0.8), { x: 0.1, y: 0.003, z: 5.95, cast: false }));
 
   // ================= 窗外：楼下草地、大树、三只猴子（彩蛋）=================
-  const outside = buildOutside({ ground: -3.3 });
+  const outside = buildOutside({ ground: -3.3, theme });
   add(outside.group);
   refs.outside = outside;
 
   // ================= 门外：西侧走廊（开门后可见）=================
   const corridor = add(K.group({ name: 'corridor' }));
+  refs.corridor = corridor;
   const CX0 = -4.4, CX1 = -1.8 - TW, CZ0 = -4.2, CZ1 = WR.z1, CY = 2.9, ccx = (CX0 + CX1) / 2;
   const cfm = M.floor.clone();
   cfm.map = M.floor.map.clone(); cfm.map.repeat.set(1, 1); cfm.map.needsUpdate = true;
@@ -568,6 +586,8 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   corridor.add(corLight);
   refs.lights.corridor = corLight;
   refs.exit = { x: ccx, doorZ: dcz };
+  refs.corridorSigns = { exit: exitC, d212 };
+  refs.gap = { line: gapMat, glow: glowMat };
 
   // ================= 灯光 =================
   const hemi = new THREE.HemisphereLight('#c9d6ea', '#6a5a48', 0.32);
@@ -585,11 +605,12 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   sun.shadow.camera.near = 2; sun.shadow.camera.far = 30;
   sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
   add(sun); add(sun.target);
-  const ceilSpots = [], tubeMats = [];
+  const ceilSpots = [], tubeMats = [], fixtures = [];
   for (const z of [2.3, -1.6]) {
     const fx = K.fluorescent();
     fx.position.set(0, 2.965, z);
     add(fx);
+    fixtures.push(fx);
     tubeMats.push(fx.userData.tubeMat);
     const sp = new THREE.SpotLight('#f4f7ff', 0, 12, 1.3, 0.85, 1.4);
     sp.position.set(0, 2.9, z);
@@ -605,6 +626,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   monLight.position.set(1.32, 1.1, 0.28);
   add(monLight);
   refs.lights = { ...refs.lights, hemi, winLight, sun, ceilSpots, tubeMats, monLight };
+  refs.fixtures = fixtures;
 
   // ================= 天花板：空调、时钟、开关 =================
   const ac = K.acUnit();
@@ -622,6 +644,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   add(sw);
   mark('switch', sw);
   refs.switchRocker = rocker;
+  refs.sw = sw;
 
   // ================= 西南角：门边折叠桌（靠西墙，紧挨着宿舍门框）+ 黑色杂物桌 =================
   const fold = K.blackTable({ w: 0.75, d: 0.45, h: 0.72 });
@@ -640,11 +663,13 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   place(K.plasticBag('#f0f0f0', 0.14, 8), -1.44, 0, 2.87);
   const broom = K.broom(); broom.rotation.z = 0.12; place(broom, -1.5, 0, 3.5, 1.25);
   mark('foldTable', fold); mark('broom', broom);
+  refs.foldTable = fold; refs.pinkBag = pinkBag; refs.broom = broom;
   block(-1.8, -1.32, 2.8, 3.6, '', 0.8);
 
   const bt = K.blackTable({ w: 1.5, d: 0.6, h: 0.75 });
   place(bt, -1.48, 0, 2.02, Math.PI / 2);
   mark('blackTable', bt);
+  refs.blackTable = bt;
   block(-1.8, -1.18, 1.27, 2.77, '', 0.8);
   const T0 = 0.75;
   const basin = K.group();
@@ -686,19 +711,23 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   refs.helmet = helmet;
   refs.helmetHome = { x: -0.84, y: 0.49, z: 2.2, ry: 1.3 };
   mark('stoolH', stoolH);
+  refs.stoolH = stoolH;
 
   // ================= 西侧：上下铺 W1（室友A）/ 书架 / W2（室友B）=================
   const W1 = K.bunkBed({ aisle: 1, ladderEnd: 1, lower: 'floral', upperNet: true, seed: 1 });
   place(W1, -1.325, 0, 0.21);
   mark('bedW1', W1);
+  refs.beds = { W1 };
   block(-1.8, -0.84, -0.8, 1.22, '', 2.8);
   const W2 = K.bunkBed({ aisle: 1, ladderEnd: 1, lower: 'blue', upperNet: true, lowerNet: true, seed: 2 });
   place(W2, -1.325, 0, -2.34);
   mark('bedW2', W2);
+  refs.beds.W2 = W2;
   block(-1.8, -0.84, -3.35, -1.33, '', 2.8);
   const shelf = K.shelfUnit({ w: 0.45, h: 1.7, d: 0.35, shelves: 4, seed: 5 });
   place(shelf, -1.62, 0, -1.07, Math.PI / 2);
   mark('shelf', shelf);
+  refs.shelf = shelf;
   block(-1.8, -1.44, -1.3, -0.85, '', 1.7);
   // 挂着的蓝色塑料袋、浅蓝毛巾
   const hang = (mat, w, h, x, y, z, ry = Math.PI / 2) => {
@@ -722,6 +751,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const rack = K.shoeRack({ tiers: 7 });
   place(rack, 1.63, 0, SZ - 0.34, -Math.PI / 2);
   mark('shoeRack', rack);
+  refs.rack = rack;
   block(1.46, 1.8, SZ - 0.66, SZ, '', 1.35);
   const shoeStyles = [
     { upper: '#1c1c1e', sole: '#f2f2f0' }, { upper: '#e8e6e0', sole: '#f5f5f2' }, { upper: '#2b2b33', sole: '#fff', accent: '#e33' },
@@ -752,6 +782,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   bin.add(K.mesh(K.box(0.14, 0.05, 0.004), K.std('#e8e8e2', 0.6), { y: 0.47, z: -0.132, cast: false }));
   place(bin, 0.66, 0, SZ - 0.2, 0);
   mark('bin', bin);
+  refs.bin = bin;
   block(0.5, 0.82, SZ - 0.34, SZ, '', 0.58);
   const box350 = K.cardboardBox(0.36, 0.24, 0.26, M.cardboard350);
   place(box350, 1.05, 0, 2.62, 0.4);
@@ -759,6 +790,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const E1 = K.bunkBed({ aisle: -1, ladderEnd: -1, lower: 'gray', upperNet: true, lowerCurtain: 'gray', seed: 3 });
   place(E1, 1.325, 0, 1.81);
   mark('bedE1', E1);
+  refs.beds.E1 = E1;
   block(0.84, 1.8, 0.8, 2.82, '', 2.8);
   // 花纹长卷 + 蓝色衣架（挂在床柱上）
   const roll = K.mesh(new THREE.CylinderGeometry(0.075, 0.075, 1.15, 20), M.patternRoll, { rz: 0.06 });
@@ -799,6 +831,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   occl(D1);
   block(1.23, 1.8, -0.25, 0.75, '', 0.78);
   refs.drawer = D1.userData.drawer;
+  refs.desks = { D1 };
   mark('drawer', D1.userData.drawer);
   const DT = 0.76;
   const dl = (o, lx, lz, ry = 0, y = DT) => { o.position.set(lx, y, lz); o.rotation.y = ry; D1.add(o); return o; };
@@ -824,9 +857,11 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const kb = K.keyboard(TX.toTex(kbC, { wrap: false }), null, uvMat(kbUVTex));
   dl(kb, -0.12, 0.09);
   mark('keyboard', kb);
+  refs.keyboard = kb;
   dl(K.mousepad(T.mousepad), 0.26, 0.1, 0, DT + 0.001);
   const mouse = K.mouse(); dl(mouse, 0.3, 0.14, 0.1, DT + 0.004);
   mark('mouse', mouse);
+  refs.mouse = mouse;
   const phone = K.phone(); dl(phone, -0.4, 0.16, 0.25);
   mark('phone', phone);
   refs.phone = phone;
@@ -835,8 +870,10 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   refs.calendar = { canvas: calC, tex: calTex };
   const cal = K.deskCalendar(calTex); dl(cal, 0.38, -0.13, -0.35);
   mark('calendar', cal);
+  refs.calendar.group = cal;
   const nb = K.notebookOpen(T.notebook); dl(nb, -0.33, -0.1, 0.2);
   mark('notebook', nb);
+  refs.notebook = nb;
   const sid = K.studentId(); dl(sid, 0.42, -0.02, 0.4, DT + 0.002);
   mark('studentId', sid);
   refs.studentId = sid;
@@ -853,6 +890,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   refs.strip = strip;
   const tower = K.pcTower(); dl(tower, 0.3, -0.05, 0, 0);
   mark('pcTower', tower);
+  refs.tower = tower;
   // 抽屉里的东西
   const drawerNote = K.mesh(new THREE.PlaneGeometry(0.1, 0.07), new THREE.MeshStandardMaterial({ map: T.foldedNote2, roughness: 0.9 }), { rx: -Math.PI / 2, y: -0.036, z: 0.02, cast: false });
   refs.drawer.add(drawerNote);
@@ -875,26 +913,30 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const doodleTex = TX.toTex(doodleC, { wrap: false });
   const doodle = K.mesh(new THREE.PlaneGeometry(1.7, 0.85), uvMat(doodleTex), { x: 1.795, y: 1.72, z: -0.3, ry: -Math.PI / 2, cast: false, recv: false });
   add(doodle);
-  refs.doodle = { canvas: doodleC, tex: doodleTex };
+  refs.doodle = { canvas: doodleC, tex: doodleTex, mesh: doodle };
 
   const D2 = K.oldDesk({ w: 1.0, d: 0.55, h: 0.76, drawer: false });
   place(D2, 1.515, 0, -0.8, -Math.PI / 2);
   occl(D2);
   block(1.23, 1.8, -1.3, -0.3, '', 0.78);
+  refs.desks.D2 = D2;
   const d2 = (o, lx, lz, ry = 0, y = DT) => { o.position.set(lx, y, lz); o.rotation.y = ry; D2.add(o); return o; };
   const offC = TX.makeCanvas(64, 36); const oc = offC.getContext('2d'); oc.fillStyle = '#060708'; oc.fillRect(0, 0, 64, 36);
   const mon2 = K.monitor(TX.toTex(offC, { wrap: false }), { bright: 1 }); d2(mon2, 0.0, -0.14);
   mark('monitor2', mon2);
+  refs.monitor2 = mon2;
   const kb2C = TX.makeCanvas(512, 170); TX.drawKeyboard(kb2C);
   d2(K.keyboard(TX.toTex(kb2C, { wrap: false })), -0.05, 0.1);
   const hs = K.headset(); d2(hs, 0.35, -0.05, 0.3, DT + 0.03);
   mark('headset', hs);
+  refs.headset = hs;
   d2(K.tissueBox(), -0.36, -0.12, 0.2);
   d2(K.bottle({ h: 0.3, r: 0.04, label: 'water' }), 0.4, -0.18);
   const fold2 = K.mesh(K.box(0.24, 0.012, 0.31), K.std('#f2c230', 0.5), { y: 0.006 }); const fg2 = K.group(); fg2.add(fold2); d2(fg2, 0.25, 0.15, 0.2);
   mark('folder', fg2);
   const p2 = K.paper(T.paperMath[1], 0.21, 0.297, 5); d2(p2, 0.3, 0.1, -0.4, DT + 0.013);
   const stool2 = K.stool(); place(stool2, 1.0, 0, -0.85, 1.4);
+  refs.stool2 = stool2;
   block(0.85, 1.15, -1.0, -0.7);
   place(K.clothPile({ mat: M.grayCloth, sx: 0.16, sy: 0.08, sz: 0.14, seed: 51 }), 1.0, 0.46, -0.85);
 
@@ -902,6 +944,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const E2 = K.bunkBed({ aisle: -1, ladderEnd: 1, lower: 'white', upperNet: true, lowerCurtain: 'pink', seed: 4 });
   place(E2, 1.325, 0, -2.34);
   mark('bedE2', E2);
+  refs.beds.E2 = E2;
   block(0.84, 1.8, -3.35, -1.33, '', 2.8);
   // 蓝色脏衣篓（小钥匙在袜子里）
   const basket = K.basket({ color: '#2d6fd8', r: 0.2, h: 0.38 });
@@ -920,6 +963,7 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   const bd = K.blackTable({ w: 0.82, d: 0.5, h: 0.74 });
   place(bd, 0.43, 0, -3.17);
   mark('farDesks', od); mark('farDesks', bd); refs.interact.farDesks = od;
+  refs.farDesks = { od, bd };
   block(-0.86, 0.84, -3.45, -2.9, '', 0.78);
   const FT = 0.74;
   const books = K.group();
@@ -939,9 +983,11 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
   lamp.add(K.mesh(K.cyl(0.008, 0.008, 0.35, 8), M.plasticWhite, { y: 0.18, rz: 0.2 }));
   lamp.add(K.mesh(new THREE.ConeGeometry(0.07, 0.1, 16, 1, true), K.std('#f3f3f0', 0.4, 0, { side: THREE.DoubleSide }), { x: -0.06, y: 0.36, rz: 0.9 }));
   place(lamp, -0.75, FT, -3.35, 0.4);
+  refs.farLamp = lamp;
   place(K.trashCan(), 0.0, 0, -3.2);
   place(K.storageBox({ w: 0.42, h: 0.26, d: 0.32, lid: '#9aa0a8' }), 0.55, 0, -3.15, 0.1);
   const blackChair = K.stool(); blackChair.traverse((o) => { if (o.isMesh) o.material = K.std('#1b1b1d', 0.5); }); place(blackChair, -0.45, 0, -2.75, 0.3);
+  refs.blackChair = blackChair;
 
   // ================= 地上散落的杂物（视频里的“名场面”）=================
   place(K.flipFlopPair('#e8742a', 0.4), -0.15, 0, 0.75);
@@ -996,6 +1042,12 @@ export function buildDorm(scene, T, collision, { faceImg = null } = {}) {
 
   // 碰撞：房间边界
   refs.bounds = { minX: ROOM.minX, maxX: ROOM.maxX, minZ: ROOM.minZ, maxZ: WR.z1 };
+
+  // 主题：替换材质、增减道具
+  if (decorate) {
+    root.updateMatrixWorld(true);
+    decorate({ THREE, K, M, T, TX, root, refs, collision, rnd, add, mark, occl, camBox, block, place, uvRect, wall, makeMirror, LAYOUT });
+  }
 
   // 静态物体矩阵冻结，减轻 CPU
   root.updateMatrixWorld(true);

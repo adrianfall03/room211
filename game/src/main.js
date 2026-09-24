@@ -13,6 +13,9 @@ import { Input } from './core/input.js';
 import { CollisionWorld } from './core/collision.js';
 import { nextFrame } from './core/util.js';
 import { buildDorm } from './world/dorm.js';
+import { buildRuinTextures, decorateRuin } from './world/ruin.js';
+import { buildToonTextures, decorateToon } from './world/toon.js';
+import { GradePass, CSS_GRADES } from './core/grade.js';
 import { createCharacter } from './player/character.js';
 import { Controller } from './player/controller.js';
 import { UI } from './ui/ui.js';
@@ -64,12 +67,25 @@ class Gfx {
     this.outline.visibleEdgeColor.set('#7ffbe4');
     this.outline.hiddenEdgeColor.set('#1d4a44');
     this.bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.45, 0.93);
+    this.grade = new GradePass();
     this.composer.addPass(this.renderPass);
     this.composer.addPass(this.gtao);
     this.composer.addPass(this.outline);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    this.composer.addPass(this.grade);
+    this.theme = 'normal';
+    this.bloomBase = { strength: 0.22, radius: 0.45, threshold: 0.93 };
     window.addEventListener('resize', () => this.resize());
+  }
+  // 每一章的画面风格：调色、Bloom、AO
+  setTheme(theme, instant = false) {
+    this.theme = theme;
+    this.grade.set(theme, instant);
+    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], toon: [0.3, 0.5, 0.95] }[theme] || [0.22, 0.45, 0.93];
+    this.bloom.strength = b[0]; this.bloom.radius = b[1]; this.bloom.threshold = b[2];
+    this.renderer.toneMappingExposure = theme === 'toon' ? 0.98 : 1.05;
+    this.setQuality(this.quality);
   }
   setQuality(q) {
     this.quality = q;
@@ -81,9 +97,10 @@ class Gfx {
       this.renderer.shadowMap.enabled = shadows;
       this.scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); });
     }
-    this.gtao.enabled = q === 'high';
+    this.gtao.enabled = q === 'high' && this.theme !== 'toon';
     this.bloom.enabled = q !== 'low';
     this.useComposer = q !== 'low';
+    this.canvas.style.filter = this.useComposer ? '' : (CSS_GRADES[this.theme] || '');
     this.resize();
   }
   setOutline(obj) {
@@ -99,8 +116,10 @@ class Gfx {
     const pr = this.renderer.getPixelRatio();
     this.composer.setPixelRatio(pr);
     this.composer.setSize(w, h);
+    this.renderer.getDrawingBufferSize(this.bufferSize || (this.bufferSize = new THREE.Vector2()));
   }
-  render() {
+  render(dt = 0, t = 0) {
+    this.grade.update(dt, t, this.width / Math.max(1, this.height));
     // 阴影只在灯亮时更新，省性能
     if (!this.shadowLights) {
       this.shadowLights = [];
@@ -201,20 +220,36 @@ async function boot() {
   scene.environmentIntensity = 0.3;
   const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.03, 60);
   const collision = new CollisionWorld();
-  const refs = buildDorm(scene, T, collision, { faceImg });
+  let ch = null;
+  // 镜子：低画质不渲染真反射；洗漱台那面只在人进了洗手间时才算；第一人称时头是隐藏的，照镜子时临时显示出来
+  const setupMirrors = (refs) => {
+    for (const m of refs.mirrors) {
+      const at = m.mesh.getWorldPosition(new THREE.Vector3());
+      // 离远了镜子在屏幕上很小，不值得把整个场景再画一遍
+      m.enabled = () => gfx.quality !== 'low' && (!m.inZone || m.inZone(camera)) && camera.position.distanceTo(at) < m.maxDist;
+      m.pre = () => { const v = ch.J.neck.visible; ch.J.neck.visible = true; return v; };
+      m.post = (v) => { ch.J.neck.visible = v; };
+    }
+  };
+  // 三个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
+  const THEMES = {
+    normal: { tex: () => T, decorate: null },
+    ruin: { tex: () => buildRuinTextures(T), decorate: decorateRuin },
+    toon: { tex: () => buildToonTextures(T), decorate: decorateToon },
+  };
+  const buildWorld = (theme) => {
+    const th = THEMES[theme] || THEMES.normal;
+    collision.boxes.length = 0;
+    const refs = buildDorm(scene, th.tex(), collision, { faceImg, theme, decorate: th.decorate });
+    setupMirrors(refs);
+    return refs;
+  };
+  const refs = buildWorld('normal');
 
   ui.loading(0.82, '照着照片捏主角……');
   await nextFrame();
-  const ch = createCharacter();
+  ch = createCharacter();
   scene.add(ch.root);
-  // 镜子：低画质不渲染真反射；洗漱台那面只在人进了洗手间时才算；第一人称时头是隐藏的，照镜子时临时显示出来
-  for (const m of refs.mirrors) {
-    const at = m.mesh.getWorldPosition(new THREE.Vector3());
-    // 离远了镜子在屏幕上很小，不值得把整个场景再画一遍
-    m.enabled = () => gfx.quality !== 'low' && (!m.inZone || m.inZone(camera)) && camera.position.distanceTo(at) < m.maxDist;
-    m.pre = () => { const v = ch.J.neck.visible; ch.J.neck.visible = true; return v; };
-    m.post = (v) => { ch.J.neck.visible = v; };
-  }
 
   const input = new Input(gfx.canvas);
   input.sensitivity = settings.sens;
@@ -226,7 +261,7 @@ async function boot() {
   gfx.setQuality(settings.quality);
   audio.setVolume(settings.vol);
 
-  const game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings });
+  const game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings, buildWorld });
   game.enterTitle();
   game.update(0.016);
 
@@ -250,11 +285,15 @@ async function boot() {
     defaultDiff: settings.diff,
     quality: settings.quality,
     onQuality: (q) => { settings.quality = q; gfx.setQuality(q); saveSettings(); },
-    onStart: ({ name, diff, quality }) => {
+    unlocked: settings.unlocked || 1,
+    defaultChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
+    onStart: ({ name, diff, quality, chapter, preview }) => {
       audio.init();
       settings.name = name; settings.diff = diff; settings.quality = quality;
+      if (!preview) settings.chapter = chapter;
+      settings.preview = false;
       saveSettings();
-      game.startIntro({ name, diff });
+      game.startIntro({ name, diff, chapter, preview });
     },
   });
 
@@ -266,12 +305,14 @@ async function boot() {
     timer.update(ts);
     const dt = Math.min(timer.getDelta(), 0.05);
     game.update(dt);
-    gfx.render();
+    gfx.render(dt, game.time);
   };
   requestAnimationFrame(frame);
 
   // 调试接口（方便测试）
-  window.__game = { game, gfx, scene, camera, refs, ch, ctrl, input, ui, audio, THREE };
+  // ff(秒)：不渲染、只推进游戏逻辑（自动化测试时用，软件渲染一帧要好几秒）
+  const ff = async (sec) => { for (let i = 0; i < sec / 0.05; i++) { game.update(0.05); if (i % 10 === 9) await new Promise((r) => setTimeout(r, 0)); } };
+  window.__game = { game, gfx, scene, camera, get refs() { return game.refs; }, ch, ctrl, input, ui, audio, THREE, ff };
 }
 
 boot().catch((e) => {

@@ -81,7 +81,7 @@ export function normalFromHeight(src, strength = 2) {
   return out;
 }
 
-function pixels(c, fn) {
+export function pixels(c, fn) {
   const ctx = c.getContext('2d');
   const w = c.width, h = c.height;
   const img = ctx.createImageData(w, h);
@@ -95,7 +95,7 @@ function pixels(c, fn) {
   ctx.putImageData(img, 0, 0);
 }
 
-function hexToRgb(hex) {
+export function hexToRgb(hex) {
   const n = parseInt(hex.replace('#', ''), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
@@ -599,8 +599,8 @@ export function genLabel(kind) {
 }
 
 // ---------- 纸张 / 笔记 ----------
-const HAND = '"Kaiti SC","STKaiti","KaiTi","PingFang SC","Microsoft YaHei",cursive';
-const SANS = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
+export const HAND = '"Kaiti SC","STKaiti","KaiTi","PingFang SC","Microsoft YaHei",cursive';
+export const SANS = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
 
 export function genPaper(kind = 'math', seed = 1) {
   const W = 256, H = 362, c = makeCanvas(W, H), ctx = c.getContext('2d');

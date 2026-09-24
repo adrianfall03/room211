@@ -504,13 +504,15 @@ export function createCharacter() {
     if (!EXPR[name]) return;
     st.expr = name;
     st.exprHold = hold;
-    faceMat.map = faceTex(name, EXPR[name]);
-    faceMat.needsUpdate = true;
+    // 卡通章会把材质整体换掉，所以每次都改头上当前那一份材质
+    const fm = headMesh.material;
+    fm.map = faceTex(name, EXPR[name]);
+    fm.needsUpdate = true;
   }
   function blinkTex(on) {
     const e = EXPR[st.expr];
     if (e.eyes === 'closed' || e.eyes === 'smile') return;
-    faceMat.map = on ? faceTex(`${st.expr}_blink`, { ...e, eyes: 'closed' }) : faceTex(st.expr, e);
+    headMesh.material.map = on ? faceTex(`${st.expr}_blink`, { ...e, eyes: 'closed' }) : faceTex(st.expr, e);
   }
   // 预生成常用表情，避免运行时卡顿
   for (const k of Object.keys(EXPR)) { faceTex(k, EXPR[k]); if (EXPR[k].eyes === 'open' || EXPR[k].eyes === 'wide') faceTex(`${k}_blink`, { ...EXPR[k], eyes: 'closed' }); }
@@ -675,6 +677,6 @@ export function createCharacter() {
   return {
     root, J, mats, update, setExpression, setFirstPerson, torch, torchTip, helmetSlot, headMesh,
     get expression() { return st.expr; },
-    faceTexture: () => faceMat.map,
+    faceTexture: () => headMesh.material.map,
   };
 }

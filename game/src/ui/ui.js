@@ -25,7 +25,7 @@ export class UI {
       <div id="hud" class="hidden">
         <div id="hud-tl"><div class="h">当前目标</div><ul id="objectives"></ul></div>
         <div id="hud-tr"><div class="ct">07:30</div><div class="cr">距离开考 30:00</div>
-          <div class="codes"><span>门锁</span><b>?</b><b>?</b><b>?</b><b>?</b></div></div>
+          <div class="codes"><span>门锁</span><b>?</b><b>?</b><b>?</b><b>?</b></div><div class="chap"></div></div>
         <div id="crosshair"></div>
         <div id="prompt" class="hidden"><kbd>E</kbd><span class="verb"></span><span class="obj"></span></div>
         <div id="subtitle" style="opacity:0"></div>
@@ -45,7 +45,7 @@ export class UI {
     this.root = root;
     this.el = {
       loading: $('#loading'), hud: $('#hud'), obj: $('#objectives'), tr: $('#hud-tr'), ct: $('#hud-tr .ct'), cr: $('#hud-tr .cr'),
-      codes: [...document.querySelectorAll('#hud-tr .codes b')], cross: $('#crosshair'), prompt: $('#prompt'), sub: $('#subtitle'),
+      codes: [...document.querySelectorAll('#hud-tr .codes b')], codeBox: $('#hud-tr .codes'), chap: $('#hud-tr .chap'), cross: $('#crosshair'), prompt: $('#prompt'), sub: $('#subtitle'),
       toasts: $('#toasts'), inv: $('#hud-inventory'), modal: $('#modal'), fade: $('#fade'), vignette: $('#vignette'),
       letterbox: $('#letterbox'), click: $('#clickToPlay'), touch: $('#touch'),
     };
@@ -65,14 +65,14 @@ export class UI {
   }
 
   // ---------- 标题 ----------
-  showTitle({ onStart, defaultName = '', defaultDiff = 'normal', quality = 'high', onQuality }) {
+  showTitle({ onStart, defaultName = '', defaultDiff = 'normal', quality = 'high', onQuality, unlocked = 1, defaultChapter = 1 }) {
     const t = h('div');
     t.id = 'title';
     t.innerHTML = `
       <div class="t-left">
         <div class="t-kicker">3D 宿舍密室逃脱</div>
         <div class="t-logo"><span>逃离</span><span class="num">211</span><span>宿舍</span></div>
-        <div class="t-sub">期末考试当天早上，你在电脑前通宵打完最后一把排位后睡着了……<br>醒来发现室友们已经走了，<b>门被你自己的车锁锁上了</b>，<br>准考证也不见了。<b>8:00</b> 高数开考，快逃！</div>
+        <div class="t-sub">期末考试当天早上，你通宵打完排位后在电脑前睡着了……醒来发现<b>门被自己的车锁锁上了</b>，准考证也不见了。<b>8:00</b> 高数开考，快逃！<br><span class="t-more">逃出这间 211 之后……门外还有<b>两个</b> 211。</span></div>
         <div><label>主角名字</label><input type="text" id="t-name" maxlength="8" placeholder="给自己起个名字（选填）" value="${esc(defaultName)}"></div>
         <div><label>难度（开考前剩余时间）</label>
           <div class="seg" id="t-diff">
@@ -80,17 +80,26 @@ export class UI {
             <button data-v="normal">标准<small>20 分钟</small></button>
             <button data-v="hard">地狱<small>12 分钟</small></button>
           </div></div>
+        <div><label>章节（通关解锁 · 预览模式随便选）</label>
+          <div class="seg" id="t-ch">
+            <button data-v="1">第一章<small>211 宿舍</small></button>
+            <button data-v="2" class="${unlocked < 2 ? 'locked' : ''}">第二章<small>${unlocked < 2 ? '🔒 可预览' : '废弃的 211'}</small></button>
+            <button data-v="3" class="${unlocked < 3 ? 'locked' : ''}">第三章<small>${unlocked < 3 ? '🔒 可预览' : '动物园 211'}</small></button>
+          </div></div>
         <div><label>画质</label>
           <div class="seg" id="t-q">
             <button data-v="low">流畅</button><button data-v="medium">均衡</button><button data-v="high">精美</button>
           </div></div>
-        <button class="btn-main" id="t-start">开 始 逃 脱</button>
-        <div class="t-help">鼠标控制视角 · WASD 移动 · E 互动 · F 手电 · V 切换第一/第三人称 · H 提示<br>建议使用电脑浏览器游玩，戴上耳机体验更佳 🎧</div>
+        <div class="t-actions">
+          <button class="btn-main" id="t-start">开 始 逃 脱</button>
+          <button class="btn-preview" id="t-preview">🎬 动画预览<small>无门锁 · 不限时<br>走到门口直接下一关</small></button>
+        </div>
+        <div class="t-help">鼠标控制视角 · WASD 移动 · E 互动 · F 手电 · V 第一/第三人称 · H 提示 · 预览模式按 N 跳关<br>建议使用电脑浏览器游玩，戴上耳机体验更佳 🎧</div>
       </div>
       <div class="t-hero"><div class="nm">主角 · 211 峡谷之神</div><div class="tg">通宵 <span>高数</span><span>夜猫子</span><span>牛仔夹克</span></div></div>`;
     document.body.appendChild(t);
     this.titleEl = t;
-    let diff = defaultDiff, q = quality;
+    let diff = defaultDiff, q = quality, chapter = String(defaultChapter);
     const seg = (id, val, cb) => {
       const el = $(id, t);
       const btns = [...el.querySelectorAll('button')];
@@ -100,9 +109,17 @@ export class UI {
     };
     seg('#t-diff', diff, (v) => (diff = v));
     seg('#t-q', q, (v) => { q = v; onQuality && onQuality(v); });
-    $('#t-start', t).addEventListener('click', () => {
+    const startBtn = $('#t-start', t);
+    const syncStart = () => { startBtn.textContent = Number(chapter) > unlocked ? '🎬 预 览 本 章' : '开 始 逃 脱'; };
+    seg('#t-ch', chapter, (v) => { chapter = v; syncStart(); });
+    syncStart();
+    startBtn.addEventListener('click', () => {
       const name = $('#t-name', t).value.trim();
-      onStart({ name, diff, quality: q });
+      onStart({ name, diff, quality: q, chapter: Number(chapter), preview: Number(chapter) > unlocked });
+    });
+    $('#t-preview', t).addEventListener('click', () => {
+      const name = $('#t-name', t).value.trim();
+      onStart({ name, diff, quality: q, chapter: Number(chapter), preview: true });
     });
   }
   hideTitle() {
@@ -123,12 +140,23 @@ export class UI {
       b.addEventListener('click', () => input.press(b.dataset.k));
     });
   }
-  setClock(time, remain, urgent) {
+  setClock(time, remain, urgent, label = '距离开考') {
     this.el.ct.textContent = time;
-    this.el.cr.textContent = `距离开考 ${remain}`;
+    this.el.cr.textContent = `${label} ${remain}`;
     this.el.tr.classList.toggle('urgent', !!urgent);
   }
-  setCodes(digits, found) {
+  setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
+  // 每一章的画风：HUD 也换一套配色（body 上的 class）
+  setTheme(theme) {
+    document.body.classList.remove('theme-ruin', 'theme-toon');
+    if (theme === 'ruin' || theme === 'toon') document.body.classList.add(`theme-${theme}`);
+  }
+  setCodes(digits, found, icons = null) {
+    if (this.el.codes.length !== digits.length || this._codeIcons !== String(icons)) {
+      this._codeIcons = String(icons);
+      this.el.codes.forEach((b) => b.remove());
+      this.el.codes = digits.map((_, i) => { const b = h('b', '', '?'); if (icons) b.dataset.ic = icons[i]; this.el.codeBox.appendChild(b); return b; });
+    }
     this.el.codes.forEach((b, i) => {
       const got = found[i];
       const txt = got ? String(digits[i]) : '?';
@@ -234,14 +262,14 @@ export class UI {
   }
 
   // 滚轮密码锁
-  lock({ n = 4, title = '密码锁', hint = '', initial = null, onSubmit, onTick }) {
-    const box = h('div', 'lockbox', `<h3>${esc(title)}</h3><div class="hint">${hint}</div><div class="wheels"></div><div class="actions"><button class="btn primary" data-a="ok">开 锁</button></div><div class="m-foot">点击 ▲▼ / 滚轮 / 直接敲数字键 · Enter 确认</div>`);
+  lock({ n = 4, title = '密码锁', hint = '', initial = null, onSubmit, onTick, labels = null, variant = '' }) {
+    const box = h('div', `lockbox ${variant}`, `<h3>${esc(title)}</h3><div class="hint">${hint}</div><div class="wheels"></div><div class="actions"><button class="btn primary" data-a="ok">开 锁</button></div><div class="m-foot">点击 ▲▼ / 滚轮 / 直接敲数字键 · Enter 确认</div>`);
     const vals = initial ? [...initial] : new Array(n).fill(0);
     let sel = 0;
     const wheelsEl = $('.wheels', box);
     const wheels = [];
     for (let i = 0; i < n; i++) {
-      const w = h('div', 'wheel', `<button data-d="-1">▲</button><div class="face"><div class="strip"></div></div><button data-d="1">▼</button>`);
+      const w = h('div', 'wheel', `${labels ? `<div class="wl">${labels[i]}</div>` : ''}<button data-d="-1">▲</button><div class="face"><div class="strip"></div></div><button data-d="1">▼</button>`);
       const strip = $('.strip', w);
       for (let k = -1; k <= 10; k++) strip.appendChild(h('div', '', String((k + 10) % 10)));
       const render = () => { strip.style.transform = `translateY(${-(vals[i] + 1) * 46 + 23}px)`; };
@@ -276,8 +304,8 @@ export class UI {
   }
 
   // 手机微信群（室友名字每局随机，头像颜色按出场顺序分配）
-  phone({ title = '211相亲相爱一家人', messages = [], time = '07:3x', battery = 10 }) {
-    const p = h('div', 'phone', `<div class="scr"><div class="sb"><span>${esc(time)}</span><span>📶 🔋${battery}%</span></div><div class="hdr"><span class="back">‹</span>${esc(title)} (4)</div><div class="msgs"></div><div class="inp"><div>欠费停机，发不出消息 😭</div><button disabled>发送</button></div></div>`);
+  phone({ title = '211相亲相爱一家人', messages = [], time = '07:3x', battery = 10, members = 4, footer = '欠费停机，发不出消息 😭' }) {
+    const p = h('div', 'phone', `<div class="scr"><div class="sb"><span>${esc(time)}</span><span>📶 🔋${battery}%</span></div><div class="hdr"><span class="back">‹</span>${esc(title)} (${members})</div><div class="msgs"></div><div class="inp"><div>${esc(footer)}</div><button disabled>发送</button></div></div>`);
     const box = $('.msgs', p);
     const palette = ['#e0853a', '#4a8fe0', '#d9508a', '#8a6fd6'];
     const colors = { 我: '#39b26a' };

@@ -1,7 +1,9 @@
 // 游戏主逻辑：状态机 / 谜题 / 交互 / 过场 / 计时
 import * as THREE from 'three';
 import * as TX from '../core/textures.js';
-import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle } from '../core/util.js';
+import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
+import { FX } from '../world/fx.js';
+import { CHAPTERS } from './chapters.js';
 
 const DIFF = { easy: 30 * 60, normal: 20 * 60, hard: 12 * 60 };
 
@@ -72,6 +74,14 @@ const ACH = [
   ['quit', '🎮 戒网瘾', '在电脑上忍住没打游戏'],
   ['monkey', '🐒 花果山', '在洗手间窗外发现三只猴子'],
   ['flush', '🚽 人有三急', '考试前还冲了个厕所'],
+  ['diary', '📔 考古学家', '读完了三十年后自己写的日记'],
+  ['rat', '🐀 鼠鼠我呀', '惊动了废墟里的老鼠'],
+  ['radio', '📻 老歌', '让破收音机唱了首歌'],
+  ['photo', '📷 旧照片', '掀开白布，找到 211 的合照'],
+  ['feather', '🪶 鸡飞狗跳', '让两只鸡的游戏掉线'],
+  ['fashion', '🪖 时尚猴王', '把头盔送给爱照镜子的猴子'],
+  ['chick', '🐣 撸鸡', '摸了摸小黄的脑袋'],
+  ['loop', '🔁 轮回终结者', '逃出全部三个 211'],
 ];
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -94,6 +104,9 @@ export class Game {
     this.reachT = 0;
     this.suppressPause = false;
     this.light = { hemi: 0.32, win: 2.2, sun: 0, spot: 0, tube: 0, flicker: 0 };
+    this.chapter = 1;
+    this.CH = null;
+    this.fx = new FX(this.scene);
     this.handlers = this._handlers();
     this._collectRayTargets();
     this._buildUV();
@@ -161,8 +174,9 @@ export class Game {
   }
 
   // ================== 新的一局 ==================
-  newRun({ name, diff }) {
+  newRun({ name, diff, chapter = 1, preview = false }) {
     const rnd = mulberry32((Date.now() ^ 0x5f3759df) >>> 0);
+    this.rnd = rnd;
     const r = (n) => Math.floor(rnd() * n);
     const dates = [[6, 18], [6, 25], [6, 12], [6, 19], [6, 23], [6, 16], [1, 12], [1, 15], [1, 18], [1, 20]];
     const [month, day] = dates[r(dates.length)];
@@ -174,7 +188,7 @@ export class Game {
       name: name || '我', mates, diff, limit: DIFF[diff] || DIFF.normal, elapsed: 0, hints: 0, freeHints: 0,
       digits, found: [false, false, false, false], month, day, suitCode: `${month}${day}`, pcPass: words[r(words.length)],
       f: {}, inv: [], clues: new Map(), ach: new Set(), phoneCharge: 0, msgSent: {}, newItem: null, helmetOn: false,
-      lastClockText: '', lastRemainSec: -1,
+      lastClockText: '', lastRemainSec: -1, chapter, done: [], preview: !!preview,
     };
     const R = this.refs;
     TX.drawCalendar(R.calendar.canvas, { month, day });
@@ -251,6 +265,13 @@ export class Game {
   // ================== 开场过场 ==================
   startIntro(opts) {
     this.newRun(opts);
+    if (opts.chapter > 1) {
+      // 直接从第二 / 三章开始：跳过第一章，从标题画面直接穿越过去
+      this.ui.hideTitle();
+      this.camera.clearViewOffset();
+      this.goChapter(opts.chapter, { fromTitle: true });
+      return;
+    }
     this.state = 'intro';
     this.ui.hideTitle();
     this.camera.clearViewOffset();
@@ -322,10 +343,14 @@ export class Game {
     this.ui.letterbox(false);
     this.ui.showHUD(true);
     if (this.input.isTouch) this.ui.showTouch(true);
+    this.auto = null;
     this._refreshHUD(true);
-    this.audio.startMusic();
-    this.ui.toast('WASD 移动 · 鼠标转视角 · E 互动 · H 提示', '', '🎮');
-    this.after(1.2, () => this.ui.subtitle('冷静……先看看显示器上那张便利贴。', 4, this.S.name));
+    this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
+    if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
+    else {
+      this.ui.toast('WASD 移动 · 鼠标转视角 · E 互动 · H 提示', '', '🎮');
+      this.after(1.2, () => this.ui.subtitle('冷静……先看看显示器上那张便利贴。', 4, this.S.name));
+    }
     this.input.requestLock();
   }
 
@@ -339,9 +364,12 @@ export class Game {
       case 'intro': this.ctrl.update(dt, { allowMove: false }); this._saveGameCam(); this._updateCine(dt); break;
       case 'play': this._updatePlay(dt); break;
       case 'outro': this._updateOutro(dt); break;
+      case 'cut': this._updateOutro(dt); break;
+      case 'transition': this._updateOutro(dt); break;
       case 'end': this._updateOutro(dt); break;
     }
     this._updateWorld(dt);
+    this.fx.update(dt, this.camera);
     this.input.endFrame();
   }
 
@@ -356,10 +384,11 @@ export class Game {
       if (inp.hit('KeyH')) this.hint();
       if (inp.hit('KeyJ')) this.openJournal();
       if (inp.hit('KeyP') && S.inv.includes('phone')) this.openPhone();
+      if (inp.hit('KeyN') && S.preview) this.previewSkip();
       if (inp.hit('Escape') && this.input.isTouch) this.openPause();
       for (let i = 1; i <= 8; i++) if (inp.hit(`Digit${i}`) && S.inv[i - 1]) this.useItem(S.inv[i - 1]);
     }
-    if (!this.paused) S.elapsed += dt;
+    if (!this.paused && !S.preview) S.elapsed += dt;
     if (this.reachT > 0) this.reachT = Math.max(0, this.reachT - dt);
     const reachW = this.reachT > 0 ? Math.sin((1 - this.reachT / 0.7) * Math.PI) : 0;
     this.ctrl.update(dt, { allowMove: canAct, extra: { hold: S.uvOn ? 1 : 0, reach: reachW, reachPitch: this._reachPitch || 0 } });
@@ -369,11 +398,12 @@ export class Game {
     this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine);
     // 时间
     const remain = S.limit - S.elapsed;
-    if (remain <= 0) { this.fail(); return; }
+    if (remain <= 0 && !S.preview) { this.fail(); return; }
     this._refreshHUD();
     this._timedEvents(remain);
+    if (this.CH && this.CH.update && !this.paused) this.CH.update(this, dt);
     // 手机充电
-    if (S.f.stripOn && S.phoneCharge < 1 && !this.paused) {
+    if (!this.CH && S.f.stripOn && S.phoneCharge < 1 && !this.paused) {
       S.phoneCharge = Math.min(1, S.phoneCharge + dt / 9);
       this._phoneScreenT = (this._phoneScreenT || 0) - dt;
       if (this._phoneScreenT <= 0 || S.phoneCharge >= 1) {
@@ -390,24 +420,43 @@ export class Game {
     const sec = Math.ceil(remain);
     if (sec !== S.lastRemainSec || force) {
       S.lastRemainSec = sec;
-      const gm = 30 * clamp(S.elapsed / S.limit, 0, 1);
-      const mm = 30 + Math.floor(gm);
-      const clockText = `07:${String(Math.min(59, mm)).padStart(2, '0')}`;
-      this.ui.setClock(clockText, formatMMSS(remain), remain < 90);
-      this.ui.setVignette(remain < 60);
+      const clockText = this._clockText();
+      if (S.preview) this.ui.setClock(clockText, '不限时', false, '🎬 预览模式');
+      else this.ui.setClock(clockText, formatMMSS(remain), remain < 90, this.CH ? this.CH.label : '距离开考');
+      this.ui.setVignette(remain < 60 && !S.preview);
       this.clockText = clockText;
     }
-    this.ui.setCodes(S.digits, S.found);
+    this.ui.setCodes(S.digits, S.found, this.CH ? this.CH.codeIcons : null);
     this.ui.setObjectives(this._objectives());
     if (force || this._invDirty) {
       this._invDirty = false;
-      const items = S.inv.map((id) => ({ id, ...ITEMS[id], desc: this._fill(ITEMS[id].desc) }));
+      const IT = this._items();
+      const items = S.inv.map((id) => ({ id, ...IT[id], desc: this._fill(IT[id].desc) }));
       this.ui.setInventory(items, { onClick: (it) => this.useItem(it.id), activeId: S.uvOn ? 'uv' : null, newId: S.newItem });
       S.newItem = null;
     }
   }
 
+  // 各章的"现在几点"：开局时间往后走 30 分钟（第二章的钟停了）
+  _clockText() {
+    const S = this.S;
+    if (this.CH && this.CH.clockText) return this.CH.clockText(this);
+    const [h0, m0] = this.CH ? this.CH.clock : [7, 30];
+    const gm = 30 * clamp(S.elapsed / S.limit, 0, 1);
+    let mm = m0 + Math.floor(gm), hh = h0 + Math.floor(mm / 60);
+    mm %= 60;
+    if (!this.CH) mm = Math.min(59, mm);
+    return `${String(hh % 24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  }
+  _items() { return this.CH && this.CH.items ? { ...ITEMS, ...this.CH.items } : ITEMS; }
+
   _objectives() {
+    if (this.S.preview) return [
+      { text: '🎬 预览模式：没有谜题，随便逛', done: false },
+      { text: this.chapter < 3 ? '走到宿舍门口按 E，直接去下一关' : '走到宿舍门口按 E，看结局', done: false },
+      { text: '或者按 N 立刻穿越', done: false },
+    ];
+    if (this.CH) return this.CH.objectives(this);
     const S = this.S, f = S.f;
     const n = S.found.filter(Boolean).length;
     if (!f.readSticky) return [{ text: '看看显示器上的便利贴', done: false }];
@@ -424,6 +473,10 @@ export class Game {
   _timedEvents(remain) {
     const S = this.S, frac = remain / S.limit;
     this.audio.tension = clamp(1 - frac, 0, 1);
+    if (remain < 60) {
+      if (this._hbT === undefined || this.time - this._hbT > 0.9) { this._hbT = this.time; this.audio.heartbeat(); }
+    }
+    if (this.CH) { if (this.CH.timed) this.CH.timed(this, remain, frac); return; }
     const push = (key, msg) => {
       if (S.msgSent[key]) return;
       S.msgSent[key] = true;
@@ -438,10 +491,6 @@ export class Game {
     if (frac < 0.5) push('half', { time: this.clockText, who: A, text: `人呢？？还有${Math.ceil(remain / 60)}分钟就开考了！` });
     if (frac < 0.25) push('quarter', { time: this.clockText, who: B, text: '监考老师已经进教室了！！！快点！' });
     if (remain < 60) push('last', { time: this.clockText, who: C, text: '完了完了，老师开始发卷子了……兄弟挺住！' });
-    if (remain < 60) {
-      this._hb = (this._hb || 0) - (1 / 60);
-      if (this._hbT === undefined || this.time - this._hbT > 0.9) { this._hbT = this.time; this.audio.heartbeat(); }
-    }
   }
 
   // ================== 交互 ==================
@@ -480,7 +529,7 @@ export class Game {
     const label = typeof hd.label === 'function' ? hd.label() : hd.label;
     this.ui.setPrompt(verb, label);
     if (prev !== hv.iid) {
-      const big = ['door', 'wcDoor', 'cubDoor', 'wcWindow', 'window', 'curtain', 'bedW1', 'bedW2', 'bedE1', 'bedE2', 'shelf', 'farDesks', 'blackTable', 'foldTable'].includes(hv.iid);
+      const big = ['door', 'wcDoor', 'cubDoor', 'wcWindow', 'window', 'curtain', 'bedW1', 'bedW2', 'bedE1', 'bedE2', 'shelf', 'farDesks', 'blackTable', 'foldTable', ...((this.CH && this.CH.big) || [])].includes(hv.iid);
       this.gfx.setOutline(big ? null : hv.obj);
     }
   }
@@ -506,7 +555,8 @@ export class Game {
     S.f[id] = true;
     S.newItem = id;
     this._invDirty = true;
-    if (!silent) { this.audio.pickup(); this.ui.toast(`获得：<b>${ITEMS[id].name}</b>`, 'item', ITEMS[id].icon); }
+    const it = this._items()[id];
+    if (!silent) { this.audio.pickup(); this.ui.toast(`获得：<b>${it.name}</b>`, 'item', it.icon); }
   }
   take(id) {
     const S = this.S;
@@ -523,14 +573,16 @@ export class Game {
     if (S.found[i]) return;
     S.found[i] = true;
     this.audio.clue();
-    const marks = ['①', '②', '③', '④'];
-    this.ui.toast(`门锁密码第${marks[i]}位：<b style="font-size:20px">${S.digits[i]}</b>`, 'clue', '🔑');
-    S.clues.set(`d${i}`, `门锁第<b>${marks[i]}</b>位 = <b>${S.digits[i]}</b>（${src}）`);
+    const marks = this.CH && this.CH.codeIcons ? this.CH.codeIcons : ['①', '②', '③', '④'];
+    const lockName = this.CH ? this.CH.lockName : '门锁';
+    this.ui.toast(`${lockName}密码第${marks[i]}位：<b style="font-size:20px">${S.digits[i]}</b>`, 'clue', '🔑');
+    S.clues.set(`d${i}`, `${lockName}第<b>${marks[i]}</b>位 = <b>${S.digits[i]}</b>（${src}）`);
     const n = S.found.filter(Boolean).length;
-    if (n === 4) this.after(1.5, () => this.say(`密码凑齐了：${S.digits.join('')}！快去门口！`, 4));
+    if (n === S.digits.length) this.after(1.5, () => this.say(`密码凑齐了：${S.digits.join('')}！快去门口！`, 4));
   }
   useItem(id) {
     const S = this.S;
+    if (this.CH && this.CH.useItem && this.CH.useItem(this, id)) return;
     if (id === 'phone') return this.openPhone();
     if (id === 'uv') return this.toggleUV();
     if (id === 'latiao') {
@@ -540,12 +592,34 @@ export class Game {
       if (S.f.ateApple) S.ach.add('foodie');
       return;
     }
-    const it = ITEMS[id];
+    const it = this._items()[id];
     if (it) this.ui.toast(`${it.name}：${this._fill(it.desc)}`, '', it.icon);
   }
 
   // ---------- 各物件的交互 ----------
   _handlers() {
+    const H = this._handlersBase();
+    // 预览模式：门没有锁，直接出门去下一关
+    if (this.S && this.S.preview) H.door = { label: '宿舍门', verb: () => (this.chapter < 3 ? '直接去下一关' : '出门（结局）'), act: () => this.previewExit() };
+    return H;
+  }
+  // 预览模式：把锁"变没"，走出门去
+  previewExit() {
+    if (this.state !== 'play') return;
+    if (this.CH) this.CH.unlockVisual(this);
+    else { const L = this.refs.lock; this.collision.setEnabled('lockCable', false); L.group.visible = false; L.dropped.visible = true; }
+    this.S.f.doorUnlocked = true; this.S.f.unlocked = true;
+    this.win();
+  }
+  // 预览模式按 N：不走出门了，直接穿越
+  previewSkip() {
+    if (this.state !== 'play') return;
+    this.state = 'outro';
+    this.ui.closeModal(true);
+    this._chapterDone();
+  }
+  _handlersBase() {
+    if (this.CH) return this.CH.handlers(this);
     const H = {};
     const flavor = (id) => ({ label: () => this._fill(FLAVOR[id][0]), verb: '查看', reach: false, act: () => this.say(this._fill(FLAVOR[id][1]), 3.6) });
     for (const id of Object.keys(FLAVOR)) H[id] = flavor(id);
@@ -1124,15 +1198,25 @@ export class Game {
   }
   hint() {
     const S = this.S;
+    if (S.preview) { this.ui.toast('💡 预览模式没有谜题：走到门口按 E，或者直接按 N 去下一关', 'clue'); return; }
+    if (this.CH) return this._hintWith(this.CH.hint(this));
     let cost = '';
     if (S.freeHints > 0) { S.freeHints--; cost = '（免费）'; }
     else { S.elapsed += 30; S.hints++; cost = '（-30秒）'; }
     this.audio.notify();
     this.ui.toast(`💡 ${this.hintText()} <span style="opacity:.6">${cost}</span>`, 'clue');
   }
+  _hintWith(text) {
+    const S = this.S;
+    let cost = '';
+    if (S.freeHints > 0) { S.freeHints--; cost = '（免费）'; }
+    else { S.elapsed += 30; S.hints++; cost = '（-30秒）'; }
+    this.audio.notify();
+    this.ui.toast(`💡 ${text} <span style="opacity:.6">${cost}</span>`, 'clue');
+  }
   openJournal() {
     const S = this.S;
-    const marks = ['①', '②', '③', '④'];
+    const marks = this.CH && this.CH.codeIcons ? this.CH.codeIcons : ['①', '②', '③', '④'];
     const code = S.digits.map((d, i) => `<b style="display:inline-grid;place-items:center;width:34px;height:42px;margin:0 3px;border-radius:8px;background:${S.found[i] ? '#ffc857' : 'rgba(255,255,255,.08)'};color:${S.found[i] ? '#111' : '#777'};font-size:22px">${S.found[i] ? d : marks[i]}</b>`).join('');
     const items = [...S.clues.values()].map((t) => `<li>${t}</li>`).join('') || '<li class="dim">还没有线索……到处看看吧。</li>';
     const node = this.ui.panel(`<h2>📒 线索本</h2><div style="text-align:center;margin-bottom:16px">${code}</div><ul class="clue-list">${items}</ul><div class="m-foot">按 J / Esc 关闭</div>`);
@@ -1194,10 +1278,11 @@ export class Game {
     const door = D.pivot;
     // 宿舍门在西墙最里头，往屋里开（贴向南墙）；先走到门的斜前方等门打开
     this.auto = { path: [new THREE.Vector3(-0.3, 0, clamp(p0.z, 1.3, 3.2)), new THREE.Vector3(-0.85, 0, 3.25)], speed: 1.7, i: 0 };
-    this.after(0.3, () => this.say('准考证 ✓　学生证 ✓　冲！！！', 2.4));
+    this.after(0.3, () => this.say(this.CH ? this.CH.exitLine(this) : '准考证 ✓　学生证 ✓　冲！！！', 2.4));
     const openDoorAt = () => {
       this.audio.doorOpen();
       this.refs.lights.corridor.intensity = 0;
+      if (this.CH && this.CH.onDoorOpen) this.CH.onDoorOpen(this);
       this.tween(1.3, (k) => { door.rotation.y = D.base + D.openAngle * k; this.refs.lights.corridor.intensity = 6 * k; }, { ease: easeOut });
       this.after(1.0, () => {
         // 出门左手边是 212 的门，安全出口在右手边（北）
@@ -1205,10 +1290,104 @@ export class Game {
         this._cineTo(new THREE.Vector3(-0.95, 1.62, E.doorZ + 0.32), new THREE.Vector3(-4.0, 1.1, E.doorZ - 1.5), 0.9);
         this.audio.whoosh();
       });
-      this.after(2.4, () => this.ui.fade(1, { dur: 1.0, white: true }));
-      this.after(3.6, () => this.showEnd(true));
+      this.after(2.1, () => this._chapterDone());
     };
     this._afterReach = openDoorAt;
+  }
+
+  // ================== 章节 ==================
+  _chapterDone() {
+    const S = this.S;
+    S.done.push({ n: this.chapter, elapsed: S.elapsed, limit: S.limit, hints: S.hints });
+    if (this.chapter < 3) this.goChapter(this.chapter + 1);
+    else this.finale();
+  }
+  _tweenP(dur, fn, opts = {}) { return new Promise((r) => this.tween(dur, fn, { ease: (t) => t, ...opts, done: r })); }
+  _wait(sec) { return new Promise((r) => this.after(sec, r)); }
+
+  // 穿越到下一个 211：画面旋涡 + 闪白 → 拆掉重建宿舍 → 旋涡收回 → 进门过场
+  async goChapter(n, { fromTitle = false } = {}) {
+    const CH = CHAPTERS[n];
+    this.state = 'transition';
+    this._setHover(null);
+    this.ui.closeModal(true);
+    this.input.exitLock();
+    this.ui.showHUD(false); this.ui.showTouch(false); this.ui.letterbox(true);
+    if (this.S.uvOn) this.toggleUV();
+    this.audio.stopMusic();
+    this.audio.stopAllLoops();
+    this.audio.warp();
+    const G = this.gfx.grade;
+    const card = `${CH.title}<small>${CH.sub}</small>`;
+    if (this.gfx.useComposer) {
+      await this._tweenP(fromTitle ? 1.0 : 1.6, (k) => { G.warp = k * k; G.flash = clamp((k - 0.6) / 0.4, 0, 1); });
+      await this.ui.fade(1, { dur: 0.25, white: true, card });
+    } else await this.ui.fade(1, { dur: 1.4, white: true, card });
+    G.flash = 0;
+    await nextFrame(); await nextFrame();
+    const t0 = performance.now();
+    this._switchWorld(CH.theme);
+    this.chapter = n; this.CH = CH;
+    this._initChapter();
+    CH.intro(this, { prepare: true });
+    try {
+      if (this.gfx.renderer.compileAsync) await Promise.race([this.gfx.renderer.compileAsync(this.scene, this.camera), new Promise((r) => setTimeout(r, 3500))]);
+    } catch (e) { /* 忽略 */ }
+    const spent = (performance.now() - t0) / 1000;
+    await new Promise((r) => setTimeout(r, Math.max(300, (2.2 - spent) * 1000)));
+    this.state = 'cut';
+    this.ui.fade(0, { dur: 1.4, white: true, card });
+    CH.intro(this, { prepare: false });
+    if (this.gfx.useComposer) { G.warp = 1; await this._tweenP(1.5, (k) => { G.warp = (1 - k) * (1 - k); }); }
+    G.warp = 0;
+  }
+  _switchWorld(theme) {
+    const old = this.refs;
+    if (old.helmet && old.helmet.parent && old.helmet.parent !== old.root) old.helmet.parent.remove(old.helmet);
+    this.scene.remove(old.root);
+    disposeTree(old.root);
+    if (old.helmet) disposeTree(old.helmet);
+    this.refs = this.buildWorld(theme);
+    this.ctrl.camBoxes = this.refs.camBoxes;
+    this.ctrl.bounds = this.refs.bounds;
+    this.gfx.shadowLights = null;
+    this.gfx.setOutline(null);
+    this.gfx.setTheme(theme);
+    this.ui.setTheme(theme);
+    this._collectRayTargets();
+    this.fx.clear();
+    this._buildDust(theme);
+    this.light = { hemi: 0.32, win: 2.2, sun: 0, spot: 0, tube: 0, flicker: 0 };
+    this._monColor = null;
+    this._fogHold = 0;
+    this._mirrorN = 0;
+  }
+  _initChapter() {
+    const S = this.S, CH = this.CH;
+    Object.assign(S, { elapsed: 0, hints: 0, freeHints: 0, f: {}, inv: [], clues: new Map(), newItem: null, helmetOn: false, uvOn: false, phoneCharge: 0, msgSent: {}, lastRemainSec: -1 });
+    S.limit = CH.limit[S.diff] || CH.limit.normal;
+    S.digits = Array.from({ length: CH.codeLen }, (_, i) => (i === 0 ? 1 + Math.floor(this.rnd() * 9) : Math.floor(this.rnd() * 10)));
+    S.found = S.digits.map(() => false);
+    this.ch.torch.visible = false;
+    CH.init(this);
+    this.handlers = this._handlers();
+    this._invDirty = true;
+    if (!S.preview) {
+      this.settings.unlocked = Math.max(this.settings.unlocked || 1, CH.n);
+      this.settings.chapter = CH.n;
+      this.saveSettings();
+    }
+    this.ui.setChapterTag(CH.tag, CH.lockName);
+  }
+  // 最后一章出门：白光 → "同学，醒醒！" → 结算
+  finale() {
+    this.state = 'transition';
+    this.audio.stopAllLoops();
+    this.audio.stopMusic();
+    this.audio.chime && this.audio.chime();
+    this.ui.fade(1, { dur: 1.4, white: true });
+    this.after(1.6, () => this.ui.fade(1, { dur: 0.6, white: false, card: '“同学……同学！醒醒！”<small>08:00 · 教学楼 A-304</small>' }));
+    this.after(5.2, () => { this.S.ach.add('loop'); this.showEnd(true); });
   }
   fail() {
     if (this.state !== 'play') return;
@@ -1221,7 +1400,8 @@ export class Game {
     this.audio.bell();
     this.ch.setExpression('shock');
     this._shake(0.4);
-    this.ui.fade(1, { dur: 2.2, card: `08:00<small>考试铃声响起……你还被困在 211</small>` });
+    if (this.CH && this.CH.onFail) this.CH.onFail(this);
+    this.ui.fade(1, { dur: 2.2, card: this.CH ? this.CH.failCard : `08:00<small>考试铃声响起……你还被困在 211</small>` });
     this.after(3.8, () => this.showEnd(false));
   }
   showEnd(success) {
@@ -1229,34 +1409,53 @@ export class Game {
     this.state = 'end';
     this.ui.fade(0, { dur: 0.8 });
     this.ui.letterbox(false);
-    const left = Math.max(0, S.limit - S.elapsed);
-    const frac = left / S.limit;
-    if (success) {
-      if (frac >= 0.5) S.ach.add('fast');
-      if (S.hints === 0) S.ach.add('nohint');
-    }
+    this.ui.showHUD(false);
+    const chName = ['', '211 宿舍', '废弃的 211', '动物园 211'];
     let rank = 'F', text = '';
+    const runs = S.done;
     if (success) {
-      if (frac >= 0.5 && S.hints <= 1) { rank = 'S'; text = '你冲进考场时，监考老师刚刚拆开试卷袋。你坐下，深吸一口气——今天的高数，稳了。'; }
-      else if (frac >= 0.3 && S.hints <= 3) { rank = 'A'; text = '你踩着预备铃冲进考场，室友们朝你竖起了大拇指。'; }
-      else if (frac >= 0.1) { rank = 'B'; text = '你在开考前几分钟冲进考场，满头大汗。监考老师瞪了你一眼。'; }
-      else { rank = 'C'; text = '你堪堪赶上，差点被拦在门外。下次……还是少打两把吧。'; }
+      const fr = runs.reduce((a, r) => a + Math.max(0, r.limit - r.elapsed) / r.limit, 0) / Math.max(1, runs.length);
+      const hints = runs.reduce((a, r) => a + r.hints, 0);
+      if (fr >= 0.5) S.ach.add('fast');
+      if (hints === 0) S.ach.add('nohint');
+      if (fr >= 0.5 && hints <= 2) { rank = 'S'; text = '你猛地抬起头——监考老师刚刚拆开试卷袋。原来你在考场上睡着了……三个 211 都只是一场梦。深吸一口气，今天的高数，稳了。'; }
+      else if (fr >= 0.3 && hints <= 5) { rank = 'A'; text = '你在考场上惊醒，卷子刚发到你手里。旁边的室友小声说：“你刚才说梦话，一直在喊‘咯咯哒’……”'; }
+      else if (fr >= 0.12) { rank = 'B'; text = '你被监考老师敲醒，已经开考五分钟了。梦里的三个 211 还历历在目。'; }
+      else { rank = 'C'; text = '你惊醒时考试已经过去一半……下次考前，还是别再通宵了吧。'; }
       this.audio.success();
-      this.audio.stopLoop('room');
+      this.audio.stopAllLoops();
     } else {
-      text = '08:00，考试铃声响起。你还被困在 211……恭喜解锁结局：『重修』。';
+      text = this.CH ? this.CH.failText : '08:00，考试铃声响起。你还被困在 211……恭喜解锁结局：『重修』。';
       this.audio.fail();
     }
+    if (S.preview) {
+      const node = this.ui.panel(`<h2>🎬 预览结束</h2><p>三个 211 都逛完啦！<br>正式游戏里每个房间都有一把锁、一串谜题和倒计时。</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始正式游戏</button><button class="btn" data-a="again">再看一遍</button></div>`, 'end');
+      node.querySelector('[data-a=play]').addEventListener('click', () => { this.settings.chapter = 1; this.saveSettings(); location.reload(); });
+      node.querySelector('[data-a=again]').addEventListener('click', () => { this.settings.chapter = 1; this.settings.preview = true; this.saveSettings(); location.reload(); });
+      this.ui.openModal(node, { closable: false });
+      this.auto = null; this.cine = null;
+      this.ctrl.teleport(0.1, 1.2, 0); this.ch.root.position.set(0.1, 0, 1.2); this.ch.root.rotation.y = 0; this.ch.setFirstPerson(false);
+      this._endPose = { cheer: 1 }; this.ch.setExpression('grin'); this.lightMode = 'end';
+      if (this.CH && this.CH.onEnd) this.CH.onEnd(this, true);
+      return;
+    }
     const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
+    const totalT = runs.reduce((a, r) => a + r.elapsed, 0) + (success ? 0 : S.elapsed);
+    const totalH = runs.reduce((a, r) => a + r.hints, 0) + (success ? 0 : S.hints);
+    const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+    const failInfo = success ? '' : `<div style="color:var(--muted)">${this.CH ? `${this.CH.lockName}密码：${S.digits.join('')}` : '门锁密码：' + S.digits.join('')}</div>`;
     const node = this.ui.panel(`
-      <h2>${success ? '成功逃脱！' : '考试开始了……'}</h2>
-      <div style="color:var(--muted)">${success ? `${S.name} 带着准考证冲出了 211` : '门锁密码：' + S.digits.join('')}</div>
+      <h2>${success ? '三个 211，全部逃脱！' : this.CH ? this.CH.failTitle : '考试开始了……'}</h2>
+      ${success ? `<div style="color:var(--muted)">${S.name} 带着准考证，醒在了考场上</div>` : failInfo}
       <div class="rank">${rank}</div>
       <p>${text}</p>
-      <div class="stats"><div><b>${formatMMSS(S.elapsed)}</b><span>用时</span></div><div><b>${formatMMSS(left)}</b><span>剩余时间</span></div><div><b>${S.hints}</b><span>提示次数</span></div></div>
+      <div class="stats">${success ? chRows : `<div><b>${formatMMSS(S.elapsed)}</b><span>用时</span></div><div><b>${formatMMSS(Math.max(0, S.limit - S.elapsed))}</b><span>剩余时间</span></div>`}<div><b>${success ? formatMMSS(totalT) : totalH}</b><span>${success ? '总用时' : '提示次数'}</span></div></div>
       <div class="ach">${achHtml}</div>
-      <div style="display:flex;gap:10px;justify-content:center"><button class="btn primary" data-a="again">再来一局</button></div>`, `end ${success ? '' : 'fail'}`);
-    node.querySelector('[data-a=again]').addEventListener('click', () => location.reload());
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">${!success && this.chapter > 1 ? '<button class="btn primary" data-a="retry">重来本章</button>' : ''}<button class="btn ${!success && this.chapter > 1 ? '' : 'primary'}" data-a="again">${success ? '再来一局' : '从头再来'}</button></div>`, `end ${success ? '' : 'fail'}`);
+    node.querySelector('[data-a=again]').addEventListener('click', () => { this.settings.chapter = 1; this.saveSettings(); location.reload(); });
+    const retry = node.querySelector('[data-a=retry]');
+    if (retry) retry.addEventListener('click', () => { this.settings.chapter = this.chapter; this.saveSettings(); location.reload(); });
     this.ui.openModal(node, { closable: false });
     // 结算背景：主角在房间里欢呼/沮丧
     this.auto = null;
@@ -1265,9 +1464,11 @@ export class Game {
     this.ctrl.teleport(0.1, 1.2, 0);
     this.ch.root.position.set(0.1, 0, 1.2);
     this.ch.root.rotation.y = 0;
+    this.ch.setFirstPerson(false);
     this._endPose = success ? { cheer: 1 } : { crouch: 1 };
     this.ch.setExpression(success ? 'grin' : 'shock');
     this.lightMode = 'end';
+    if (this.CH && this.CH.onEnd) this.CH.onEnd(this, success);
   }
 
   _updateOutro(dt) {
@@ -1301,8 +1502,9 @@ export class Game {
       this.ch.root.rotation.y = this.ctrl.charYaw;
       this.ch.update(dt, { speed: this.auto ? speed : 0 });
     } else {
-      this.ch.update(dt, { speed: 0 });
+      this.ch.update(dt, { speed: 0, ...(this._cutPose || {}) });
     }
+    if (this.cine && !this.cine.to) { this.ctrl._updateCamera(dt, 0); this._saveGameCam(); }
     this._updateCine(dt);
   }
 
@@ -1353,29 +1555,102 @@ export class Game {
     this.uvLight.castShadow = false;
     this.scene.add(this.uvLight, this.uvLight.target);
   }
-  _buildDust() {
-    const n = 420;
+  // 空气里飘的东西：第一章是窗边阳光里的灰尘，废墟里满屋都是灰，卡通章是金色的小亮点
+  _buildDust(theme = 'normal') {
+    if (this.dust) { this.scene.remove(this.dust); this.dust.geometry.dispose(); }
+    const cfg = {
+      normal: { n: 420, x: [-1.3, 1.3], y: [0.3, 2.7], z: [-3.4, -0.6], color: '#fff2d8', size: 0.014 },
+      ruin: { n: 900, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#e8c89a', size: 0.012 },
+      toon: { n: 160, x: [-1.6, 1.6], y: [0.3, 2.6], z: [-3.3, 4.2], color: '#fff0a8', size: 0.03 },
+    }[theme] || {};
+    this._dustCfg = cfg;
+    const n = cfg.n;
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(n * 3);
     const rnd = mulberry32(8);
     this._dustBase = [];
     for (let i = 0; i < n; i++) {
-      const x = -1.3 + rnd() * 2.6, y = 0.3 + rnd() * 2.4, z = -3.4 + rnd() * 2.8;
+      const x = cfg.x[0] + rnd() * (cfg.x[1] - cfg.x[0]), y = cfg.y[0] + rnd() * (cfg.y[1] - cfg.y[0]), z = cfg.z[0] + rnd() * (cfg.z[1] - cfg.z[0]);
       pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
       this._dustBase.push([x, y, z, rnd() * 6.28, 0.3 + rnd() * 0.7]);
     }
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const c = TX.makeCanvas(32, 32), ctx = c.getContext('2d');
-    const gr = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gr; ctx.fillRect(0, 0, 32, 32);
-    this.dustMat = new THREE.PointsMaterial({ size: 0.014, map: TX.toTex(c, { wrap: false }), color: '#fff2d8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    if (!this.dustMat) {
+      const c = TX.makeCanvas(32, 32), ctx = c.getContext('2d');
+      const gr = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, 32, 32);
+      this.dustMat = new THREE.PointsMaterial({ size: 0.014, map: TX.toTex(c, { wrap: false }), color: '#fff2d8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+    }
+    this.dustMat.color.set(cfg.color);
+    this.dustMat.size = cfg.size;
+    this.dustMat.opacity = 0;
     this.dust = new THREE.Points(g, this.dustMat);
     this.dust.frustumCulled = false;
     this.scene.add(this.dust);
   }
+  _updateDust(dt, target) {
+    const t = this.time;
+    this.dustMat.opacity = lerp(this.dustMat.opacity, target, 1 - Math.exp(-dt * 3));
+    if (this.dustMat.opacity > 0.02) {
+      const p = this.dust.geometry.attributes.position;
+      const amp = this._dustCfg === undefined || this._dustCfg.n === 420 ? 1 : 0.8;
+      for (let i = 0; i < this._dustBase.length; i++) {
+        const b = this._dustBase[i];
+        p.setXYZ(i, b[0] + Math.sin(t * 0.13 * b[4] + b[3]) * 0.25 * amp, b[1] + Math.sin(t * 0.09 * b[4] + b[3] * 2) * 0.18 * amp, b[2] + Math.cos(t * 0.11 * b[4] + b[3]) * 0.25 * amp);
+      }
+      p.needsUpdate = true;
+    }
+  }
 
   _updateWorld(dt) {
+    const S = this.S, R = this.refs;
+    const t = this.time;
+    if (this.CH) this.CH.world(this, dt, t);
+    else this._updateWorld1(dt);
+    for (const u of R.updaters) u(dt, t, this);
+    // 洗手间窗外：镜头在屋子南半边或洗手间里才画、才动
+    const O = R.outside;
+    O.group.visible = this.camera.position.z > 1.5;
+    if (O.group.visible) O.update(dt, t, this.camera);
+    // 挂钟
+    let ck = this.CH && this.CH.clockHands ? this.CH.clockHands(this) : null;
+    if (!ck) {
+      const [h0, m0] = this.CH ? this.CH.clock : [7, 30];
+      const gm = S ? 30 * clamp(S.elapsed / S.limit, 0, 1) : 29;
+      ck = { h: h0, m: m0 + gm, s: (gm % 1) * 60 };
+    }
+    const cl = R.clock.userData;
+    cl.minute.rotation.z = -(ck.m / 60) * Math.PI * 2;
+    cl.hour.rotation.z = -((ck.h + ck.m / 60) / 12) * Math.PI * 2;
+    cl.second.rotation.z = -(ck.s / 60) * Math.PI * 2;
+    // 紫光手电
+    const uvOn = S && S.uvOn && this.state === 'play';
+    const U = R.uvUniforms;
+    U.on.value = lerp(U.on.value, uvOn ? 1 : 0, 1 - Math.exp(-dt * 10));
+    this.uvLight.intensity = lerp(this.uvLight.intensity, uvOn ? 1.6 : 0, 1 - Math.exp(-dt * 10));
+    if (U.on.value > 0.01) {
+      const origin = _v1;
+      if (this.ctrl.mode === 'first') {
+        origin.copy(this.camera.position);
+        this.camera.getWorldDirection(_v3);
+        origin.addScaledVector(_v3, 0.15);
+        origin.y -= 0.12;
+      } else {
+        this.ch.torchTip.getWorldPosition(origin);
+      }
+      const dir = _v2.copy(this.aim).sub(origin);
+      if (dir.lengthSq() < 0.01) this.camera.getWorldDirection(dir);
+      dir.normalize();
+      this.uvLight.position.copy(origin);
+      this.uvLight.target.position.copy(origin).addScaledVector(dir, 3);
+      U.lightPos.value.copy(origin);
+      U.lightDir.value.copy(dir);
+    }
+  }
+
+  // 第一章的灯光：开关灯、拉窗帘
+  _updateWorld1(dt) {
     const S = this.S, R = this.refs, L = R.lights;
     const t = this.time;
     // --- 灯光目标值 ---
@@ -1409,16 +1684,7 @@ export class Game {
     L.monLight.color.lerp(_c.set(mc), kk);
     L.monLight.intensity = 1.1 + Math.sin(t * 13) * 0.04;
     // 灰尘
-    const dOp = curtainOpen ? 0.55 : 0.08;
-    this.dustMat.opacity = lerp(this.dustMat.opacity, dOp, kk);
-    if (this.dustMat.opacity > 0.02) {
-      const p = this.dust.geometry.attributes.position;
-      for (let i = 0; i < this._dustBase.length; i++) {
-        const b = this._dustBase[i];
-        p.setXYZ(i, b[0] + Math.sin(t * 0.13 * b[4] + b[3]) * 0.25, b[1] + Math.sin(t * 0.09 * b[4] + b[3] * 2) * 0.18, b[2] + Math.cos(t * 0.11 * b[4] + b[3]) * 0.25);
-      }
-      p.needsUpdate = true;
-    }
+    this._updateDust(dt, curtainOpen ? 0.55 : 0.08);
     // 鸟叫
     if (curtainOpen && this.state === 'play') {
       this._birdT = (this._birdT ?? 3) - dt;
@@ -1429,41 +1695,27 @@ export class Game {
       this._fogHold -= dt;
       if (this._fogHold <= 0) { const f = R.fog.mat; const o0 = f.opacity; this.tween(3, (k) => (f.opacity = lerp(o0, 0.12, k))); }
     }
-    // 洗手间窗外的猴子：镜头在屋子南半边或洗手间里才画、才动
-    const O = R.outside;
-    O.group.visible = this.camera.position.z > 1.5;
-    if (O.group.visible) O.update(dt, t, this.camera);
-    // 挂钟
-    const gm = S ? 30 * clamp(S.elapsed / S.limit, 0, 1) : 29;
-    const minutes = 30 + gm, secs = (gm % 1) * 60;
-    const cl = R.clock.userData;
-    cl.minute.rotation.z = -(minutes / 60) * Math.PI * 2;
-    cl.hour.rotation.z = -((7 + minutes / 60) / 12) * Math.PI * 2;
-    cl.second.rotation.z = -(secs / 60) * Math.PI * 2;
-    // 紫光手电
-    const uvOn = S && S.uvOn && this.state === 'play';
-    const U = R.uvUniforms;
-    U.on.value = lerp(U.on.value, uvOn ? 1 : 0, 1 - Math.exp(-dt * 10));
-    this.uvLight.intensity = lerp(this.uvLight.intensity, uvOn ? 1.6 : 0, 1 - Math.exp(-dt * 10));
-    if (U.on.value > 0.01) {
-      const origin = _v1;
-      if (this.ctrl.mode === 'first') {
-        origin.copy(this.camera.position);
-        this.camera.getWorldDirection(_v3);
-        origin.addScaledVector(_v3, 0.15);
-        origin.y -= 0.12;
-      } else {
-        this.ch.torchTip.getWorldPosition(origin);
-      }
-      const dir = _v2.copy(this.aim).sub(origin);
-      if (dir.lengthSq() < 0.01) this.camera.getWorldDirection(dir);
-      dir.normalize();
-      this.uvLight.position.copy(origin);
-      this.uvLight.target.position.copy(origin).addScaledVector(dir, 3);
-      U.lightPos.value.copy(origin);
-      U.lightDir.value.copy(dir);
-    }
+    // 拉开窗帘后的光柱
+    if (R.shafts) R.shafts.update(dt, t, curtainOpen ? 1 : 0);
   }
+}
+
+// 换章时把旧宿舍的显存全部释放
+function disposeTree(root) {
+  const mats = new Set(), geos = new Set(), texs = new Set();
+  root.traverse((o) => {
+    if (o.geometry) geos.add(o.geometry);
+    if (o.material) for (const m of [].concat(o.material)) if (m) mats.add(m);
+    if (o.isLight && o.shadow && o.shadow.map) { o.shadow.map.dispose(); o.shadow.map = null; }
+    if (o.isReflector && o.dispose) o.dispose();
+  });
+  for (const m of mats) {
+    for (const v of Object.values(m)) if (v && v.isTexture) texs.add(v);
+    if (m.uniforms) for (const u of Object.values(m.uniforms)) if (u && u.value && u.value.isTexture) texs.add(u.value);
+    m.dispose();
+  }
+  for (const g of geos) g.dispose();
+  for (const t of texs) t.dispose();
 }
 
 const _c = new THREE.Color();
