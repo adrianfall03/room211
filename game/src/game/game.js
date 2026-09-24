@@ -1384,6 +1384,8 @@ export class Game {
     this._monColor = null;
     this._fogHold = 0;
     this._mirrorN = 0;
+    // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来
+    this.auto = null; this._afterReach = null; this.cine = null; this._cutPose = null;
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
@@ -1410,7 +1412,7 @@ export class Game {
     this.audio.chime && this.audio.chime();
     this.ui.fade(1, { dur: 1.4, white: true });
     this.after(1.6, () => this.ui.fade(1, { dur: 0.6, white: false, card: '“同学……同学！醒醒！”<small>08:00 · 教学楼 A-304</small>' }));
-    this.after(5.2, () => { this.S.ach.add('loop'); this.showEnd(true); });
+    this.after(5.2, () => { if (this.S.done.some((d) => d.n === 1)) this.S.ach.add('loop'); this.showEnd(true); });
   }
   fail() {
     if (this.state !== 'play') return;
