@@ -1,0 +1,16 @@
+# 依赖和构建产物（npm install / npm run build 即可生成）
+node_modules/
+game/dist/
+game/dist-face/
+
+# 系统和本地工具文件
+.DS_Store
+.claude/
+
+# 原始参考素材（宿舍视频、照片），不上传
+*.mp4
+291790246181_.pic.jpg
+
+# 真人头像只留在本地：公开版准考证上是剪影
+game/src/assets/face.jpg
+逃离211宿舍（带头像）.html
