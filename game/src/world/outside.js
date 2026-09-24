@@ -1,33 +1,46 @@
 // 洗手间窗外：楼下草地、一棵大树，树枝上吊着三只荡来荡去的猴子（彩蛋）
+//   废墟章：黄昏里的一棵枯树，树枝上站着一排乌鸦（数一数有几只）；卡通章：夜里挂满彩灯的树，三只猴子坐在树枝上打呼噜
 //   室外一律用 MeshBasicMaterial + 顶点色里“烘焙”好的明暗：白天的亮度不受屋里开关灯影响，也省灯光计算
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as TX from '../core/textures.js';
+import * as TR from '../core/tex_ruin.js';
+import * as TT from '../core/tex_toon.js';
 import { mulberry32, clamp, lerp, easeInOut } from '../core/util.js';
 
 const SUN = new THREE.Vector3(0.35, 0.8, -0.5).normalize(); // 阳光从楼这一侧的斜上方照过去，朝窗户的一面是亮的
 const _zAxis = new THREE.Vector3(0, 0, 1);
 const _col = new THREE.Color();
+// 不同章节的室外光照：白天 / 黄昏（废墟）/ 夜晚（卡通）。颜色直接“烘”进顶点色
+const LIGHTS = {
+  normal: { dir: SUN, tint: [1, 1, 1], lit: [1, 1, 1] },
+  ruin: { dir: new THREE.Vector3(-0.6, 0.35, -0.7).normalize(), tint: [0.62, 0.52, 0.46], lit: [1.25, 0.82, 0.5] },
+  toon: { dir: new THREE.Vector3(0.3, 0.7, 0.6).normalize(), tint: [0.2, 0.26, 0.46], lit: [0.55, 0.66, 1.0] },
+};
+let LIGHT = LIGHTS.normal;
 
 // 给几何体刷顶点色：环境光 + 按法线算的“阳光”，可选每个面随机深浅
-function paint(geo, color, { shade = 0.4, jitter = 0, rnd = null, flat = false } = {}) {
+function paint(geo, color, { shade = 0.4, jitter = 0, rnd = null, flat = false, raw = false } = {}) {
   const g = flat && geo.index ? geo.toNonIndexed() : geo;
   if (!g.attributes.normal || flat) g.computeVertexNormals();
   const n = g.attributes.normal, cnt = n.count;
   const col = new Float32Array(cnt * 3);
   const base = _col.set(color).clone();
+  const L = LIGHT, D = L.dir;
   let j = 1;
   for (let i = 0; i < cnt; i++) {
     if (jitter && (!flat || i % 3 === 0)) j = 1 + ((rnd ? rnd() : Math.random()) - 0.5) * jitter;
-    const d = Math.max(0, n.getX(i) * SUN.x + n.getY(i) * SUN.y + n.getZ(i) * SUN.z);
+    const d = Math.max(0, n.getX(i) * D.x + n.getY(i) * D.y + n.getZ(i) * D.z);
     const k = (1 - shade + shade * d) * j;
-    col[i * 3] = base.r * k; col[i * 3 + 1] = base.g * k; col[i * 3 + 2] = base.b * k;
+    if (raw) { col[i * 3] = base.r; col[i * 3 + 1] = base.g; col[i * 3 + 2] = base.b; continue; }
+    // 暗部偏向环境色，亮部偏向光源色
+    for (let c = 0; c < 3; c++) col[i * 3 + c] = base[['r', 'g', 'b'][c]] * k * (L.tint[c] + (L.lit[c] - L.tint[c]) * d * shade * 1.6);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   if (g.attributes.uv) g.deleteAttribute('uv');
   return g;
 }
-const vcMat = () => new THREE.MeshBasicMaterial({ vertexColors: true });
+const vcMat = () => new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
 
 // 两点之间的一根树枝（圆锥台）
 function limb(a, b, r0, r1, seg = 7) {
@@ -118,55 +131,138 @@ const POSES = [
 const _poseT = new THREE.Vector3();
 const SH_R = new THREE.Vector3(0.1, -0.035, 0);
 
-export function buildOutside({ ground = -3.3 } = {}) {
+// ---------------- 乌鸦（废墟章） ----------------
+function makeCrow(rnd) {
+  const mat = vcMat();
+  const sph = (r, color, sx, sy, sz, x, y, z, shade = 0.5) => { const g = new THREE.SphereGeometry(r, 12, 9); g.scale(sx, sy, sz); g.translate(x, y, z); return paint(g, color, { shade }); };
+  const root = new THREE.Group();
+  const body = new THREE.Group(); root.add(body);
+  const black = '#1c1c22', sheen = '#2c3040';
+  body.add(new THREE.Mesh(mergeGeometries([
+    sph(0.07, black, 1, 1, 1.9, 0, 0.1, 0),
+    (() => { const g = new THREE.BoxGeometry(0.07, 0.012, 0.14); g.translate(0, 0.085, 0.17); g.rotateX(-0.35); return paint(g, black); })(),
+    (() => { const g = new THREE.CylinderGeometry(0.004, 0.004, 0.08, 5); g.translate(0.025, 0.03, 0.01); return paint(g, '#3a3434'); })(),
+    (() => { const g = new THREE.CylinderGeometry(0.004, 0.004, 0.08, 5); g.translate(-0.025, 0.03, 0.01); return paint(g, '#3a3434'); })(),
+  ]), mat));
+  const head = new THREE.Group(); head.position.set(0, 0.17, -0.11); body.add(head);
+  head.add(new THREE.Mesh(mergeGeometries([
+    sph(0.05, sheen, 1, 1, 1.1, 0, 0, 0),
+    (() => { const g = new THREE.ConeGeometry(0.018, 0.08, 7); g.rotateX(-Math.PI / 2); g.translate(0, -0.008, -0.08); return paint(g, '#26262c'); })(),
+    sph(0.009, '#e8d9a0', 1, 1, 1, 0.034, 0.012, -0.03, 0), sph(0.009, '#e8d9a0', 1, 1, 1, -0.034, 0.012, -0.03, 0),
+    sph(0.005, '#050505', 1, 1, 1, 0.041, 0.013, -0.034, 0), sph(0.005, '#050505', 1, 1, 1, -0.041, 0.013, -0.034, 0),
+  ]), mat));
+  const wings = [-1, 1].map((sd) => {
+    const w = new THREE.Group(); w.position.set(sd * 0.06, 0.13, -0.04); body.add(w);
+    const g = new THREE.SphereGeometry(0.06, 10, 7); g.scale(0.25, 0.7, 2.1); g.translate(sd * 0.01, -0.02, 0.07);
+    w.add(new THREE.Mesh(paint(g, black), mat));
+    return w;
+  });
+  return { root, body, head, wings, phase: rnd() * 6.28, flap: 0, caw: 0 };
+}
+
+export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
+  LIGHT = LIGHTS[theme] || LIGHTS.normal;
+  const ruin = theme === 'ruin', toon = theme === 'toon';
   const g = new THREE.Group(); g.name = 'outside';
   const rnd = mulberry32(2112);
   // 远景 + 楼下草地
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(80, 34), new THREE.MeshBasicMaterial({ map: TX.genParkView(), fog: false }));
+  const backTex = ruin ? TR.genParkViewRuin() : toon ? TT.genParkViewNight() : TX.genParkView();
+  const lawnTex = ruin ? TR.genLawnRuin() : toon ? TT.genLawnNight() : TX.genLawn();
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(80, 34), new THREE.MeshBasicMaterial({ map: backTex, fog: false }));
   back.position.set(0, 7, 34); back.rotation.y = Math.PI; g.add(back);
-  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(80, 28), new THREE.MeshBasicMaterial({ map: TX.genLawn(), fog: false }));
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(80, 28), new THREE.MeshBasicMaterial({ map: lawnTex, fog: false }));
   lawn.rotation.x = -Math.PI / 2; lawn.position.set(0, ground, 6.5 + 14); g.add(lawn);
 
   // 大树：树干 + 树枝合成一个网格，树叶合成一个网格
-  const bark = '#6a4a31';
+  const bark = ruin ? '#5a5048' : '#6a4a31';
   const T0 = new THREE.Vector3(1.9, ground, 9.9), T1 = new THREE.Vector3(1.75, 3.2, 9.75), T2 = new THREE.Vector3(1.6, 6.2, 9.9);
   const MB = { a: new THREE.Vector3(1.75, 2.36, 9.62), b: new THREE.Vector3(-1.95, 2.74, 8.62) }; // 猴子吊着的那根横枝
-  const wood = [
-    limb(T0, T1, 0.26, 0.2, 9), limb(T1, T2, 0.2, 0.1, 8),
-    limb(MB.a, MB.b, 0.085, 0.04), limb(MB.b, new THREE.Vector3(-2.6, 3.05, 8.35), 0.04, 0.018),
-    limb(new THREE.Vector3(1.7, 3.6, 9.8), new THREE.Vector3(3.6, 4.6, 8.9), 0.09, 0.03),
-    limb(new THREE.Vector3(1.65, 4.3, 9.85), new THREE.Vector3(-0.6, 5.6, 10.8), 0.08, 0.03),
-    limb(new THREE.Vector3(1.8, 1.4, 9.8), new THREE.Vector3(3.4, 2.2, 10.9), 0.1, 0.04),
-    limb(new THREE.Vector3(-0.4, 2.52, 9.06), new THREE.Vector3(-0.9, 3.4, 9.9), 0.035, 0.015),
-  ].map((x) => paint(x, bark, { shade: 0.5 }));
-  g.add(new THREE.Mesh(mergeGeometries(wood), vcMat()));
+  const limbs = [
+    [T0, T1, 0.26, 0.2, 9], [T1, T2, 0.2, 0.1, 8],
+    [MB.a, MB.b, 0.085, 0.04], [MB.b, new THREE.Vector3(-2.6, 3.05, 8.35), 0.04, 0.018],
+    [new THREE.Vector3(1.7, 3.6, 9.8), new THREE.Vector3(3.6, 4.6, 8.9), 0.09, 0.03],
+    [new THREE.Vector3(1.65, 4.3, 9.85), new THREE.Vector3(-0.6, 5.6, 10.8), 0.08, 0.03],
+    [new THREE.Vector3(1.8, 1.4, 9.8), new THREE.Vector3(3.4, 2.2, 10.9), 0.1, 0.04],
+    [new THREE.Vector3(-0.4, 2.52, 9.06), new THREE.Vector3(-0.9, 3.4, 9.9), 0.035, 0.015],
+  ];
+  const wood = limbs.map(([a, b, r0, r1, seg]) => limb(a, b, r0, r1, seg));
+  if (ruin) {
+    // 枯树：没有树冠，只剩一层层往外戳的细枝
+    const grow = (a, dir, len, r, depth) => {
+      const b = a.clone().addScaledVector(dir, len);
+      wood.push(limb(a, b, r, r * 0.6, 5));
+      if (depth <= 0) return;
+      for (let k = 0; k < 2; k++) {
+        const nd = dir.clone().add(new THREE.Vector3((rnd() - 0.5) * 1.3, rnd() * 0.7, (rnd() - 0.5) * 1.3)).normalize();
+        grow(b, nd, len * (0.55 + rnd() * 0.2), r * 0.6, depth - 1);
+      }
+    };
+    for (const [a, b] of limbs.slice(1)) {
+      const d = b.clone().sub(a);
+      for (let k = 0; k < 2; k++) {
+        const p = a.clone().addScaledVector(d, 0.45 + rnd() * 0.5);
+        grow(p, new THREE.Vector3((rnd() - 0.5) * 1.4, 0.6 + rnd() * 0.6, (rnd() - 0.2) * 1.2).normalize(), 0.7 + rnd() * 0.5, 0.035, 2);
+      }
+    }
+    grow(T2, new THREE.Vector3(0.1, 1, 0.1).normalize(), 1.2, 0.08, 3);
+  }
+  g.add(new THREE.Mesh(mergeGeometries(wood.map((x) => paint(x, bark, { shade: 0.5 }))), vcMat()));
   const leaves = [];
-  const blob = (x, y, z, r, color) => {
+  const blob = (x, y, z, r, color, squash = 0.85) => {
     const geo = new THREE.IcosahedronGeometry(r, 1);
     const p = geo.attributes.position;
-    for (let i = 0; i < p.count; i++) { const k = 1 + (rnd() - 0.5) * 0.28; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.85, p.getZ(i) * k); }
+    for (let i = 0; i < p.count; i++) { const k = 1 + (rnd() - 0.5) * 0.28; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * squash, p.getZ(i) * k); }
     geo.translate(x, y, z);
     leaves.push(paint(geo, color, { shade: 0.5, jitter: 0.22, rnd, flat: true }));
   };
-  const greens = ['#4f8a2e', '#3f7a28', '#5f9a36', '#467f2f'];
+  const greens = ruin ? ['#6d5a3a', '#5e4c33', '#7a6443', '#4f4a36'] : toon ? ['#3f9a6a', '#358a60', '#4fae78', '#3a8f70'] : ['#4f8a2e', '#3f7a28', '#5f9a36', '#467f2f'];
   const crown = [[1.6, 6.3, 9.9, 1.5], [0.4, 5.7, 10.3, 1.2], [2.9, 5.6, 9.6, 1.25], [1.7, 5.0, 11.0, 1.3], [-0.7, 5.3, 10.9, 1.0],
     [3.7, 4.7, 8.9, 0.9], [-2.5, 3.6, 8.6, 0.7], [-1.2, 3.8, 9.9, 0.8], [3.3, 2.5, 11.0, 0.9], [0.2, 4.2, 11.4, 1.0], [2.6, 3.6, 10.8, 0.95]];
-  crown.forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i % greens.length]));
+  if (!ruin) crown.forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i % greens.length]));
+  else [[3.5, 4.5, 8.95, 0.22], [-0.8, 5.4, 10.7, 0.25], [2.2, 6.4, 9.8, 0.3]].forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i]));
   // 远一点的几棵树
   const far = [[-6.5, 13, 1.5], [-3.2, 16, 1.9], [5.2, 14, 1.6], [8.5, 18, 2.2], [-9.5, 19, 2.0], [0.8, 20, 2.1]];
   for (const [x, z, r] of far) {
-    blob(x, ground + 2.6 + r, z, r, greens[(x * 7) & 3]);
-    blob(x + r * 0.6, ground + 2.1 + r * 0.6, z - 0.3, r * 0.7, greens[(z * 3) & 3]);
-    leaves.push(paint(limb(new THREE.Vector3(x, ground, z), new THREE.Vector3(x, ground + 2.8, z), 0.18, 0.12), bark, { shade: 0.5, flat: true }));
+    if (!ruin) {
+      blob(x, ground + 2.6 + r, z, r, greens[(x * 7) & 3]);
+      blob(x + r * 0.6, ground + 2.1 + r * 0.6, z - 0.3, r * 0.7, greens[(z * 3) & 3]);
+    }
+    leaves.push(paint(limb(new THREE.Vector3(x, ground, z), new THREE.Vector3(x, ground + (ruin ? 4.2 : 2.8), z), 0.18, ruin ? 0.04 : 0.12), bark, { shade: 0.5, flat: true }));
   }
-  // 楼脚下一排灌木
-  for (let x = -7; x <= 7; x += 1.1) blob(x + (rnd() - 0.5) * 0.4, ground + 0.35, 7.2 + rnd() * 0.3, 0.55 + rnd() * 0.2, greens[(rnd() * 4) | 0]);
+  // 楼脚下一排灌木（废墟章：枯黄的野草）
+  for (let x = -7; x <= 7; x += 1.1) blob(x + (rnd() - 0.5) * 0.4, ground + 0.35, 7.2 + rnd() * 0.3, 0.55 + rnd() * 0.2, greens[(rnd() * 4) | 0], ruin ? 0.5 : 0.85);
   g.add(new THREE.Mesh(mergeGeometries(leaves), vcMat()));
 
-  // 三只猴子（大、中、小），单手吊在横枝上荡
+  // ---- 卡通章：树上挂着一串串彩灯 ----
+  const fairy = [];
+  let fairyMesh = null;
+  if (toon) {
+    const strings = [
+      [new THREE.Vector3(1.7, 3.0, 9.5), new THREE.Vector3(-1.6, 3.3, 8.5), 0.5],
+      [new THREE.Vector3(1.6, 4.2, 9.4), new THREE.Vector3(-0.9, 4.6, 9.8), 0.6],
+      [new THREE.Vector3(1.8, 2.0, 9.4), new THREE.Vector3(3.3, 2.5, 10.4), 0.4],
+      [new THREE.Vector3(1.7, 3.7, 9.5), new THREE.Vector3(3.5, 4.3, 8.9), 0.45],
+      [new THREE.Vector3(-2.5, 3.0, 8.4), new THREE.Vector3(-4.5, 2.2, 8.6), 0.5],
+    ];
+    const wires = [];
+    const palette = ['#ffd36e', '#ff8fb1', '#8fe3ff', '#b6ff8f', '#ffb36e'].map((c) => new THREE.Color(c));
+    for (const [a, b, sag] of strings) {
+      const pts = [];
+      for (let k = 0; k <= 16; k++) { const t = k / 16; const p = a.clone().lerp(b, t); p.y -= Math.sin(t * Math.PI) * sag; pts.push(p); }
+      wires.push(paint(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.006, 4), '#1a2030', { raw: true }));
+      for (let k = 1; k < 16; k++) fairy.push({ p: pts[k], c: palette[(fairy.length) % palette.length], ph: rnd() * 6.28 });
+    }
+    g.add(new THREE.Mesh(mergeGeometries(wires), vcMat()));
+    fairyMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.035, 8, 6), new THREE.MeshBasicMaterial({ toneMapped: false }), fairy.length);
+    const m4 = new THREE.Matrix4();
+    fairy.forEach((f, i) => { m4.makeTranslation(f.p.x, f.p.y - 0.03, f.p.z); fairyMesh.setMatrixAt(i, m4); fairyMesh.setColorAt(i, f.c); });
+    g.add(fairyMesh);
+  }
+
+  // 三只猴子（大、中、小），单手吊在横枝上荡（卡通章：坐在树枝上睡觉）
   const furs = [['#6d4a2b', '#e3c49a'], ['#7a5433', '#ead0a6'], ['#8a6040', '#f0d8b2']];
   const scales = [1.12, 0.95, 0.78];
-  const monkeys = [0.3, 0.5, 0.7].map((t, i) => {
+  const monkeys = ruin ? [] : [0.3, 0.5, 0.7].map((t, i) => {
     const mk = makeMonkey(furs[i][0], furs[i][1]);
     const grip = MB.a.clone().lerp(MB.b, t);
     mk.root.position.copy(grip);
@@ -175,13 +271,38 @@ export function buildOutside({ ground = -3.3 } = {}) {
     g.add(mk.root);
     return { ...mk, grip, phase: rnd() * 6.28, amp: 0.42 + rnd() * 0.18, w: 2.0 + rnd() * 0.5, idx: i };
   });
-  g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; o.userData.noRay = true; } });
+  // 睡觉时头顶冒的 Zzz
+  const zzz = [];
+  if (toon) {
+    const zc = TX.makeCanvas(64, 64), zx = zc.getContext('2d');
+    zx.fillStyle = '#eaf2ff'; zx.font = 'bold 52px "Comic Sans MS", Arial'; zx.textAlign = 'center'; zx.fillText('Z', 32, 50);
+    const zm = new THREE.SpriteMaterial({ map: TX.toTex(zc, { wrap: false }), transparent: true, depthWrite: false, fog: false });
+    for (const m of monkeys) for (let k = 0; k < 3; k++) { const sp = new THREE.Sprite(zm.clone()); sp.scale.setScalar(0.14); g.add(sp); zzz.push({ sp, m, off: k / 3 }); }
+  }
+  // 废墟章：树枝上一排乌鸦（只数得清的那种间距）
+  const crows = [];
+  if (ruin) for (let i = 0; i < 9; i++) { const c = makeCrow(rnd); c.root.visible = false; g.add(c.root); crows.push(c); }
+  const setCrows = (n) => {
+    const vis = crows.slice(0, n);
+    crows.forEach((c) => (c.root.visible = false));
+    vis.forEach((c, i) => {
+      const t = 0.22 + (0.6 * (i + 0.5)) / n + (rnd() - 0.5) * 0.015;
+      const p = MB.a.clone().lerp(MB.b, t);
+      const r = lerp(0.085, 0.04, t);
+      c.root.position.set(p.x, p.y + r * 0.8, p.z);
+      c.root.rotation.y = Math.PI * 0.12 + (rnd() - 0.5) * 0.9 + (i % 2 ? 0.3 : -0.3);
+      c.root.scale.setScalar(1.25 + rnd() * 0.25);
+      c.root.visible = true;
+    });
+  };
+  g.traverse((o) => { if (o.isMesh || o.isSprite) { o.castShadow = false; o.receiveShadow = false; o.userData.noRay = true; } });
 
   // ---- 动画 ----
-  const state = { b: 0, target: 0, hold: 0 }; // b：0=吊着荡，1=坐在树枝上摆造型
+  const state = { b: 0, target: 0, hold: 0 }; // b：0=吊着荡（卡通章：睡觉），1=坐在树枝上摆造型
   const hangT = new THREE.Vector3(), poseT = new THREE.Vector3(), tmp = new THREE.Vector3();
   const _inv = new THREE.Matrix4(), _pos = new THREE.Vector3(), _hp = new THREE.Vector3();
   const camLocal = new THREE.Vector3();
+  const _cc = new THREE.Color();
   const update = (dt, t, camera) => {
     if (state.hold > 0) { state.hold -= dt; if (state.hold <= 0) state.target = 0; }
     const db = state.target - state.b;
@@ -189,6 +310,29 @@ export function buildOutside({ ground = -3.3 } = {}) {
     const e = easeInOut(state.b);
     for (const m of monkeys) {
       const tt = t * m.w + m.phase;
+      if (toon) {
+        // 睡觉：坐在树枝上，脑袋一点一点的；被叫醒后摆“三不猴”
+        _hp.set(0, 0.36 + Math.sin(t * 1.4 + m.idx) * 0.006, -0.01);
+        m.torso.position.copy(_hp);
+        m.torso.rotation.set(lerp(0.32 + Math.sin(t * 1.4 + m.idx) * 0.04, 0.1, e), 0, lerp(Math.sin(t * 0.5 + m.idx) * 0.06, 0, e));
+        m.torso.updateMatrix();
+        let hy = 0, hx = lerp(0.55 + Math.sin(t * 1.4 + m.idx) * 0.08, 0, e);
+        if (camera && e > 0.01) {
+          m.torso.updateWorldMatrix(true, false);
+          camLocal.copy(camera.position).applyMatrix4(_inv.copy(m.torso.matrixWorld).invert()).sub(m.head.position);
+          hy = lerp(0, clamp(Math.atan2(-camLocal.x, -camLocal.z), -0.8, 0.8), e);
+          hx = lerp(hx, clamp(Math.atan2(camLocal.y, Math.hypot(camLocal.x, camLocal.z)), -0.5, 0.5) * 0.8, e);
+        }
+        m.head.rotation.set(hx, hy, m.idx === 1 ? 0.15 * (1 - e) : -0.12 * (1 - e));
+        const toTorso = (v) => _poseT.copy(v).applyEuler(m.head.rotation).add(m.head.position);
+        const P = POSES[m.idx];
+        solveArm(m.armR, poseT.set(0.1, -0.3, -0.12).lerp(toTorso(P.R), e));
+        solveArm(m.armL, poseT.set(-0.1, -0.3, -0.12).lerp(toTorso(P.L), e));
+        m.legR.rotation.set(1.25 + Math.sin(t * 1.1 + m.idx) * 0.1 * (1 - e), 0, 0.05);
+        m.legL.rotation.set(1.25 + Math.sin(t * 1.3 + m.idx) * 0.1 * (1 - e), 0, -0.05);
+        m.tail.rotation.set(-1.0 + Math.sin(t * 0.8 + m.idx) * 0.3, 0, Math.sin(t * 0.6) * 0.2);
+        continue;
+      }
       // 吊着：以抓握点为轴的单摆
       const th = Math.sin(tt) * m.amp;
       const tilt = -0.28 + Math.sin(tt + 1.2) * 0.08;
@@ -226,7 +370,45 @@ export function buildOutside({ ground = -3.3 } = {}) {
       m.legL.rotation.set(lerp(0.35 - kick * 0.35, 1.25 + Math.sin(t * 2.4) * 0.12 * e, e), 0, lerp(-0.15, -0.05, e));
       m.tail.rotation.set(lerp(Math.sin(tt) * 0.3, -1.0 + Math.sin(t * 1.6 + m.idx) * 0.15, e), 0, lerp(Math.sin(tt * 0.7) * 0.4, 0, e));
     }
+    // Zzz 往上飘，醒着的时候不冒
+    for (const z of zzz) {
+      const k = (t * 0.35 + z.off + z.m.idx * 0.21) % 1;
+      z.m.head.getWorldPosition(tmp);
+      z.sp.position.set(tmp.x + 0.08 + k * 0.18, tmp.y + 0.1 + k * 0.45, tmp.z + Math.sin(k * 6 + z.off * 5) * 0.05);
+      z.sp.material.opacity = Math.sin(k * Math.PI) * (1 - e);
+      z.sp.scale.setScalar((0.08 + k * 0.12) * z.m.root.scale.x);
+    }
+    // 彩灯一闪一闪
+    if (fairyMesh) {
+      fairy.forEach((f, i) => { const k = 0.55 + 0.45 * Math.max(0, Math.sin(t * 2.2 + f.ph)); fairyMesh.setColorAt(i, _cc.copy(f.c).multiplyScalar(k * 1.6)); });
+      fairyMesh.instanceColor.needsUpdate = true;
+    }
+    // 乌鸦：歪头、梳毛、偶尔扑腾一下；被看的时候齐刷刷转头盯着你
+    for (const c of crows) {
+      if (!c.root.visible) continue;
+      const tt = t + c.phase;
+      const look = state.b;
+      let hy = Math.sin(tt * 0.7) * 0.7 * Math.sign(Math.sin(tt * 0.31)), hx = Math.sin(tt * 1.9) * 0.1;
+      if (camera && look > 0.01) {
+        c.root.updateWorldMatrix(true, true);
+        camLocal.copy(camera.position).applyMatrix4(_inv.copy(c.head.matrixWorld).invert());
+        const cy = clamp(Math.atan2(-camLocal.x, -camLocal.z), -1.2, 1.2);
+        hy = lerp(hy, c.head.rotation.y + cy, look * 0.5); hx = lerp(hx, -0.2, look);
+      }
+      c.head.rotation.set(hx, hy, Math.sin(tt * 2.3) * 0.12);
+      if (Math.sin(tt * 0.23) > 0.985) c.flap = 1;
+      c.flap = Math.max(0, c.flap - dt * 1.2);
+      const fl = c.flap > 0 ? Math.sin(t * 28) * 0.9 * c.flap : 0;
+      c.wings[0].rotation.set(0, 0, -0.1 - Math.abs(fl));
+      c.wings[1].rotation.set(0, 0, 0.1 + Math.abs(fl));
+      c.body.position.y = c.flap * 0.03 * Math.abs(Math.sin(t * 14));
+      c.body.rotation.x = Math.sin(tt * 1.3) * 0.04 + (c.caw > 0 ? -0.2 * c.caw : 0);
+      c.caw = Math.max(0, c.caw - dt * 2);
+    }
   };
-  const trigger = (sec = 4.5) => { state.target = 1; state.hold = sec; };
-  return { group: g, update, trigger, get busy() { return state.b > 0.02 || state.target > 0; } };
+  const trigger = (sec = 4.5) => {
+    state.target = 1; state.hold = sec;
+    crows.forEach((c, i) => { if (i % 3 === 0) { c.caw = 1; c.flap = 0.6; } });
+  };
+  return { group: g, update, trigger, setCrows, crows, branch: MB, get busy() { return state.b > 0.02 || state.target > 0; } };
 }
