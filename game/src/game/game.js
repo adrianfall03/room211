@@ -308,6 +308,28 @@ export class Game {
     ];
     for (const [t, fn] of seq) this.after(t, () => { if (this.state === 'intro') fn(); });
   }
+  _showSkip(fn) {
+    if (this._skipBtn) this._skipBtn.remove();
+    const b = document.createElement('button');
+    b.id = 'skip'; b.textContent = '跳过 ▶▶';
+    b.addEventListener('click', fn);
+    document.body.appendChild(b);
+    this._skipBtn = b;
+  }
+  // 跳过第二、三章的进门过场
+  _skipCut() {
+    if (this.state !== 'cut') return;
+    this.timers = [];
+    const D = this.refs.door;
+    D.pivot.rotation.y = D.base;
+    this.auto = null; this._afterReach = null; this._cutPose = null;
+    this.ctrl.teleport(-1.05, 3.9, Math.PI / 2);
+    this.ctrl.yaw = Math.PI / 2 + Math.PI;
+    this.ch.setExpression('neutral');
+    this._cineTo(null, null, 0.6);
+    this.ui.subtitle('', 0.01);
+    this.beginPlay();
+  }
   _skipIntro() {
     if (this.state !== 'intro') return;
     this.timers = [];
@@ -1068,7 +1090,7 @@ export class Game {
   toggleWcDoor() {
     const D = this.refs.wcDoor;
     this._swingDoor(D, { shutId: 'wcShut', openId: 'wcOpen', sound: (o) => this.audio.glassDoor(o) });
-    if (D.open && !this.S.f.wcSeen) { this.S.f.wcSeen = true; this.after(0.5, () => this.say('洗手间的灯一直亮着……谁昨晚没关？', 2.8)); }
+    if (D.open && !this.S.f.wcSeen && !this.CH) { this.S.f.wcSeen = true; this.after(0.5, () => this.say('洗手间的灯一直亮着……谁昨晚没关？', 2.8)); }
   }
   toggleCubDoor() {
     this._swingDoor(this.refs.cubDoor, { shutId: 'cubShut', openId: 'cubOpen', sound: (o) => this.audio.stallDoor(o), dur: 0.6 });
@@ -1338,6 +1360,7 @@ export class Game {
     this.state = 'cut';
     this.ui.fade(0, { dur: 1.4, white: true, card });
     CH.intro(this, { prepare: false });
+    this._showSkip(() => this._skipCut());
     if (this.gfx.useComposer) { G.warp = 1; await this._tweenP(1.5, (k) => { G.warp = (1 - k) * (1 - k); }); }
     G.warp = 0;
   }
@@ -1450,7 +1473,7 @@ export class Game {
       ${success ? `<div style="color:var(--muted)">${S.name} 带着准考证，醒在了考场上</div>` : failInfo}
       <div class="rank">${rank}</div>
       <p>${text}</p>
-      <div class="stats">${success ? chRows : `<div><b>${formatMMSS(S.elapsed)}</b><span>用时</span></div><div><b>${formatMMSS(Math.max(0, S.limit - S.elapsed))}</b><span>剩余时间</span></div>`}<div><b>${success ? formatMMSS(totalT) : totalH}</b><span>${success ? '总用时' : '提示次数'}</span></div></div>
+      <div class="stats">${success ? chRows : `<div><b>${formatMMSS(Math.min(S.elapsed, S.limit))}</b><span>用时</span></div><div><b>${formatMMSS(Math.max(0, S.limit - S.elapsed))}</b><span>剩余时间</span></div>`}<div><b>${success ? formatMMSS(totalT) : totalH}</b><span>${success ? '总用时' : '提示次数'}</span></div></div>
       <div class="ach">${achHtml}</div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">${!success && this.chapter > 1 ? '<button class="btn primary" data-a="retry">重来本章</button>' : ''}<button class="btn ${!success && this.chapter > 1 ? '' : 'primary'}" data-a="again">${success ? '再来一局' : '从头再来'}</button></div>`, `end ${success ? '' : 'fail'}`);
     node.querySelector('[data-a=again]').addEventListener('click', () => { this.settings.chapter = 1; this.saveSettings(); location.reload(); });

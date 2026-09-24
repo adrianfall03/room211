@@ -548,6 +548,29 @@ export function decorateRuin(ctx) {
     });
   }
 
+  // ===== 12.5 灯泡亮了以后，几只飞蛾绕着它扑腾 =====
+  const mothMat = new THREE.MeshBasicMaterial({ color: '#2a2018', side: THREE.DoubleSide, transparent: true, opacity: 0.85 });
+  const moths = [];
+  for (let i = 0; i < 6; i++) {
+    const m = new THREE.Group();
+    for (const s of [-1, 1]) { const w = new THREE.Mesh(new THREE.CircleGeometry(0.012, 6), mothMat); w.position.x = s * 0.01; w.scale.set(1, 0.7, 1); m.add(w); }
+    m.visible = false; m.userData.noRay = true;
+    ADD(m); moths.push({ m, ph: rnd() * 6.28, r: 0.12 + rnd() * 0.14, sp: 2 + rnd() * 2.5, h: (rnd() - 0.5) * 0.2 });
+  }
+  refs.updaters.push((dt, t) => {
+    const lit = bulbMat.emissiveIntensity > 1;
+    const c = bulb.getWorldPosition(new THREE.Vector3());
+    for (const o of moths) {
+      o.m.visible = lit;
+      if (!lit) continue;
+      const a = t * o.sp + o.ph;
+      o.m.position.set(c.x + Math.cos(a) * o.r + Math.sin(t * 7 + o.ph) * 0.02, c.y + o.h + Math.sin(a * 1.7) * 0.06, c.z + Math.sin(a) * o.r);
+      o.m.rotation.set(0, -a, 0);
+      const f = Math.abs(Math.sin(t * 40 + o.ph));
+      o.m.children[0].rotation.y = f * 1.2; o.m.children[1].rotation.y = -f * 1.2;
+    }
+  });
+
   // ===== 13. 动画：灯泡晃、滴水、CRT 雪花 =====
   refs.updaters.push((dt, t) => {
     bulbG.rotation.x = Math.sin(t * 1.1) * 0.07 + Math.sin(t * 0.37) * 0.03;

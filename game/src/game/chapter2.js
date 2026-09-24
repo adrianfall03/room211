@@ -75,6 +75,7 @@ export const CH2 = {
     g.after(1.2, () => g.ui.subtitle('书桌上那本发黄的本子……好像是日记？', 3.6, g.S.name));
   },
   exitLine: () => '走！离开这个鬼地方！',
+  onFail(g) { g.audio.bulbPop(); g.S.f.power = false; g.refs.crt.on = false; g.audio.stopAllLoops(); },
   // 出门时颜色一点点回来：老胶片滤镜褪掉，门口是一个紫色的时空漩涡
   onDoorOpen(g) { addPortal(g); g.gfx.grade.set('normal'); },
 

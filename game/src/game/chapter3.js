@@ -50,7 +50,7 @@ export const CH3 = {
     if (!g.ch.root.userData.toon) { toonifyScene(g.ch.root, { minR: 0.015, maxR: 1 }); g.ch.root.userData.toon = true; }
     g.scene.fog = null;
     g.lightMode = 'game';
-    this._paT = 0;
+    this._paT = 0; this._blackout = false;
   },
 
   intro(g, { prepare }) {
@@ -92,7 +92,17 @@ export const CH3 = {
     for (const a of g.refs.animalList) { a.setState('cheer'); a.emote.show('heart', 2.5); }
     g.audio.sparkle();
   },
-  onEnd(g) { for (const a of g.refs.animalList) a.setState('cheer'); },
+  onEnd(g, success) { for (const a of g.refs.animalList) a.setState(success ? 'cheer' : a.state); },
+  // 熄灯：屋里所有的灯一下子全灭了
+  onFail(g) {
+    const R = g.refs, TL = R.toonLights;
+    g.audio.clunk();
+    g.S.f.lightsOn = false; g.S.f.powerCut = true;
+    for (const s of R.gameScreens) s.off = true;
+    R.toonLights.fairyMesh.visible = false;
+    for (const b of TL.bulbs) b.visible = false;
+    this._blackout = true;
+  },
 
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
@@ -394,7 +404,7 @@ export const CH3 = {
   world(g, dt, t) {
     const S = g.S, R = g.refs, L = R.lights, TL = R.toonLights;
     const kk = 1 - Math.exp(-dt * 4);
-    const lightsOn = (S && S.f.lightsOn) || g.lightMode === 'end';
+    const lightsOn = ((S && S.f.lightsOn) || g.lightMode === 'end') && !this._blackout;
     const power = !(S && S.f.powerCut);
     let spot = lightsOn ? 11 : 0, tube = lightsOn ? 2.4 : 0;
     g.light.spot = lerp(g.light.spot, spot, 1 - Math.exp(-dt * 8));
@@ -410,8 +420,9 @@ export const CH3 = {
     const hue = (t * 0.08) % 1;
     L.monLight.color.setHSL(hue, 0.8, 0.6); L.monLight.intensity = power ? 0.75 + Math.sin(t * 9) * 0.12 : 0;
     TL.glow2.color.setHSL((hue + 0.5) % 1, 0.8, 0.6); TL.glow2.intensity = power ? 0.7 + Math.sin(t * 7) * 0.12 : 0;
-    TL.vanity.intensity = 0.9 + Math.sin(t * 3) * 0.08;
-    TL.fairyL.intensity = 1.1 + Math.sin(t * 1.7) * 0.15;
+    TL.vanity.intensity = this._blackout ? 0 : 0.9 + Math.sin(t * 3) * 0.08;
+    TL.fairyL.intensity = this._blackout ? 0 : 1.1 + Math.sin(t * 1.7) * 0.15;
+    if (this._blackout) { L.hemi.intensity = 0.12; L.sun.intensity = 0.3; L.winLight.intensity = 0.4; R.ceilMat.emissiveIntensity = 0.9; }
     const A = R.animals;
     TL.phoneA.intensity = A.horseA.state === 'scroll' ? 0.9 : 0;
     TL.phoneB.intensity = A.horseB.state === 'scroll' ? 0.9 : 0;

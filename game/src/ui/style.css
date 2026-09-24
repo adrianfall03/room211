@@ -291,3 +291,7 @@ body.theme-toon #crosshair.active { border-color: #ff8fc0; box-shadow: 0 0 12px 
   #title .t-logo .num { font-size: 1.1em; margin: 0 0.08em; }
 }
 .end h2 { font-size: clamp(30px, 6vw, 46px); }
+#fade.white .card { color: #2a2438; text-shadow: 0 2px 20px rgba(160,120,255,0.35); }
+#fade.white .card small { color: #7a6a8a; }
+.end .stats { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+.end .rank { font-size: clamp(72px, 14vh, 120px); }
