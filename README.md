@@ -12,6 +12,7 @@
   然后打开 http://127.0.0.1:5173 。改完代码刷新页面即可（已关闭自动热刷新，避免打断正在进行的游戏）。
 - **重新打包单文件**：`cd game && npm run build`，产物在 `game/dist/index.html`（公开版，准考证上是剪影）。
 - **换上自己的头像**：把照片存成 `game/src/assets/face.jpg`（这个文件不进仓库），开发模式会自动用上；`npm run build:face` 打包带头像的单文件到 `game/dist-face/index.html`。
+- **部署到 Vercel**：在 [vercel.com/new](https://vercel.com/new) 导入这个仓库，设置全部保持默认，直接点 Deploy。根目录的 `vercel.json` 已经配好：在 `game/` 里执行 `npm ci` 和 `npm run build`，发布 `game/dist`（公开版，准考证上是剪影）。之后每次 push 都会自动重新部署。也可以在仓库根目录用命令行部署：`npx vercel --prod`。
 
 ## 操作
 
@@ -44,6 +45,7 @@
 
 ```
 逃离211宿舍.html        单文件成品（双击即玩）
+vercel.json             Vercel 部署配置
 game/
   src/core/     工具、程序化贴图、音效、输入、碰撞
   src/world/    道具工具箱 kit.js、宿舍布局 dorm.js
