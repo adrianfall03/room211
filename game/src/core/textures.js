@@ -1296,3 +1296,57 @@ export function drawPhoneScreen(c, state = 'off', pct = 0, time = '07:30') {
     ctx.fillText('💬 211相亲相爱一家人 (12)', W * 0.12, H * 0.46);
   }
 }
+
+// ---------- 军装上衣（参考美军 AGSU 常服：深橄榄绿毛呢、同色腰带 + 铜扣、四个口袋、左胸略章、右胸名牌）----------
+// vAt(h) 把躯干高度映射为贴图 v 坐标（和牛仔夹克同一套 UV）
+export function genServiceCoat(vAt, { base = '#4a4833', name = 'SMITH', ribbons = true } = {}) {
+  const W = 1024, H = 1024;
+  const c = makeCanvas(W, H), ctx = c.getContext('2d');
+  const { fbm } = createNoise(58);
+  const [br, bg, bb] = hexToRgb(base);
+  pixels(c, (x, y, d, i) => {
+    const n = fbm((x / W) * 40, (y / H) * 40, 2, 40, 40), n2 = fbm((x / W) * 6, (y / H) * 6, 2, 6, 6);
+    const k = 0.92 + n * 0.12 + (n2 - 0.5) * 0.06 + (((x + y) & 3) < 2 ? 0.02 : -0.02);
+    d[i] = br * k; d[i + 1] = bg * k; d[i + 2] = bb * k; d[i + 3] = 255;
+  });
+  const Y = (h) => (1 - vAt(h)) * H, X = (u) => u * W;
+  const seam = (pts, col = 'rgba(20,20,10,0.55)', w = 3) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); };
+  // 门襟
+  seam([[X(0.5) - 4, Y(0.43)], [X(0.5) - 4, H]]);
+  // 同色腰带 + 铜扣
+  const b0 = Y(0.13), b1 = Y(0.095);
+  ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(0, b0, W, b1 - b0);
+  seam([[0, b0], [W, b0]]); seam([[0, b1], [W, b1]]);
+  ctx.fillStyle = '#c9a23a'; ctx.fillRect(X(0.5) - 18, b0 + 3, 36, b1 - b0 - 6);
+  ctx.strokeStyle = '#6a4a10'; ctx.lineWidth = 3; ctx.strokeRect(X(0.5) - 18, b0 + 3, 36, b1 - b0 - 6);
+  // 下口袋（带袋盖）
+  for (const u of [0.41, 0.59]) {
+    const w = 110, top = Y(0.235), bot = Y(0.14);
+    seam([[X(u) - w / 2, top], [X(u) - w / 2, bot], [X(u) + w / 2, bot], [X(u) + w / 2, top], [X(u) - w / 2, top]], 'rgba(20,20,10,0.4)', 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(X(u) - w / 2, top, w, 18);
+  }
+  // 胸口袋
+  for (const u of [0.425, 0.575]) {
+    const w = 80, top = Y(0.37), bot = Y(0.3);
+    seam([[X(u) - w / 2, top], [X(u) - w / 2, bot], [X(u) + w / 2, bot], [X(u) + w / 2, top], [X(u) - w / 2, top]], 'rgba(20,20,10,0.4)', 2);
+    seam([[X(u) - 3, top], [X(u) - 3, bot]], 'rgba(20,20,10,0.35)', 2);
+  }
+  // 左胸略章（佩戴者的左边 = 贴图 u > 0.5）
+  if (ribbons) {
+    const cols = [['#b3262e', '#ffffff', '#2a3f8f'], ['#f2c14e', '#2a6a3a', '#b3262e'], ['#2a3f8f', '#f2c14e', '#ffffff'], ['#6a2a8a', '#ffffff', '#6a2a8a'], ['#2a6a3a', '#b3262e', '#2a6a3a'], ['#b3262e', '#f2c14e', '#b3262e']];
+    let k = 0;
+    for (let r = 0; r < 2; r++) for (let q = 0; q < 3; q++) {
+      const x = X(0.548) + q * 22 - (r ? 11 : 0), y = Y(0.405) - r * 12;
+      const cc = cols[k++ % cols.length];
+      ctx.fillStyle = cc[0]; ctx.fillRect(x, y, 21, 11);
+      ctx.fillStyle = cc[1]; ctx.fillRect(x + 7, y, 7, 11);
+      ctx.fillStyle = cc[2]; ctx.fillRect(x + 9, y, 3, 11);
+    }
+  }
+  // 右胸名牌
+  ctx.fillStyle = '#111'; ctx.fillRect(X(0.4), Y(0.395), 66, 16);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.fillText(name, X(0.4) + 33, Y(0.395) + 12);
+  // 后背中缝
+  seam([[X(0.0) + 2, Y(0.13)], [X(0.0) + 2, 0]], 'rgba(20,20,10,0.3)', 2);
+  return toTex(c);
+}

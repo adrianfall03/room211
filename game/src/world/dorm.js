@@ -37,9 +37,9 @@ void main(){
   gl_FragColor = vec4(c.rgb * 3.2 * a, a);
 }`;
 
-// theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'toon' 卡通动物 211。
+// theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'toon' 卡通动物 211 / 'space' 失重太空舱 211。
 //   三个版本共用同一套布局；decorate(ctx) 在布局搭好之后替换材质、增减道具（见 ruin.js / toon.js）
-export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null } = {}) {
+export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null, outside: outsideFn = null } = {}) {
   RectAreaLightUniformsLib.init();
   const K = new Kit(T);
   const M = K.M;
@@ -543,7 +543,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   wcRoom.add(K.mesh(K.box(0.12, 0.004, 0.12), K.std('#8f9296', 0.3, 0.8), { x: 0.1, y: 0.003, z: 5.95, cast: false }));
 
   // ================= 窗外：楼下草地、大树、三只猴子（彩蛋）=================
-  const outside = buildOutside({ ground: -3.3, theme });
+  const outside = (outsideFn || buildOutside)({ ground: -3.3, theme });
   add(outside.group);
   refs.outside = outside;
 

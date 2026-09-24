@@ -34,6 +34,10 @@ export class Controller {
     this.fpBlend = 0;
     this.sensitivity = 1;
     this.invertY = false;
+    // 失重（第四章）：float 0..1；floatY 离地高度，空格往上飘、C 往下沉
+    this.float = 0;
+    this.floatTarget = 0.3;
+    this.t = 0;
   }
 
   get forward() { return _v.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)); }
@@ -45,7 +49,7 @@ export class Controller {
   toggleMode() { this.setMode(this.mode === 'third' ? 'first' : 'third'); }
 
   teleport(x, z, charYaw = null) {
-    this.pos.set(x, 0, z);
+    this.pos.set(x, this.float > 0 ? this.floatTarget : 0, z);
     this.vel.set(0, 0, 0);
     if (charYaw !== null) { this.charYaw = charYaw; this.yaw = charYaw + Math.PI; }
   }
@@ -57,6 +61,7 @@ export class Controller {
 
   update(dt, { allowMove = true, extra = {} } = {}) {
     const inp = this.input;
+    this.t += dt;
     const look = inp.consumeLook();
     if (allowMove) {
       this.yaw -= look.x * 0.0023 * this.sensitivity;
@@ -72,14 +77,23 @@ export class Controller {
       wishX = fx * ax.y + rx * ax.x;
       wishZ = fz * ax.y + rz * ax.x;
       wantRun = inp.down('ShiftLeft') || inp.down('ShiftRight');
-      if (inp.hit('KeyC')) this.crouch = !this.crouch;
+      if (this.float > 0.5) {
+        // 失重：按住空格往上飘、按住 C 往下沉；触屏点一下“蹲”在高低两档之间切换
+        if (inp.down('Space')) this.floatTarget += dt * 1.1;
+        if (inp.down('KeyC') || inp.down('ControlLeft')) this.floatTarget -= dt * 1.1;
+        else if (inp.hit('KeyC')) this.floatTarget = this.floatTarget > 0.7 ? 0.3 : 1.15;
+        this.floatTarget = clamp(this.floatTarget, 0.12, 1.25);
+        this.crouch = false;
+      } else if (inp.hit('KeyC')) this.crouch = !this.crouch;
     }
-    const crouching = this.crouch || (allowMove && (inp.down('ControlLeft') || inp.down('ControlRight')));
-    const maxSpeed = crouching ? 0.85 : wantRun ? 3.0 : 1.55;
+    const floating = this.float > 0.5;
+    const crouching = !floating && (this.crouch || (allowMove && (inp.down('ControlLeft') || inp.down('ControlRight'))));
+    const maxSpeed = floating ? (wantRun ? 2.2 : 1.15) : crouching ? 0.85 : wantRun ? 3.0 : 1.55;
     const l = Math.hypot(wishX, wishZ);
     const tx = l > 0.01 ? (wishX / Math.max(1, l)) * maxSpeed : 0;
     const tz = l > 0.01 ? (wishZ / Math.max(1, l)) * maxSpeed : 0;
-    const accel = l > 0.01 ? 10 : 14;
+    // 失重时有惯性：起步慢、停下来还会往前飘一段
+    const accel = floating ? (l > 0.01 ? 2.6 : 1.1) : l > 0.01 ? 10 : 14;
     this.vel.x = damp(this.vel.x, tx, accel, dt);
     this.vel.z = damp(this.vel.z, tz, accel, dt);
     if (!this.sitting) {
@@ -90,6 +104,7 @@ export class Controller {
       this.pos.x = clamp(this.pos.x, b.minX + this.radius, b.maxX - this.radius);
       this.pos.z = clamp(this.pos.z, b.minZ + this.radius, b.maxZ - this.radius);
     }
+    this.pos.y = this.float > 0 ? damp(this.pos.y, this.floatTarget * this.float, 2.2, dt) : 0;
     const speed = Math.hypot(this.vel.x, this.vel.z);
     // 朝向
     if (this.mode === 'first') {
@@ -106,14 +121,16 @@ export class Controller {
       lookYaw: this.mode === 'third' ? (Math.abs(lookYaw) < 1.9 ? lookYaw : 0) : 0,
       lookPitch: this.mode === 'third' ? this.pitch * 0.5 : this.pitch * 0.3,
       holdPitch: this.pitch,
+      float: this.float,
       ...extra,
       ...(this.overrides || {}),
     };
     this.anim.crouchW = damp(this.anim.crouchW || 0, prm.crouch, 8, dt);
-    this.ch.root.position.set(this.pos.x, 0, this.pos.z);
+    this.ch.root.position.set(this.pos.x, this.pos.y + this.float * Math.sin(this.t * 1.1) * 0.03, this.pos.z);
+    this.ch.root.rotation.z = this.float * Math.sin(this.t * 0.6) * 0.05;
     this.ch.root.rotation.y = this.charYaw;
     const ev = this.ch.update(dt, prm);
-    if (ev === 'step' && this.audio) this.audio.footstep(speed > 2.2);
+    if (ev === 'step' && this.audio && !floating) this.audio.footstep(speed > 2.2);
     this.anim.speed = speed;
     this._updateCamera(dt, speed);
   }
@@ -125,14 +142,14 @@ export class Controller {
       this.bob += dt * speed * 5.2;
       const bobY = Math.sin(this.bob * 2) * 0.018 * Math.min(1, speed / 1.5);
       const bobX = Math.cos(this.bob) * 0.012 * Math.min(1, speed / 1.5);
-      const eye = this.sitting ? 1.22 : lerp(1.62, 1.08, crouchW);
+      const eye = (this.sitting ? 1.22 : lerp(1.62, 1.08, crouchW)) + this.pos.y;
       const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
       cam.position.set(this.pos.x + fx * 0.1 + Math.cos(this.yaw) * bobX, eye + bobY, this.pos.z + fz * 0.1 - Math.sin(this.yaw) * bobX);
       cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
       this.curDist = 0;
       return;
     }
-    const h = this.sitting ? 1.25 : lerp(1.52, 1.02, crouchW);
+    const h = Math.min(2.7, (this.sitting ? 1.25 : lerp(1.52, 1.02, crouchW)) + this.pos.y);
     const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
     const shoulder = 0.24;
     const target = _v.set(this.pos.x + rx * shoulder, h, this.pos.z + rz * shoulder);
@@ -172,6 +189,7 @@ export class Controller {
         if (mn === dl) final.x = x0; else if (mn === dr) final.x = x1; else if (mn === db) final.z = z0; else final.z = z1;
       }
     }
+    final.y = Math.min(final.y, 2.86);
     cam.position.copy(final);
     cam.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
     // 相机太近时隐藏头部，避免穿模

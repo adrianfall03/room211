@@ -15,6 +15,8 @@ import { nextFrame } from './core/util.js';
 import { buildDorm } from './world/dorm.js';
 import { buildRuinTextures, decorateRuin } from './world/ruin.js';
 import { buildToonTextures, decorateToon } from './world/toon.js';
+import { buildSpaceTextures, decorateSpace, buildSpaceOutside } from './world/space.js';
+import { buildFinale } from './world/finale.js';
 import { GradePass, CSS_GRADES } from './core/grade.js';
 import { createCharacter } from './player/character.js';
 import { Controller } from './player/controller.js';
@@ -82,9 +84,9 @@ class Gfx {
   setTheme(theme, instant = false) {
     this.theme = theme;
     this.grade.set(theme, instant);
-    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], toon: [0.3, 0.5, 0.95] }[theme] || [0.22, 0.45, 0.93];
+    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], toon: [0.3, 0.5, 0.95], space: [0.42, 0.55, 0.84], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
     this.bloom.strength = b[0]; this.bloom.radius = b[1]; this.bloom.threshold = b[2];
-    this.renderer.toneMappingExposure = theme === 'toon' ? 0.98 : 1.05;
+    this.renderer.toneMappingExposure = { toon: 0.98, space: 1.0, finale: 1.1 }[theme] || 1.05;
     this.setQuality(this.quality);
   }
   setQuality(q) {
@@ -97,7 +99,7 @@ class Gfx {
       this.renderer.shadowMap.enabled = shadows;
       this.scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); });
     }
-    this.gtao.enabled = q === 'high' && this.theme !== 'toon';
+    this.gtao.enabled = q === 'high' && this.theme !== 'toon' && this.theme !== 'space';
     this.bloom.enabled = q !== 'low';
     this.useComposer = q !== 'low';
     this.canvas.style.filter = this.useComposer ? '' : (CSS_GRADES[this.theme] || '');
@@ -231,16 +233,19 @@ async function boot() {
       m.post = (v) => { ch.J.neck.visible = v; };
     }
   };
-  // 三个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
+  // 四个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
   const THEMES = {
     normal: { tex: () => T, decorate: null },
     ruin: { tex: () => buildRuinTextures(T), decorate: decorateRuin },
     toon: { tex: () => buildToonTextures(T), decorate: decorateToon },
+    space: { tex: () => buildSpaceTextures(T), decorate: decorateSpace, outside: buildSpaceOutside },
   };
   const buildWorld = (theme) => {
-    const th = THEMES[theme] || THEMES.normal;
     collision.boxes.length = 0;
-    const refs = buildDorm(scene, th.tex(), collision, { faceImg, theme, decorate: th.decorate });
+    // 结局：不是宿舍了，是征兵站门前的广场
+    if (theme === 'finale') return buildFinale(scene);
+    const th = THEMES[theme] || THEMES.normal;
+    const refs = buildDorm(scene, th.tex(), collision, { faceImg, theme, decorate: th.decorate, outside: th.outside });
     setupMirrors(refs);
     return refs;
   };
