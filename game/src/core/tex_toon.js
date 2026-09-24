@@ -278,13 +278,14 @@ export function genWindowViewNight() {
   const W = 2048, H = 1024, c = makeCanvas(W, H), ctx = c.getContext('2d');
   const rnd = mulberry32(661);
   nightSky(ctx, W, H, rnd, 0.75);
-  moon(ctx, W * 0.8, H * 0.13, 70);
-  // 对面宿舍楼：马卡龙色，一格格暖黄的窗，窗里是各种小动物的剪影
-  const bx = W * 0.05, bw = W * 0.9, by = H * 0.2, bh = H * 0.72;
+  // 窗户里能看到的是贴图中间偏上那一块：月亮放在那儿
+  moon(ctx, W * 0.6, H * 0.33, 62);
+  // 对面宿舍楼：马卡龙色，一格格暖黄的窗，窗里是各种小动物的剪影（楼放低一点，露出夜空）
+  const bx = W * 0.05, bw = W * 0.9, by = H * 0.5, bh = H * 0.5;
   ctx.fillStyle = '#e8a8a0'; ctx.fillRect(bx, by, bw, bh);
   ctx.fillStyle = '#c98a88'; ctx.fillRect(bx, by, bw, 22);
   ctx.fillStyle = 'rgba(40,30,80,0.35)'; ctx.fillRect(bx, by, bw, bh);
-  const cols = 14, rows = 6;
+  const cols = 14, rows = 4;
   for (let r = 0; r < rows; r++) {
     for (let k = 0; k < cols; k++) {
       const x = bx + 30 + k * (bw - 60) / cols, y = by + 40 + r * (bh - 60) / rows;

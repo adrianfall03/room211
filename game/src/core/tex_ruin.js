@@ -385,7 +385,7 @@ export function genWindowViewRuin() {
   const sky = ctx.createLinearGradient(0, 0, 0, H * 0.8);
   sky.addColorStop(0, '#3d3a52'); sky.addColorStop(0.45, '#a8604a'); sky.addColorStop(0.8, '#e8a55a'); sky.addColorStop(1, '#f0c27a');
   ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H);
-  const sun = ctx.createRadialGradient(W * 0.2, H * 0.62, 10, W * 0.2, H * 0.62, 480);
+  const sun = ctx.createRadialGradient(W * 0.56, H * 0.44, 10, W * 0.56, H * 0.44, 480);
   sun.addColorStop(0, 'rgba(255,220,150,0.95)'); sun.addColorStop(0.15, 'rgba(255,170,90,0.55)'); sun.addColorStop(1, 'rgba(255,150,80,0)');
   ctx.fillStyle = sun; ctx.fillRect(0, 0, W, H);
   for (let k = 0; k < 16; k++) {
@@ -403,8 +403,10 @@ export function genWindowViewRuin() {
   ctx.strokeStyle = '#3a2e30'; ctx.lineWidth = 6;
   ctx.beginPath(); ctx.moveTo(W * 0.86, H * 0.62); ctx.lineTo(W * 0.86, H * 0.12); ctx.lineTo(W * 0.62, H * 0.14); ctx.moveTo(W * 0.86, H * 0.12); ctx.lineTo(W * 0.95, H * 0.13); ctx.stroke();
   ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(W * 0.68, H * 0.14); ctx.lineTo(W * 0.68, H * 0.3); ctx.stroke();
-  // 对面宿舍楼：灰黑、窗户碎了、爬满藤
-  const bx = W * 0.05, bw = W * 0.9, by = H * 0.2, bh = H * 0.72;
+  // 夕阳本体（窗户里正好能看到）
+  ctx.fillStyle = 'rgba(255,214,150,0.95)'; ctx.beginPath(); ctx.arc(W * 0.56, H * 0.44, 46, 0, 6.28); ctx.fill();
+  // 对面宿舍楼：灰黑、窗户碎了、爬满藤（楼放低一点，露出晚霞）
+  const bx = W * 0.05, bw = W * 0.9, by = H * 0.52, bh = H * 0.48;
   ctx.fillStyle = '#8a7a6a'; ctx.fillRect(bx, by, bw, bh);
   const { fbm } = createNoise(472);
   const img = ctx.getImageData(bx, by, bw, bh);
@@ -414,7 +416,7 @@ export function genWindowViewRuin() {
     img.data[i] *= k; img.data[i + 1] *= k * 0.97; img.data[i + 2] *= k * 0.92;
   }
   ctx.putImageData(img, bx, by);
-  const cols = 14, rows = 6;
+  const cols = 14, rows = 4;
   for (let r = 0; r < rows; r++) {
     for (let k = 0; k < cols; k++) {
       const x = bx + 30 + k * (bw - 60) / cols, y = by + 40 + r * (bh - 60) / rows;
