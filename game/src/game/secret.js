@@ -460,7 +460,7 @@ export class Secret {
         const p = V((Math.random() - 0.5) * 3.4, Math.random() * 2.9 + 0.05, C.front - 0.06);
         g.fx.emit('spark', p, { count: 2, speed: 0.6, spread: 1, up: 0.2, gravity: 0, drag: 1.2, life: 0.9, size: 0.05, colors: ['#bfe8ff', '#ffffff', '#ffc860'] });
       }
-      if (Math.random() < dt * 3) g.fx.emit('star', A.target.group.getWorldPosition(_a).add(V(0.12, 0.13, 0)), { count: 1, speed: 0.2, spread: 1, up: 0.2, gravity: 0, drag: 1, life: 0.8, size: 0.04, colors: ['#ffe08a', '#ffffff'], spin: 2 });
+      if (Math.random() < dt * 3) g.fx.emit('dust', A.target.group.getWorldPosition(_a).add(V(0.12, 0.13, 0)), { count: 1, speed: 0.15, spread: 1, up: 0.15, gravity: 0, drag: 1, life: 1.2, size: 0.03, colors: ['#ffd9a0', '#fff4e0'] });
     }
     // 书架背后的那天晚上
     if (this.past && this.stage >= 6) {

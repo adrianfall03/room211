@@ -8,10 +8,14 @@ import * as TX from '../core/textures.js';
 import * as TS from '../core/tex_space.js';
 import { mulberry32 } from '../core/util.js';
 import { makeBlackHole } from './gargantua.js';
+import { std as realStd, glow as realGlowMat, real, panel, compact } from './spacelook.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...o });
-const glow = (color, o = {}) => new THREE.MeshBasicMaterial({ color, toneMapped: false, ...o });
+// 材质都从 spacelook 拿：原来的动画配色会被换成用旧了的空间站配色
+const std = (color, o = {}) => realStd(color, { roughness: 0.55, ...o });
+const glow = realGlowMat;
+// 长条的装饰灯带：写实版里只是很暗的一条（真正亮的只有小指示灯）
+const stripGlow = () => new THREE.MeshBasicMaterial({ color: '#3c5a4e', toneMapped: false });
 function mesh(geo, mat, { x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, s = 1, cast = true } = {}) {
   const m = new THREE.Mesh(geo, mat);
   m.position.set(x, y, z); m.rotation.set(rx, ry, rz);
@@ -46,37 +50,41 @@ function canvasTex(w, h, draw) {
   draw(c.getContext('2d'), w, h);
   return { canvas: c, tex: TX.toTex(c, { wrap: false }) };
 }
-const screenMesh = (w, h, tex, o = {}) => { const m = mesh(new THREE.PlaneGeometry(w, h), glow('#ffffff', { map: tex }), { ...o, cast: false }); m.userData.noOutline = true; return m; };
-const sign = (lines, w, h, o = {}, so = {}) => mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: TS.genSign(lines, { W: 512, H: Math.round((512 * h) / w), ...so }), roughness: 0.6 }), { ...o, cast: false });
+const screenMesh = (w, h, tex, o = {}) => mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, color: new THREE.Color(0.78, 0.78, 0.78) }), { ...o, cast: false });
+const sign = (lines, w, h, o = {}, so = {}) => {
+  const so2 = { ...so }; if (so2.fg) so2.fg = real(so2.fg); if (so2.accent) so2.accent = real(so2.accent);
+  return mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: TS.genSign(lines, { W: 512, H: Math.round((512 * h) / w), ...so2 }), roughness: 0.7 }), { ...o, cast: false });
+};
 
 // ---------------- 画在屏幕上的东西（名字每局随机，开局时由第四章来画）----------------
 const MONO = '"SF Mono","Menlo","Consolas","PingFang SC",monospace';
 // 休眠舱床头的状态屏
 export function drawPodScreen(c, { code, name, status, ok = false, warn = false }) {
   const x = c.getContext('2d'), W = c.width, H = c.height;
-  x.fillStyle = '#081630'; x.fillRect(0, 0, W, H);
-  const col = warn ? '#ff8a9a' : ok ? '#8fffc0' : '#7fe8ff';
-  x.strokeStyle = col; x.lineWidth = 4; x.strokeRect(6, 6, W - 12, H - 12);
+  x.fillStyle = '#070a08'; x.fillRect(0, 0, W, H);
+  const col = warn ? '#ffb04a' : ok ? '#8cf0a4' : '#b8dccb';
+  x.strokeStyle = col; x.globalAlpha = 0.6; x.lineWidth = 2; x.strokeRect(6, 6, W - 12, H - 12); x.globalAlpha = 1;
   x.fillStyle = col; x.textAlign = 'left';
   x.font = `bold 26px ${MONO}`; x.fillText(`CRYO ${code}`, 20, 42);
   x.font = `bold 30px "PingFang SC",sans-serif`; x.fillText(name, 20, 92);
   x.font = `bold 24px "PingFang SC",sans-serif`; x.fillText(status, 20, 140);
   x.globalAlpha = 0.35; for (let i = 0; i < 6; i++) x.fillRect(W - 36, 24 + i * 22, 14, 14); x.globalAlpha = 1;
+  TS.crtFinish(x, W, H);
 }
 // 信息接收站的大屏：标题、实时波形、最近几条消息（第四章每 0.1 秒重画一次）
 export function drawComms(c, { t = 0, lines = [], channel = 'CH-01 · 返回舱', alert = false, anomaly = 0 }) {
   const x = c.getContext('2d'), W = c.width, H = c.height;
-  x.fillStyle = '#06122a'; x.fillRect(0, 0, W, H);
-  x.strokeStyle = 'rgba(127,232,255,0.12)'; x.lineWidth = 1;
+  x.fillStyle = '#060908'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(140,240,164,0.08)'; x.lineWidth = 1;
   for (let i = 0; i < W; i += 32) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, H); x.stroke(); }
   for (let i = 0; i < H; i += 32) { x.beginPath(); x.moveTo(0, i); x.lineTo(W, i); x.stroke(); }
-  const col = alert ? '#ff8a9a' : '#7fe8ff';
-  x.fillStyle = col; x.font = `bold 26px ${MONO}`; x.textAlign = 'left';
-  x.fillText('SIGNAL RECEIVER · 信息接收站', 18, 36);
-  x.font = `bold 20px "PingFang SC",sans-serif`; x.fillStyle = anomaly > 0 ? '#ffd23f' : '#bff4ff';
+  const col = alert ? '#ff6a4a' : '#8cf0a4';
+  x.fillStyle = col; x.font = `bold 24px ${MONO}`; x.textAlign = 'left';
+  x.fillText('S-BAND RCVR · 信息接收站', 18, 36);
+  x.font = `bold 20px "PingFang SC",sans-serif`; x.fillStyle = anomaly > 0 ? '#ffb04a' : '#cfe8d6';
   x.fillText(`▶ ${channel}`, 18, 66);
   // 波形：正常是平缓的正弦，收到异常信号时变成一串一长一短的脉冲
-  x.strokeStyle = anomaly > 0 ? '#ffd23f' : col; x.lineWidth = 3; x.beginPath();
+  x.strokeStyle = anomaly > 0 ? '#ffb04a' : col; x.lineWidth = 2; x.beginPath();
   for (let i = 0; i <= 120; i++) {
     const u = i / 120, px = 18 + u * (W - 36);
     let v = Math.sin(u * 22 + t * 5) * 0.35 + Math.sin(u * 57 - t * 9) * 0.15;
@@ -86,20 +94,22 @@ export function drawComms(c, { t = 0, lines = [], channel = 'CH-01 · 返回舱'
   }
   x.stroke();
   x.font = `20px "PingFang SC",sans-serif`;
-  lines.slice(-6).forEach((l, i) => { x.fillStyle = l.color || '#dff6ff'; x.fillText(l.text, 18, 176 + i * 30); });
+  lines.slice(-6).forEach((l, i) => { x.fillStyle = l.color || '#cfe8d6'; x.fillText(l.text, 18, 176 + i * 30); });
   if (Math.sin(t * 6) > 0) { x.fillStyle = col; x.fillRect(W - 40, 20, 16, 16); }
+  TS.crtFinish(x, W, H, 0.14);
 }
 // 仪表台的导航屏：一条弯弯的返航轨道
 function drawNav(c, t) {
   const x = c.getContext('2d'), W = c.width, H = c.height;
-  x.fillStyle = '#071a36'; x.fillRect(0, 0, W, H);
-  x.strokeStyle = 'rgba(127,232,255,0.25)'; x.lineWidth = 1;
+  x.fillStyle = '#060908'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(140,240,164,0.2)'; x.lineWidth = 1;
   for (let r = 30; r < 160; r += 30) { x.beginPath(); x.arc(W * 0.3, H * 0.55, r, 0, 6.28); x.stroke(); }
-  x.fillStyle = '#3a8ee8'; x.beginPath(); x.arc(W * 0.3, H * 0.55, 26, 0, 6.28); x.fill();
-  x.strokeStyle = '#ffd23f'; x.setLineDash([8, 6]); x.lineWidth = 3; x.beginPath(); x.moveTo(W * 0.92, H * 0.2); x.quadraticCurveTo(W * 0.62, H * 0.1, W * 0.36, H * 0.46); x.stroke(); x.setLineDash([]);
-  x.fillStyle = '#7fe8ff'; x.font = `bold 18px ${MONO}`; x.fillText('RETURN TRAJ.', 14, 26);
+  x.strokeStyle = '#8cf0a4'; x.lineWidth = 2; x.beginPath(); x.arc(W * 0.3, H * 0.55, 26, 0, 6.28); x.stroke();
+  x.strokeStyle = '#ffb04a'; x.setLineDash([8, 6]); x.lineWidth = 2; x.beginPath(); x.moveTo(W * 0.92, H * 0.2); x.quadraticCurveTo(W * 0.62, H * 0.1, W * 0.36, H * 0.46); x.stroke(); x.setLineDash([]);
+  x.fillStyle = '#8cf0a4'; x.font = `bold 18px ${MONO}`; x.fillText('RETURN TRAJ.', 14, 26);
   x.font = `bold 16px "PingFang SC",sans-serif`; x.fillText('自动驾驶 · 返回地球', 14, H - 16);
-  x.fillStyle = '#ff8a3d'; x.beginPath(); x.arc(W * 0.92, H * 0.2, 6, 0, 6.28); x.fill();
+  x.fillStyle = '#ffb04a'; x.beginPath(); x.arc(W * 0.92, H * 0.2, 5, 0, 6.28); x.fill();
+  TS.crtFinish(x, W, H);
 }
 
 // ---------------- 休眠舱 ----------------
@@ -108,9 +118,9 @@ function makePod({ side, open = false, frost, seed = 0 }) {
   const g = new THREE.Group();
   const aisle = -side; // 过道方向（本地 x）
   const white = std('#eef2f7', { roughness: 0.35 }), navy = std('#243452', { roughness: 0.5 }), steel = std('#8d9bb0', { roughness: 0.35, metalness: 0.5 });
-  const cyanG = glow('#7fe8ff');
+  const cyanG = stripGlow();
   // 底座
-  g.add(mesh(box(0.86, 0.42, 1.98), std('#dfe5ee', { roughness: 0.45 }), { y: 0.21 }));
+  g.add(mesh(box(0.86, 0.42, 1.98), panel('#dfe5ee', { seed: 1 }), { y: 0.21 }));
   g.add(mesh(box(0.9, 0.06, 2.0), navy, { y: 0.03 }));
   g.add(mesh(box(0.012, 0.025, 1.7), cyanG, { x: aisle * 0.432, y: 0.33, cast: false }));
   for (let i = 0; i < 4; i++) g.add(mesh(box(0.01, 0.05, 0.22), navy, { x: aisle * 0.432, y: 0.17, z: -0.6 + i * 0.4, cast: false }));
@@ -127,7 +137,7 @@ function makePod({ side, open = false, frost, seed = 0 }) {
   // 舱盖（上半个胶囊，半透明，结着霜）：合页在靠墙那一边
   const hinge = group(side * 0.37, 0.62, 0);
   g.add(hinge);
-  const canopy = mesh(halfCapsule(0.38, 1.2, true), new THREE.MeshStandardMaterial({ color: '#d8f0ff', map: frost, transparent: true, opacity: open ? 0.55 : 0.8, roughness: 0.08, side: THREE.DoubleSide, depthWrite: false, emissive: new THREE.Color('#9fdcff'), emissiveIntensity: 0.12 }), { x: -side * 0.37, s: [1, 0.8, 1], cast: false });
+  const canopy = mesh(halfCapsule(0.38, 1.2, true), new THREE.MeshStandardMaterial({ color: '#c9d2d0', map: frost, transparent: true, opacity: open ? 0.4 : 0.62, roughness: 0.12, metalness: 0.1, side: THREE.DoubleSide, depthWrite: false }), { x: -side * 0.37, s: [1, 0.8, 1], cast: false });
   canopy.renderOrder = 3;
   hinge.add(canopy);
   if (open) hinge.rotation.z = -side * 1.25;
@@ -137,16 +147,16 @@ function makePod({ side, open = false, frost, seed = 0 }) {
   g.add(tube([V(side * 0.3, 1.42, -0.82), V(side * 0.34, 1.1, -0.86), V(side * 0.36, 0.75, -0.86)], 0.022, pipeM));
   // 四根立柱（对应上下铺的床柱）+ 上层平台
   for (const [px, pz] of [[-0.44, -0.97], [0.44, -0.97], [-0.44, 0.97], [0.44, 0.97]]) g.add(mesh(box(0.05, 2.78, 0.05), steel, { x: px, y: 1.39, z: pz }));
-  g.add(mesh(box(0.92, 0.07, 1.98), std('#dfe5ee', { roughness: 0.45 }), { y: 1.45 }));
+  g.add(mesh(box(0.92, 0.07, 1.98), panel('#b9c3d2', { seed: 2 }), { y: 1.45 }));
   g.add(mesh(box(0.012, 0.02, 1.8), cyanG, { x: aisle * 0.462, y: 1.45, cast: false }));
   // 上层：两个横躺的冷却液罐 + 压缩机 + 一排会闪的指示灯
-  const tankM = std('#f4f7fb', { roughness: 0.3 }), band = std('#2ec4c9', { roughness: 0.4 });
+  const tankM = std('#8e918b', { roughness: 0.42, metalness: 0.6 }), band = std('#2ec4c9', { roughness: 0.4 });
   for (const s of [-1, 1]) {
     g.add(mesh(new THREE.CapsuleGeometry(0.15, 1.2, 6, 18), tankM, { x: s * 0.2, y: 1.66, rx: Math.PI / 2 }));
     for (const z of [-0.45, 0, 0.45]) g.add(mesh(new THREE.TorusGeometry(0.152, 0.012, 6, 24), band, { x: s * 0.2, y: 1.66, z, cast: false }));
   }
   const comp = group(0, 2.1, 0.55);
-  comp.add(mesh(box(0.62, 0.36, 0.6), std('#b9c3d2', { roughness: 0.4 })));
+  comp.add(mesh(box(0.62, 0.36, 0.6), panel('#b9c3d2', { seed: 3 })));
   comp.add(mesh(new THREE.CircleGeometry(0.13, 24), navy, { x: aisle * 0.311, ry: aisle * Math.PI / 2, cast: false }));
   const fan = group(aisle * 0.313, 0, 0);
   for (let i = 0; i < 3; i++) fan.add(mesh(box(0.004, 0.22, 0.04), steel, { rx: (i * Math.PI) / 3, cast: false }));
@@ -160,41 +170,50 @@ function makePod({ side, open = false, frost, seed = 0 }) {
   const scr = canvasTex(256, 160, () => {});
   const arm = group(aisle * 0.47, 1.02, -0.72);
   arm.add(mesh(box(0.03, 0.03, 0.03), steel));
-  const panel = group(aisle * 0.02, 0, 0);
-  panel.rotation.y = aisle * Math.PI / 2 - aisle * 0.35;
-  panel.add(mesh(box(0.3, 0.2, 0.02), navy, { z: -0.012 }));
-  panel.add(screenMesh(0.27, 0.17, scr.tex, { z: 0.0 }));
-  arm.add(panel);
+  const scrPanel = group(aisle * 0.02, 0, 0);
+  scrPanel.rotation.y = aisle * Math.PI / 2 - aisle * 0.35;
+  scrPanel.add(mesh(box(0.3, 0.2, 0.02), navy, { z: -0.012 }));
+  scrPanel.add(screenMesh(0.27, 0.17, scr.tex, { z: 0.0 }));
+  arm.add(scrPanel);
   g.add(arm);
   return { group: g, canopy, hinge, screen: scr, leds, fan, mist: V(0, 0.9, 0) };
 }
 
 // 霜花：舱盖边上一圈白霜 + 零散的冰晶
 function genFrost(seed = 1) {
-  return canvasTex(256, 256, (x, W, H) => {
+  return canvasTex(512, 512, (x, W, H) => {
     const r = mulberry32(seed);
     x.clearRect(0, 0, W, H);
+    // 边上一圈结得厚的霜，往中间越来越薄，一片片不规则
     const g = x.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.25, 'rgba(235,248,255,0.4)'); g.addColorStop(0.75, 'rgba(235,248,255,0.4)'); g.addColorStop(1, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0, 'rgba(225,232,230,0.85)'); g.addColorStop(0.18, 'rgba(215,224,222,0.3)'); g.addColorStop(0.5, 'rgba(210,220,218,0.08)'); g.addColorStop(0.82, 'rgba(215,224,222,0.3)'); g.addColorStop(1, 'rgba(225,232,230,0.85)');
     x.fillStyle = g; x.fillRect(0, 0, W, H);
-    // 动画风格的玻璃高光：两道斜斜的白条
-    x.fillStyle = 'rgba(255,255,255,0.75)';
-    for (const [u, w] of [[0.36, 0.05], [0.45, 0.018]]) { x.beginPath(); x.moveTo(W * u, 0); x.lineTo(W * (u + w), 0); x.lineTo(W * (u + w - 0.05), H); x.lineTo(W * (u - 0.05), H); x.fill(); }
-    x.strokeStyle = 'rgba(255,255,255,0.7)'; x.lineWidth = 1.5;
-    for (let i = 0; i < 70; i++) {
-      const cx = r() * W, cy = r() * H, s = 3 + r() * 9;
+    for (let i = 0; i < 260; i++) {
+      const edge = r() < 0.7, cx = edge ? (r() < 0.5 ? r() * W * 0.22 : W - r() * W * 0.22) : r() * W, cy = r() * H, rad = 4 + r() * 22;
+      const gg = x.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      gg.addColorStop(0, `rgba(235,240,238,${0.15 + r() * 0.3})`); gg.addColorStop(1, 'rgba(235,240,238,0)');
+      x.fillStyle = gg; x.beginPath(); x.arc(cx, cy, rad, 0, 6.28); x.fill();
+    }
+    // 细小的冰晶
+    x.strokeStyle = 'rgba(240,244,242,0.35)'; x.lineWidth = 0.8;
+    for (let i = 0; i < 160; i++) {
+      const cx = r() * W, cy = r() * H, s = 2 + r() * 6;
       for (let k = 0; k < 3; k++) { const a = (k * Math.PI) / 3 + r(); x.beginPath(); x.moveTo(cx - Math.cos(a) * s, cy - Math.sin(a) * s); x.lineTo(cx + Math.cos(a) * s, cy + Math.sin(a) * s); x.stroke(); }
     }
+    // 水汽凝结的细流痕
+    x.strokeStyle = 'rgba(200,210,208,0.25)'; x.lineWidth = 1.2;
+    for (let i = 0; i < 30; i++) { const sx = r() * W, sy = r() * H * 0.6; x.beginPath(); x.moveTo(sx, sy); x.lineTo(sx + (r() - 0.5) * 6, sy + 30 + r() * 80); x.stroke(); }
   }).tex;
 }
 
 // ---------------- 资料库（原来的书架）----------------
 // 书脊朝过道（+x），每一层都拿橙色松紧带勒着。第五层（从下往上，和眼睛一样高）中间那本就是《高等数学（下）》
 const BOOK_TITLES = ['高等数学（下）', '时间简史', '从零开始的太空生活', '三体', '相对论入门', '宇航员手册', '高等数学（上）', '星际导航'];
-function spineTex(title, bg, fg = '#ffffff') {
+function spineTex(title, bg, fg = '#e2dccb') {
   return canvasTex(64, 256, (x, W, H) => {
-    x.fillStyle = bg; x.fillRect(0, 0, W, H);
-    x.fillStyle = 'rgba(255,255,255,0.25)'; x.fillRect(0, 14, W, 6); x.fillRect(0, H - 22, W, 6);
+    x.fillStyle = real(bg); x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(210,190,130,0.45)'; x.fillRect(0, 14, W, 4); x.fillRect(0, H - 22, W, 4);
+    x.fillStyle = 'rgba(0,0,0,0.15)'; for (let i = 0; i < 40; i++) x.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 3, 1);
     x.fillStyle = fg; x.font = `bold 26px "PingFang SC",sans-serif`; x.textAlign = 'center';
     const chars = [...title].slice(0, 8);
     chars.forEach((ch, i) => x.fillText(ch, W / 2, 50 + i * 26));
@@ -260,8 +279,8 @@ function makeArchive() {
   g.add(cardBox);
   // 自己飘出来的那张索引卡（一开始插在卡盒里）
   const cardC = canvasTex(256, 176, (x, W, H) => {
-    x.fillStyle = '#fff6d8'; x.fillRect(0, 0, W, H);
-    x.strokeStyle = '#e0b860'; x.lineWidth = 6; x.strokeRect(3, 3, W - 6, H - 6);
+    x.fillStyle = '#e6dfc8'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = '#b8a070'; x.lineWidth = 4; x.strokeRect(3, 3, W - 6, H - 6);
     x.fillStyle = '#c0392b'; x.fillRect(0, 34, W, 3);
     x.fillStyle = '#243452'; x.font = `bold 22px ${MONO}`; x.fillText('INDEX · 001', 16, 26);
     x.font = `bold 24px "PingFang SC",sans-serif`; x.fillText('引力异常 → 接收站', 16, 80);
@@ -284,15 +303,15 @@ function makeArchive() {
 // ---------------- 信息接收站（原来我的书桌 + 电脑）----------------
 function makeStation() {
   const g = new THREE.Group();
-  const navy = std('#243452', { roughness: 0.5 }), panel = std('#dfe5ee', { roughness: 0.45 }), steel = std('#8d9bb0', { roughness: 0.35, metalness: 0.5 });
+  const navy = std('#243452', { roughness: 0.5 }), panelM = panel('#dfe5ee', { seed: 4 }), steel = std('#8d9bb0', { roughness: 0.35, metalness: 0.5 });
   // 机柜 + 斜面操作台
-  g.add(mesh(box(0.5, 0.72, 0.98), panel, { x: 1.54, y: 0.36, z: 0.25 }));
+  g.add(mesh(box(0.5, 0.72, 0.98), panelM, { x: 1.54, y: 0.36, z: 0.25 }));
   g.add(mesh(box(0.52, 0.04, 1.0), navy, { x: 1.54, y: 0.74, z: 0.25 }));
   const deck = group(1.42, 0.8, 0.25); deck.rotation.z = 0.28;
   deck.add(mesh(box(0.32, 0.04, 0.96), std('#2e3f62', { roughness: 0.4 })));
   const knobM = std('#ff9a3d', { roughness: 0.4 });
   for (let i = 0; i < 6; i++) deck.add(mesh(cyl(0.018, 0.02, 0.025, 12), knobM, { x: -0.06, y: 0.03, z: -0.38 + i * 0.07 }));
-  for (let i = 0; i < 4; i++) deck.add(mesh(box(0.1, 0.012, 0.02), std('#7fe8ff', { roughness: 0.4, emissive: new THREE.Color('#2ec4c9'), emissiveIntensity: 0.6 }), { x: 0.05, y: 0.025, z: 0.12 + i * 0.07, cast: false }));
+  for (let i = 0; i < 4; i++) deck.add(mesh(box(0.1, 0.012, 0.02), std('#6a5a3a', { roughness: 0.4, emissive: new THREE.Color('#ffb04a'), emissiveIntensity: 0.35 }), { x: 0.05, y: 0.025, z: 0.12 + i * 0.07, cast: false }));
   for (let i = 0; i < 8; i++) deck.add(mesh(box(0.025, 0.012, 0.025), glow(['#8fffc0', '#ffd23f', '#ff8a9a', '#7fe8ff'][i % 4]), { x: 0.1, y: 0.024, z: -0.36 + i * 0.05, cast: false }));
   g.add(deck);
   // 大屏（朝西，对着过道）
@@ -324,9 +343,9 @@ function makeStation() {
 // ---------------- 生命维持控制台（原来 {C} 的书桌）----------------
 function makeLifeSupport() {
   const g = new THREE.Group();
-  const navy = std('#243452', { roughness: 0.5 }), panel = std('#dfe5ee', { roughness: 0.45 });
-  g.add(mesh(box(0.5, 0.78, 0.98), panel, { x: 1.54, y: 0.39, z: -0.8 }));
-  g.add(mesh(box(0.012, 0.03, 0.9), glow('#8fffc0'), { x: 1.285, y: 0.6, z: -0.8, cast: false }));
+  const navy = std('#243452', { roughness: 0.5 });
+  g.add(mesh(box(0.5, 0.78, 0.98), panel('#dfe5ee', { seed: 5 }), { x: 1.54, y: 0.39, z: -0.8 }));
+  g.add(mesh(box(0.012, 0.03, 0.9), stripGlow(), { x: 1.285, y: 0.6, z: -0.8, cast: false }));
   const scr = canvasTex(320, 180, () => {});
   const frame = group(1.74, 1.18, -0.8); frame.rotation.y = -Math.PI / 2;
   frame.add(mesh(box(0.5, 0.31, 0.05), navy, { z: -0.03 }));
@@ -350,10 +369,10 @@ function makeLifeSupport() {
 // ---------------- 观测台（原来窗前的两张书桌）----------------
 function makeObservatory() {
   const g = new THREE.Group();
-  const panel = std('#dfe5ee', { roughness: 0.45 }), navy = std('#243452', { roughness: 0.5 }), steel = std('#8d9bb0', { roughness: 0.35, metalness: 0.5 });
-  g.add(mesh(box(1.7, 0.72, 0.52), panel, { y: 0.36, z: -3.18 }));
+  const navy = std('#243452', { roughness: 0.5 }), steel = std('#8d9bb0', { roughness: 0.35, metalness: 0.5 });
+  g.add(mesh(box(1.7, 0.72, 0.52), panel('#dfe5ee', { seed: 6 }), { y: 0.36, z: -3.18 }));
   g.add(mesh(box(1.72, 0.05, 0.56), navy, { y: 0.745, z: -3.18 }));
-  g.add(mesh(box(1.5, 0.012, 0.012), glow('#7fe8ff'), { y: 0.5, z: -2.915, cast: false }));
+  g.add(mesh(box(1.5, 0.012, 0.012), stripGlow(), { y: 0.5, z: -2.915, cast: false }));
   // 星图屏（斜放在台面上）
   const scr = canvasTex(320, 180, () => {});
   const sf = group(0.45, 0.86, -3.2); sf.rotation.x = -0.6;
@@ -396,13 +415,7 @@ function makeO2Rack() {
 // ---------------- 补给货箱（原来的收纳箱 + 波点收纳袋）----------------
 function makeCrates() {
   const g = new THREE.Group();
-  const lab = canvasTex(256, 128, (x, W, H) => {
-    x.fillStyle = '#f4f6fa'; x.fillRect(0, 0, W, H);
-    x.fillStyle = '#ff8a3d'; x.fillRect(0, 0, W, 18); x.fillRect(0, H - 18, W, 18);
-    x.fillStyle = '#243452'; x.font = `bold 38px ${MONO}`; x.textAlign = 'center'; x.fillText('SUPPLY', W / 2, 62);
-    x.font = `bold 24px "PingFang SC",sans-serif`; x.fillText('211 · 补给', W / 2, 98);
-  });
-  const face = new THREE.MeshStandardMaterial({ map: lab.tex, roughness: 0.5 }), plain = std('#eef2f7', { roughness: 0.45 });
+  const face = new THREE.MeshStandardMaterial({ map: TS.genCargoBag({ seed: 4491 }), roughness: 0.95 }), plain = std('#cfc8b4', { roughness: 0.95 });
   const crate = (w, h, d, x, y, z, ry = 0) => { const m = mesh(new THREE.BoxGeometry(w, h, d), [plain, face, plain, plain, plain, face], { x, y: y + h / 2, z, ry }); g.add(m); return m; };
   crate(0.5, 0.4, 0.4, 1.18, 0, 4.26);
   crate(0.42, 0.3, 0.36, 1.2, 0.4, 4.27, 0.1);
@@ -415,12 +428,12 @@ function makeCrates() {
 // ---------------- 太空厨房（原来门边的杂物桌）----------------
 function makeGalley() {
   const g = new THREE.Group();
-  const panel = std('#dfe5ee', { roughness: 0.45 }), navy = std('#243452', { roughness: 0.5 });
-  g.add(mesh(box(0.55, 0.8, 1.45), panel, { x: -1.53, y: 0.4, z: 2.02 }));
-  g.add(mesh(box(0.012, 0.02, 1.3), glow('#ffd23f'), { x: -1.253, y: 0.72, z: 2.02, cast: false }));
+  const navy = std('#243452', { roughness: 0.5 });
+  g.add(mesh(box(0.55, 0.8, 1.45), panel('#dfe5ee', { seed: 7 }), { x: -1.53, y: 0.4, z: 2.02 }));
+  g.add(mesh(box(0.012, 0.02, 1.3), stripGlow(), { x: -1.253, y: 0.72, z: 2.02, cast: false }));
   // 加热器（发光的小窗）+ 饮水嘴
   const oven = group(-1.62, 1.18, 2.4);
-  oven.add(mesh(box(0.36, 0.3, 0.46), std('#b9c3d2', { roughness: 0.4 })));
+  oven.add(mesh(box(0.36, 0.3, 0.46), panel('#b9c3d2', { seed: 8 })));
   oven.add(mesh(new THREE.PlaneGeometry(0.3, 0.16), glow('#ffb45a', { transparent: true, opacity: 0.85 }), { x: 0.181, ry: Math.PI / 2, cast: false }));
   g.add(oven);
   const tap = group(-1.66, 1.12, 1.62);
@@ -471,10 +484,10 @@ function makeEVASuit() {
 // ---------------- 驾驶舱（洗手间东半边）----------------
 function makeCockpit(WR) {
   const g = new THREE.Group();
-  const panel = std('#dfe5ee', { roughness: 0.45 }), navy = std('#243452', { roughness: 0.5 }), dark = std('#1a2238', { roughness: 0.5 }), orange = std('#ff8a3d', { roughness: 0.5 });
+  const panelM = panel('#8c7033', { seed: 9 }), navy = std('#243452', { roughness: 0.5 }), dark = std('#1a2238', { roughness: 0.5 }), orange = std('#ff8a3d', { roughness: 0.5 });
   // 仪表台：沿后墙，从隔间墙一直到东墙，舷窗下面
   const dz = WR.z1 - 0.2;
-  g.add(mesh(box(2.3, 0.78, 0.36), panel, { x: 0.6, y: 0.39, z: dz }));
+  g.add(mesh(box(2.3, 0.78, 0.36), panelM, { x: 0.6, y: 0.39, z: dz }));
   const top = group(0.6, 0.83, dz - 0.05); top.rotation.x = -0.45;
   top.add(mesh(box(2.3, 0.05, 0.42), navy));
   const nav = canvasTex(320, 200, (x) => {}); drawNav(nav.canvas, 0); nav.tex.needsUpdate = true;
@@ -506,17 +519,12 @@ function makeCockpit(WR) {
   seat.add(mesh(new THREE.SphereGeometry(0.01, 8, 6), glow('#ff4a5a'), { x: 0.28, y: 0.87, z: 0.13, cast: false }));
   g.add(seat);
   // 东墙上的开关面板
-  const sw = canvasTex(256, 256, (x, W, H) => {
-    x.fillStyle = '#1a2a4a'; x.fillRect(0, 0, W, H);
-    const cc = ['#ff4a5a', '#8fffc0', '#7fe8ff', '#ffd23f', '#f4f7fb'];
-    for (let r = 0; r < 7; r++) for (let c = 0; c < 6; c++) { x.fillStyle = cc[(r * 3 + c * 7) % cc.length]; x.globalAlpha = 0.9; x.fillRect(18 + c * 38, 18 + r * 34, 26, 16); }
-    x.globalAlpha = 1;
-  });
-  g.add(mesh(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshStandardMaterial({ map: sw.tex, roughness: 0.5, emissive: new THREE.Color('#ffffff'), emissiveMap: sw.tex, emissiveIntensity: 0.35 }), { x: WR.x1 - 0.012, y: 1.9, z: 5.5, ry: -Math.PI / 2, cast: false }));
+  const swTex = TS.genFaceplate(7, { W: 512, H: 340, base: '#3a3e3b' });
+  g.add(mesh(new THREE.PlaneGeometry(0.9, 0.6), new THREE.MeshStandardMaterial({ map: swTex, roughness: 0.55, metalness: 0.2 }), { x: WR.x1 - 0.012, y: 1.9, z: 5.5, ry: -Math.PI / 2, cast: false }));
   // 饮水机（原来水桶的位置）：漏水了——大水球就是从这儿漏出来的
   const disp = group(1.6, 0, 5.16);
-  disp.add(mesh(box(0.34, 1.05, 0.34), panel, { y: 0.52 }));
-  disp.add(mesh(cyl(0.12, 0.12, 0.4, 18), new THREE.MeshStandardMaterial({ color: '#8fd8ff', transparent: true, opacity: 0.55, roughness: 0.1 }), { y: 1.28 }));
+  disp.add(mesh(box(0.34, 1.05, 0.34), panel('#b9c3d2', { seed: 10 }), { y: 0.52 }));
+  disp.add(mesh(cyl(0.12, 0.12, 0.4, 18), new THREE.MeshStandardMaterial({ color: '#9fb4b8', transparent: true, opacity: 0.38, roughness: 0.08 }), { y: 1.28 }));
   disp.add(mesh(cyl(0.13, 0.13, 0.04, 18), navy, { y: 1.08 }));
   disp.add(mesh(cyl(0.012, 0.012, 0.08, 8), std('#d8dde6', { metalness: 0.7 }), { x: -0.2, y: 0.8, rz: Math.PI / 2 }));
   disp.add(sign(['H₂O', '饮用水 · 漏水中！'], 0.3, 0.12, { x: -0.171, y: 0.55, ry: -Math.PI / 2 }, { fg: '#2e8ad8', accent: '#ff4a5a' }));
@@ -546,7 +554,7 @@ function makeStorage(WR, CUB) {
   // 货柜 G：贴着南墙，对开门
   const L = group(-1.05, 0, WR.z1 - 0.22);
   const w = 0.78, h = 1.9, d = 0.42;
-  const shell = std('#dfe5ee', { roughness: 0.4 });
+  const shell = panel('#dfe5ee', { seed: 11 });
   L.add(mesh(box(w, 0.06, d), shell, { y: 0.03 }));
   L.add(mesh(box(w, 0.06, d), shell, { y: h - 0.03 }));
   for (const s of [-1, 1]) L.add(mesh(box(0.04, h, d), shell, { x: s * (w / 2 - 0.02), y: h / 2 }));
@@ -560,7 +568,7 @@ function makeStorage(WR, CUB) {
   L.add(mesh(cyl(0.205, 0.205, 0.06, 24, true), new THREE.MeshStandardMaterial({ map: hzT, roughness: 0.6, side: THREE.DoubleSide }), { y: 0.5, cast: false }));
   // 约束球：玻璃球 + 三个会转的万向环
   const core = group(0, 0.95, 0.02);
-  const glass = mesh(new THREE.SphereGeometry(0.2, 32, 24), new THREE.MeshStandardMaterial({ color: '#bfe8ff', transparent: true, opacity: 0.16, roughness: 0.05, depthWrite: false }), { cast: false });
+  const glass = mesh(new THREE.SphereGeometry(0.2, 32, 24), new THREE.MeshStandardMaterial({ color: '#a9b6b6', transparent: true, opacity: 0.14, roughness: 0.04, metalness: 0.2, depthWrite: false }), { cast: false });
   glass.renderOrder = 7; glass.userData.noOutline = true;
   core.add(glass);
   const rings = [];
@@ -610,6 +618,7 @@ export function buildSpaceGear(ctx, P) {
     { id: 'bedE1', who: -1, x: 1.325, z: 1.81, side: 1, code: 'E-01', open: true },
   ].map((d, i) => {
     const p = makePod({ side: d.side, open: d.open, frost, seed: i });
+    compact(p.group, [p.fan, p.hinge, ...p.leds]); // 静态的部分合批（风扇会转、指示灯会闪、舱盖是半透明的）
     p.group.position.set(d.x, 0, d.z);
     P(p.group); mark(d.id, p.group);
     p.group.updateMatrixWorld(true);
@@ -617,19 +626,27 @@ export function buildSpaceGear(ctx, P) {
   });
   // 3) 资料库
   const archive = makeArchive();
+  // 书架：会被推动 / 抽走的那一层书、索引卡、背板、松紧带都不合并
+  compact(archive.group, [archive.target.group, archive.card, archive.back, ...archive.straps, ...archive.books.filter((b) => b.shelf === archive.level).map((b) => b.group)]);
   P(archive.group); mark('shelf', archive.group); mark('gBook', archive.target.group); mark('indexCard', archive.card);
   // 4) 信息接收站、生命维持、观测台、氧气瓶架、补给货箱、厨房、宇航服
-  const station = makeStation(); P(station.group); mark('station', station.group);
-  const life = makeLifeSupport(); P(life.group); mark('monitor2', life.group);
-  const obs = makeObservatory(); P(obs.group); mark('farDesks', obs.group); mark('telescope', obs.telescope);
-  const o2 = makeO2Rack(); P(o2); mark('shoeRack', o2);
-  const crates = makeCrates(); P(crates); mark('storageBox', crates);
-  const galley = makeGalley(); P(galley); mark('blackTable', galley);
-  const suit = makeEVASuit(); P(suit); mark('foldTable', suit);
+  const station = makeStation(); compact(station.group, [station.dish]); P(station.group); mark('station', station.group);
+  const life = makeLifeSupport(); compact(life.group); P(life.group); mark('monitor2', life.group);
+  const obs = makeObservatory(); compact(obs.telescope); compact(obs.group, [obs.telescope]); P(obs.group); mark('farDesks', obs.group); mark('telescope', obs.telescope);
+  const o2 = makeO2Rack(); compact(o2); P(o2); mark('shoeRack', o2);
+  const crates = makeCrates(); compact(crates); P(crates); mark('storageBox', crates);
+  const galley = makeGalley(); compact(galley); P(galley); mark('blackTable', galley);
+  const suit = makeEVASuit(); compact(suit); P(suit); mark('foldTable', suit);
   // 5) 洗手间 → 驾驶舱 + 储藏室
-  const cockpit = makeCockpit(WR); P(cockpit.group);
+  const cockpit = makeCockpit(WR);
+  for (const part of [cockpit.dash, cockpit.seat, cockpit.dispenser]) compact(part);
+  compact(cockpit.group, [cockpit.dash, cockpit.seat, cockpit.dispenser]);
+  P(cockpit.group);
   mark('dashboard', cockpit.dash); mark('pilotSeat', cockpit.seat); mark('dispenser', cockpit.dispenser);
-  const storage = makeStorage(WR, CUB); P(storage.group); mark('storageRack', storage.group); mark('lockerG', storage.locker); mark('gargantua', storage.core); mark('gargantua', storage.lever.parent);
+  const storage = makeStorage(WR, CUB);
+  compact(storage.locker, [...storage.doors.map((d) => d.pivot), storage.core, storage.lever.parent]);
+  compact(storage.group, [storage.locker]);
+  P(storage.group); mark('storageRack', storage.group); mark('lockerG', storage.locker); mark('gargantua', storage.core); mark('gargantua', storage.lever.parent);
   block(-0.58, 0.55, WR.z1 - 0.4, WR.z1, '', 0.9);
   block(0.04, 0.56, 5.08, 5.62, 'seat');
   block(WR.x0, storage.rack.x1 + 0.02, storage.rack.z0 - 0.02, storage.rack.z1 + 0.02, '', 2.3);

@@ -123,9 +123,9 @@ class Gfx {
   setTheme(theme, instant = false) {
     this.theme = theme;
     this.grade.set(theme, instant);
-    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], toon: [0.3, 0.5, 0.95], space: [0.42, 0.55, 0.84], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
+    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], toon: [0.3, 0.5, 0.95], space: [0.28, 0.42, 0.88], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
     this.bloom.strength = b[0]; this.bloom.radius = b[1]; this.bloom.threshold = b[2];
-    this.renderer.toneMappingExposure = { toon: 0.98, space: 1.0, finale: 1.1 }[theme] || 1.05;
+    this.renderer.toneMappingExposure = { toon: 0.98, space: 1.12, finale: 1.1 }[theme] || 1.05;
     this.setQuality(this.quality);
   }
   setQuality(q) {
@@ -139,7 +139,7 @@ class Gfx {
       this.scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); });
       this.shadows.invalidate();
     }
-    this.gtao.enabled = q === 'high' && this.theme !== 'toon' && this.theme !== 'space';
+    this.gtao.enabled = q === 'high' && this.theme !== 'toon';
     this.bloom.enabled = q !== 'low';
     this.useComposer = q !== 'low';
     this.canvas.style.filter = this.useComposer ? '' : (CSS_GRADES[this.theme] || '');

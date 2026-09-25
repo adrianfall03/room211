@@ -352,6 +352,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const wPaint = lit({ color: '#ebe5c6', roughness: 0.9 }, 0.08); // 视频里洗手间上半截墙是淡黄色的
   const wFloor = lit({ map: TX.genTiles({ n: 2, base: '#b9b5ab', grout: '#8b8880', gap: 4, jitter: 14, seed: 9, speck: 500 }), roughness: 0.55 }, 0.06); // 0.6m 一张 → 30cm 地砖
   const wCeil = lit({ map: TX.genStripCeiling(), roughness: 0.35, metalness: 0.3 }, 0.12); // 铝扣板吊顶
+  refs.wcMats = { wTile, wPaint, wFloor, wCeil }; // 第四章把洗手间改成驾驶舱时要换掉
   wcRoom.add(K.mesh(uvRect(new THREE.PlaneGeometry(WR.x1 - WR.x0, WR.z1 - SZ), WR.x0 / 0.6, WR.x1 / 0.6, 0, (WR.z1 - SZ) / 0.6), wFloor, { x: wcx, y: 0.001, z: (SZ + WR.z1) / 2, rx: -Math.PI / 2, cast: false }));
   wcRoom.add(K.mesh(uvRect(new THREE.PlaneGeometry(WR.x1 - WR.x0, WR.z1 - WR.z0), 0, 4.5, 0, 2), wCeil, { x: wcx, y: WR.h, z: wcz, rx: Math.PI / 2, cast: false }));
   // 墙面：1.6m 以下贴白砖，上面刷淡黄漆。at(u) 把墙面横坐标 u 换成世界 (x, z)

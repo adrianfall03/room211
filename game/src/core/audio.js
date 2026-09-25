@@ -482,25 +482,35 @@ export class Audio {
     this._musicTimer = setInterval(play, 2000);
   }
   // 太空：空灵的合成器长音 + 慢慢的琶音（动画里宇宙场景的配乐）
+  // 第四章：太空舱 —— 电影配乐式的氛围音：低沉的弦乐铺底、舱里空气循环的底噪、偶尔一声很远的金属回响；越紧张滤波开得越大，还有心跳一样的低音
   _musicSpace() {
-    const prog = [[196, 247, 294, 370], [165, 208, 247, 330], [175, 220, 262, 330], [147, 185, 220, 294]];
+    const prog = [[73.4, 110, 174.6], [65.4, 98, 155.6], [69.3, 103.8, 164.8], [61.7, 92.5, 146.8]];
     let i = 0;
     const play = () => {
-      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t;
+      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t, T = 8.6;
       ch.forEach((f, k) => {
-        const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
-        o.type = 'triangle'; o.frequency.value = f; o.detune.value = (k - 1.5) * 4;
-        fl.type = 'lowpass'; fl.frequency.value = 900 + this.tension * 1200;
-        g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.022, t0 + 1.6); g.gain.linearRampToValueAtTime(0.0001, t0 + 6.2);
-        o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
-        o.start(t0); o.stop(t0 + 6.4);
+        for (const det of [-7, 5]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          fl.type = 'lowpass'; fl.Q.value = 0.7;
+          fl.frequency.setValueAtTime(260 + this.tension * 500, t0);
+          fl.frequency.linearRampToValueAtTime(420 + this.tension * 900, t0 + T * 0.55);
+          fl.frequency.linearRampToValueAtTime(240 + this.tension * 400, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.03, t0 + 2.6); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); o.stop(t0 + T + 0.1);
+        }
       });
-      for (let n = 0; n < 12; n++) this.tone({ f: ch[(n * 3) % 4] * (n % 3 === 2 ? 4 : 2), dur: 0.9, type: 'sine', gain: 0.012 + this.tension * 0.01, delay: n * 0.5, dest: this.mus });
-      if (this.tension > 0.5) for (let n = 0; n < 12; n++) this.tone({ f: 110, dur: 0.12, type: 'square', gain: 0.012 * this.tension, delay: n * 0.5, dest: this.mus });
+      // 空气循环机的底噪
+      this.noise({ dur: T, gain: 0.02, type: 'lowpass', freq: 170, Q: 0.4, brown: true, curve: [[0.25, 1], [0.75, 1], [1, 0]], rev: false });
+      // 很远的一声金属回响（舱体热胀冷缩）
+      if (i % 2 === 1) { const d = 1 + Math.random() * 5; this.tone({ f: 1320 + Math.random() * 600, dur: 2.8, type: 'sine', gain: 0.008, delay: d, dest: this.mus }); this.tone({ f: 330, dur: 1.6, type: 'triangle', gain: 0.006, delay: d, dest: this.mus }); }
+      // 紧张起来：心跳一样的低音
+      if (this.tension > 0.35) for (let n = 0; n < 8; n++) { this.tone({ f: 55, dur: 0.22, type: 'sine', gain: 0.03 * this.tension, delay: n * 1.05, dest: this.mus }); this.tone({ f: 52, dur: 0.18, type: 'sine', gain: 0.02 * this.tension, delay: n * 1.05 + 0.28, dest: this.mus }); }
       i++;
     };
     play();
-    this._musicTimer = setInterval(play, 6000);
+    this._musicTimer = setInterval(play, 8000);
   }
   // 结局：军乐队进行曲（小军鼓 + 铜管）
   _musicFinale() {

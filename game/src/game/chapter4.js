@@ -7,7 +7,7 @@
 //   另外还有一条隐藏任务线（索引卡 → 信息接收站的频道 211 → 储藏室的货柜 G → 卡冈图雅），见 secret.js
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, smoothstep } from '../core/util.js';
-import { ensureToonStyle } from '../world/toonkit.js';
+import { untoonify } from '../world/toonkit.js';
 import * as TS from '../core/tex_space.js';
 import { drawPodScreen, drawComms } from '../world/spacegear.js';
 import { Secret } from './secret.js';
@@ -38,11 +38,16 @@ export const CH4 = {
 
   init(g) {
     const R = g.refs, S = g.S;
-    ensureToonStyle(g.ch.root, 'anime');
-    // 动画里的黑头发带一点蓝紫色的光泽，不然背光时是一整块黑
-    g.ch.root.traverse((o) => { if (o.isMesh && o.userData.origMat === g.ch.mats.hairMat && o.material.isMeshToonMaterial) o.material.color.set('#2b2636'); });
+    // 写实电影感：人物用原来的写实材质（从第三章过来的话把卡通材质换回去）
+    untoonify(g.ch.root);
     g.ctrl.float = 1; g.ctrl.floatTarget = 0.35;
-    g.scene.fog = null;
+    // 这一章用不上紫光手电：它那盏灯藏起来（每个像素都要算一遍灯光，能省则省）；换章时 game.js 会放回来
+    g.uvLight.visible = false;
+    // 通往驾驶舱的舱门一开始就开着：从乘员舱望过去，门后那节舱段是被琥珀色的灯照亮的
+    const D = R.wcDoor;
+    if (!D.open) { D.open = true; g.collision.setEnabled('wcShut', false); g.collision.setEnabled('wcOpen', true); D.camBox.makeEmpty(); D.pivot.rotation.y = (D.base || 0) + D.openAngle; R.lights.wc.shadow.needsUpdate = true; }
+    // 一层很淡的青灰色空气感：远处的东西稍微沉下去，灯光有了"体积"
+    g.scene.fog = new THREE.FogExp2('#141c1b', 0.038);
     g.lightMode = 'game';
     R.spaceSky.drawDigit(S.digits[2]);
     // 水球里的纸条
@@ -63,10 +68,10 @@ export const CH4 = {
     }
     // 信息接收站：返回舱发回来的消息
     this._comms = [
-      { text: `[06:52] ${A}：上返回舱了！他还没醒？`, color: '#ffd9a8' },
-      { text: `[06:53] ${B}：叫了八百遍，睡得跟死猪一样`, color: '#bff4ff' },
-      { text: `[06:55] ${C}：授权码拆成三份了 🤖💧🌍`, color: '#ffc2e0' },
-      { text: '[07:10] 返回舱：已脱离轨道，三小时后溅落', color: '#8fffc0' },
+      { text: `[06:52] ${A}：上返回舱了！他还没醒？`, color: '#ffcf8a' },
+      { text: `[06:53] ${B}：叫了八百遍，睡得跟死猪一样`, color: '#cfe8d6' },
+      { text: `[06:55] ${C}：授权码拆成三份了 🤖💧🌍`, color: '#e8d6bc' },
+      { text: '[07:10] 返回舱：已脱离轨道，三小时后溅落', color: '#8cf0a4' },
     ];
     this._commsT = 0; this._mistT = 0;
     this.secret = new Secret(g, this);
@@ -74,16 +79,17 @@ export const CH4 = {
 
   _drawKeypad(g, mode) {
     const K = g.refs.hatch.keypad, c = K.canvas, x = c.getContext('2d'), S = g.S;
-    x.fillStyle = '#0b1a33'; x.fillRect(0, 0, 128, 160);
-    const col = mode === 'open' ? '#7fffb0' : mode === 'error' ? '#ff6a7a' : '#7fe8ff';
-    x.strokeStyle = col; x.lineWidth = 3; x.strokeRect(6, 6, 116, 40);
+    x.fillStyle = '#1c1f1e'; x.fillRect(0, 0, 128, 160);
+    x.fillStyle = '#070a08'; x.fillRect(6, 6, 116, 40);
+    const col = mode === 'open' ? '#8cf0a4' : mode === 'error' ? '#ff5a3c' : '#ffb04a';
+    x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 3; x.strokeRect(6, 6, 116, 40);
     x.fillStyle = col; x.font = 'bold 22px sans-serif'; x.textAlign = 'center';
     x.fillText(mode === 'open' ? 'OPEN' : S.digits.map((d, i) => (S.found[i] ? '•' : '_')).join(' '), 64, 34);
     x.font = 'bold 12px sans-serif'; x.fillText(mode === 'open' ? 'AIRLOCK READY' : 'AIRLOCK LOCKED', 64, 62);
     for (let i = 0; i < 12; i++) {
       const bx = 14 + (i % 3) * 36, by = 72 + Math.floor(i / 3) * 21;
-      x.fillStyle = 'rgba(127,232,255,0.18)'; x.fillRect(bx, by, 30, 17);
-      x.fillStyle = col; x.font = 'bold 12px sans-serif'; x.fillText(['1', '2', '3', '4', '5', '6', '7', '8', '9', '✕', '0', '✓'][i], bx + 15, by + 13);
+      x.fillStyle = '#3a3e3b'; x.fillRect(bx, by, 30, 17); x.fillStyle = 'rgba(255,255,255,0.08)'; x.fillRect(bx, by, 30, 3);
+      x.fillStyle = '#d6d2c4'; x.font = 'bold 12px sans-serif'; x.fillText(['1', '2', '3', '4', '5', '6', '7', '8', '9', '✕', '0', '✓'][i], bx + 15, by + 13);
     }
     K.tex.needsUpdate = true;
   },
@@ -152,7 +158,7 @@ export const CH4 = {
     g.refs.floaters.impulse(0.5, V(-0.5, 0.1, 0.3));
     this.speedLines(g, 1.6);
     g.audio.hiss(); g.audio.sparkle();
-    g.fx.emit('dust', V(-1.5, 1.2, g.refs.door.z), { count: 40, speed: 0.8, spread: 1, up: 0.4, gravity: 0, drag: 1.2, life: 2.2, size: 0.12, colors: ['#ffffff', '#dff4ff'], sway: 0.2 });
+    g.fx.emit('dust', V(-1.5, 1.2, g.refs.door.z), { count: 40, speed: 0.8, spread: 1, up: 0.4, gravity: 0, drag: 1.2, life: 2.2, size: 0.1, colors: ['#e8e4dc', '#cfd6d2'], sway: 0.2 });
   },
   onEnd() {},
 
@@ -199,19 +205,22 @@ export const CH4 = {
     g.refs.robot.emote.show('!', 1.5);
     g.after(1.2, () => g.ui.subtitle('哇啊啊啊——！！', 1.6, g.S.name));
   },
-  // 动画里的"眼缘"：找到一位密码时，屏幕上"啪"地弹出一格漫画分镜
-  eyecatch(g, icon, digit, text = 'GET!') {
+  // 找到一位授权码：画面角落淡入一行电影字幕式的读数（不再弹漫画分镜）
+  eyecatch(g, icon, digit) {
     const el = document.createElement('div');
-    el.className = 'eyecatch';
-    el.innerHTML = `<div class="ec-burst"></div><div class="ec-ic">${icon}</div><div class="ec-d">${digit}</div><div class="ec-get">${text}</div>`;
+    el.className = 'readout';
+    const n = { '🤖': 1, '💧': 2, '🌍': 3 }[icon] || '';
+    el.innerHTML = `<div class="ro-k">AIRLOCK AUTH · DIGIT ${n}/3</div><div class="ro-v"><span class="ro-ic">${icon}</span><b>${digit}</b></div><div class="ro-bar"></div>`;
     document.body.appendChild(el);
-    g.audio.sparkle();
-    setTimeout(() => el.classList.add('out'), 1500);
-    setTimeout(() => el.remove(), 2100);
+    g.audio.robotBeep(2, 1400);
+    setTimeout(() => el.classList.add('out'), 2600);
+    setTimeout(() => el.remove(), 3400);
   },
+  // 原来的漫画"集中线"：写实版改成镜头被撞了一下——一震 + 一下色散
   speedLines(g, dur = 1) {
     const G = g.gfx.grade;
-    g.tween(dur, (k) => { G.speed = Math.sin(Math.min(1, k * 1.4) * Math.PI) * 0.9 + (k < 0.7 ? 0.1 : 0); }, { ease: (t) => t, done: () => (G.speed = 0) });
+    G.cur.aberration = Math.max(G.cur.aberration, 0.004 + 0.004 * Math.min(1, dur));
+    if (g._shake) g._shake(0.04 * Math.min(1.5, dur));
   },
 
   handlers(g) {
@@ -263,13 +272,13 @@ export const CH4 = {
       g.say(S().f.noodle ? '面条已经泡发了……在太空里泡面会变成一个大面球。' : '吸溜——面条在空中飘成了一个圈，吃进去一半，另一半飘走了。', 3);
       S().f.noodle = true;
     } };
-    H.candies = { label: '一团糖豆', verb: '张嘴去接', act: () => {
+    H.candies = { label: '一团巧克力豆', verb: '张嘴去接', act: () => {
       const s = S();
       g.audio.crunch();
-      if (s.f.candy) { g.say('糖豆被你吃得差不多了，剩下几颗还在转圈。', 2.6); return; }
+      if (s.f.candy) { g.say('巧克力豆被你吃得差不多了，剩下几颗还在转圈。', 2.6); return; }
       s.f.candy = true; s.freeHints++;
-      g.fx.emit('star', g.refs.candies.group.getWorldPosition(V()), { count: 8, speed: 0.4, spread: 0.6, up: 0.4, gravity: 0, drag: 1, life: 1.2, size: 0.06, colors: ['#ffd23f', '#ff4a5a', '#2ec4c9'], spin: 3 });
-      g.say('啊呜——张嘴接住一颗糖豆！甜！（下一次提示免费）', 3);
+      g.fx.emit('dust', g.refs.candies.group.getWorldPosition(V()), { count: 6, speed: 0.25, spread: 0.6, up: 0.2, gravity: 0, drag: 1, life: 1.4, size: 0.025, colors: ['#e0b024', '#a8201c', '#1d4e92'] });
+      g.say('啊呜——张嘴接住一颗巧克力豆！甜！（下一次提示免费）', 3);
     } };
     // ---- 🤖 机器人 ----
     H.robot = {
@@ -342,7 +351,7 @@ export const CH4 = {
     g.after(1.4, () => { rb.mode = 'blink'; g.audio.bootChime(); g.ui.subtitle('……系统重启中……陀螺仪校准完毕！', 2.2, '？？？（机器人）'); });
     g.after(3.6, () => {
       rb.mode = 'happy'; rb.emote.show('heart', 2); g.audio.sparkle();
-      g.fx.emit('star', rb.root.getWorldPosition(V()).add(V(0, 0.2, 0)), { count: 16, speed: 0.8, spread: 1, up: 0.6, gravity: 0, drag: 1.4, life: 1.6, size: 0.07, colors: ['#7fe8ff', '#ffffff', '#ffd23f'], spin: 3 });
+      g.fx.emit('spark', rb.root.getWorldPosition(V()), { count: 6, speed: 0.5, spread: 1, up: 0.2, gravity: 0, drag: 2, life: 0.4, size: 0.02, colors: ['#ffe0a0', '#ffffff'] });
       g.ui.subtitle(`谢谢你，${S.name}！我是 211 舱的生活助理「小圆」！`, 3, '小圆（机器人）');
       S.ach.add('robot');
     });
@@ -541,7 +550,7 @@ export const CH4 = {
     g.tween(1.2, (k) => (H.wheel.rotation.z = w0 + k * Math.PI * 3), { ease: easeInOut });
     g.audio.hiss(); g.audio.clunk();
     this.speedLines(g, 1.0);
-    g.fx.emit('dust', V(-1.62, 1.4, g.refs.door.z), { count: 30, speed: 0.6, spread: 1, up: 0.2, gravity: 0, drag: 1.2, life: 2, size: 0.1, colors: ['#ffffff', '#dff4ff'], sway: 0.2 });
+    g.fx.emit('dust', V(-1.62, 1.4, g.refs.door.z), { count: 30, speed: 0.6, spread: 1, up: 0.2, gravity: 0, drag: 1.2, life: 2, size: 0.08, colors: ['#e8e4dc', '#cfd6d2'], sway: 0.2 });
     g.say('嗤——气闸舱门的转轮自己转了起来！', 2.4);
     g.refs.robot.emote.show('star', 1.5);
     g.after(1.6, () => g.win());
@@ -583,18 +592,18 @@ export const CH4 = {
     const earthLit = 0.5 + 0.5 * -sky.sunDir.dot(sky.earthDir);
     // 阳光：只有在没被地球挡住的时候
     L.sun.position.copy(L.sun.target.position).addScaledVector(sky.sunDir, 12);
-    L.sun.intensity = sunVis * 2.6;
-    SL.earthLight.intensity = this._open * (0.4 + earthLit * 2.2);
+    L.sun.intensity = sunVis * 3.4;
+    const earthGlow = this._open * (0.1 + earthLit * 0.9); // 打开遮光板：地球反射的蓝光（叠在环境光上，不另外加灯）
     R.shafts.target = sunVis * this._open * clamp(-sky.sunDir.z * 2.2, 0, 1) * 0.035;
     R.shafts.uniforms.intensity.value = lerp(R.shafts.uniforms.intensity.value, R.shafts.target, kk);
-    // 舱内照明：夜间模式（蓝色灯带 + 天花板灯板很暗）/ 照明模式
+    // 舱内照明：夜间模式（很暗：两盏暖色工作灯 + 屏幕光 + 驾驶舱的琥珀色）/ 照明模式（天花板的灯箱全开，偏冷的日光色）
     const on = (S && S.f.lightsOn) || g.lightMode === 'end';
-    const spot = on ? 9 : 0;
+    const spot = on ? 7 : 0;
     g.light.spot = lerp(g.light.spot, spot, 1 - Math.exp(-dt * 6));
     L.ceilSpots.forEach((s) => (s.intensity = g.light.spot));
-    L.tubeMats.forEach((m) => (m.emissiveIntensity = on ? 2.4 : 0.3));
-    R.ceilMat.emissiveIntensity = lerp(R.ceilMat.emissiveIntensity, on ? 1.2 : 0.35, kk);
-    let hemi = on ? 1.0 : 0.85;
+    L.tubeMats.forEach((m) => (m.emissiveIntensity = on ? 1.8 : 0.04));
+    R.ceilMat.emissiveIntensity = lerp(R.ceilMat.emissiveIntensity, on ? 0.5 : 0.05, kk);
+    let hemi = (on ? 0.55 : 0.2) + earthGlow * 0.25;
     // 报警：红灯转起来
     const alarm = this._alarm > 0 || (S && S.f.alarm);
     if (this._alarm > 0) this._alarm -= dt;
@@ -605,21 +614,27 @@ export const CH4 = {
       B.light.target.position.set(-1.68 + Math.cos(a) * 3, 1.2, 3.36 + Math.sin(a) * 3);
     }
     B.mat.emissiveIntensity = alarm ? 1.4 + Math.sin(t * 10) * 1.2 : 0.25;
-    SL.stripMat.color.set(alarm ? '#ff6a7a' : '#8fe8ff').multiplyScalar(alarm ? 0.7 + 0.3 * Math.sin(t * 10) : 0.85 + 0.15 * Math.sin(t * 1.3));
-    if (alarm) hemi *= 0.85;
+    SL.stripMat.color.set(alarm ? '#ff3a22' : on ? '#b8dccb' : '#5e7c70').multiplyScalar(alarm ? 0.55 + 0.45 * Math.sin(t * 10) : 1);
+    if (alarm) hemi *= 0.8;
     L.hemi.intensity = lerp(L.hemi.intensity, hemi, kk);
-    L.hemi.color.lerp(_c.set(alarm ? '#ffb0b8' : '#bfe0ff'), kk);
-    SL.cabinGlow.intensity = on ? 0.4 : 1.1;
-    // 镜头补光：从镜头斜上方打过去
+    L.hemi.color.lerp(_c.set(alarm ? '#7a4a44' : earthGlow > 0.3 ? '#5f7f98' : '#56706b'), kk);
+    // 两盏暖色工作灯：夜间模式的主光（其中一盏接触不良，偶尔闪一下）
+    const flick = Math.sin(t * 23) > 0.985 ? 0.35 : 1;
+    SL.cabinGlow.intensity = (on ? 0.5 : 1.8) * flick;
+    // 厨房那盏灯借的是走廊灯：出舱时门口的光门在用它，别抢
+    const GL = SL.galleyLamp, home = GL.userData.home;
+    if (!(R.doorLight && R.doorLight.power > 0.002)) {
+      GL.position.copy(home.pos); GL.color.set(home.color); GL.distance = home.distance; GL.decay = home.decay;
+      GL.intensity = on ? 0.35 : 1.2;
+    } else { GL.distance = 9; GL.decay = 1.6; }
+    // 镜头补光：只留一点点，别让人物背光时死黑
     const cam = g.camera;
     cam.getWorldDirection(_q);
     SL.camFill.position.copy(cam.position).add(_p.set(0, 0.8, 0)).addScaledVector(_q, -0.5);
     SL.camFill.target.position.copy(cam.position).addScaledVector(_q, 3);
-    SL.camFill.intensity = on ? 0.45 : 0.75;
-    g.scene.environmentIntensity = 0.3;
-    L.monLight.intensity = 0.9 + Math.sin(t * 9) * 0.05;
-    L.monLight.color.set(alarm ? '#ff8a9a' : '#7fe0ff');
-    L.wc.intensity = on ? 1.8 : 0.9;
+    SL.camFill.intensity = on ? 0.06 : 0.12;
+    g.scene.environmentIntensity = on ? 0.32 : 0.14;
+    L.wc.intensity = on ? 10 : 8.5;
     g._updateDust(dt, 0.6);
     // 信息接收站的大屏（10 帧/秒）
     this._commsT -= dt;
@@ -645,7 +660,9 @@ export const CH4 = {
     rb.faceT = (rb.faceT || 0) - dt;
     if (rb.talkT > 0) rb.talkT -= dt;
     let mode = rb.mode;
-    if (rb.state === 'follow' && rb.talkT > 0) mode = 'talk';
+    if (rb.flashT > 0) rb.flashT -= dt;
+    if (rb.flashT > 0) mode = rb.flashMode;
+    else if (rb.state === 'follow' && rb.talkT > 0) mode = 'talk';
     else if (rb.state === 'follow' && (t % 3.2) < 0.12) mode = 'blink';
     else if (rb.state === 'follow' && mode === 'talk') mode = 'normal';
     if (rb.faceT <= 0 || mode !== rb._drawn) {
@@ -653,8 +670,9 @@ export const CH4 = {
       TS.drawRobotFace(rb.faceCanvas, mode, t);
       rb.faceTex.needsUpdate = true;
     }
-    for (const [i, e] of rb.ears.entries()) e.rotation.z = (i ? -1 : 1) * (0.3 + Math.sin(t * (rb.state === 'tumble' ? 22 : 7)) * 0.4);
-    rb.tipMat.color.set(Math.sin(t * (rb.state === 'tumble' ? 12 : 3)) > 0 ? (rb.state === 'tumble' ? '#ff4a5a' : '#7fffb0') : '#3a1a20');
+    // 两侧导风口里的小风扇：失控时狂转
+    for (const [i, e] of rb.ears.entries()) e.rotation.y += dt * (rb.state === 'tumble' ? 45 : 16) * (i ? -1 : 1);
+    rb.tipMat.color.set(Math.sin(t * (rb.state === 'tumble' ? 12 : 3)) > 0 ? (rb.state === 'tumble' ? '#ff3a26' : '#62ff8e') : '#2a0c08');
     rb.ring.rotation.z += dt * (rb.state === 'tumble' ? 6 : 1.2);
     rb.jet.scale.set(1, 0.5 + Math.random() * 0.3, 1);
     if (rb.state === 'tumble') {
@@ -664,7 +682,7 @@ export const CH4 = {
       rb.sparkT = (rb.sparkT || 1) - dt;
       if (rb.sparkT <= 0) {
         rb.sparkT = 0.7 + Math.random() * 1.2;
-        g.fx.emit('spark', r.position.clone(), { count: 8, speed: 1.2, spread: 1, up: 0.5, gravity: 0, drag: 2, life: 0.5, size: 0.03, colors: ['#ffe08a', '#ffffff', '#7fe8ff'] });
+        g.fx.emit('spark', r.position.clone(), { count: 8, speed: 1.2, spread: 1, up: 0.5, gravity: 0, drag: 2, life: 0.5, size: 0.025, colors: ['#ffe0a0', '#ffffff', '#ffb04a'] });
         if (g.state === 'play' && r.position.distanceTo(g.camera.position) < 5) g.audio.robotBeep(1, 600 + Math.random() * 900);
       }
     } else {

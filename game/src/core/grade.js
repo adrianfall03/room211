@@ -22,6 +22,8 @@ const GradeShader = {
     speed: { value: 0 },
     speedColor: { value: new THREE.Color(1, 1, 1) },
     aspect: { value: 1 },
+    lowTint: { value: new THREE.Color(1, 1, 1) },
+    highTint: { value: new THREE.Color(1, 1, 1) },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -29,7 +31,7 @@ const GradeShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform float time, saturation, contrast, brightness, sepia, vignette, grain, scratch, aberration, warp, flash, aspect, speed;
-    uniform vec3 tint, flashColor, speedColor;
+    uniform vec3 tint, flashColor, speedColor, lowTint, highTint;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     vec3 sampleAb(vec2 uv, vec2 dir, float ab) {
@@ -71,6 +73,8 @@ const GradeShader = {
       col = mix(col, sep, sepia);
       col = (col - 0.5) * contrast + 0.5 + brightness;
       col *= tint;
+      // 分离色调：暗部一种颜色、亮部一种颜色（电影里常见的"青橙"）
+      col *= mix(lowTint, highTint, smoothstep(0.05, 0.75, l));
       // 暗角
       col *= 1.0 - vignette * smoothstep(0.3, 0.95, r);
       // 老胶片：竖向划痕 + 帧闪烁
@@ -109,32 +113,31 @@ export const GRADES = {
   normal: { saturation: 1, contrast: 1, brightness: 0, tint: [1, 1, 1], sepia: 0, vignette: 0, grain: 0, scratch: 0, aberration: 0 },
   ruin: { saturation: 0.72, contrast: 1.08, brightness: -0.015, tint: [1.04, 0.97, 0.86], sepia: 0.32, vignette: 0.55, grain: 0.07, scratch: 1, aberration: 0.0025 },
   toon: { saturation: 1.22, contrast: 1.04, brightness: 0.01, tint: [1.03, 1.0, 1.02], sepia: 0, vignette: 0.28, grain: 0, scratch: 0, aberration: 0 },
-  // 太空舱：干净通透的动画色调，略偏青
-  space: { saturation: 1.16, contrast: 1.07, brightness: 0.012, tint: [0.97, 1.0, 1.05], sepia: 0, vignette: 0.24, grain: 0, scratch: 0, aberration: 0.0009 },
+  // 太空舱：写实电影感——暗部偏青、亮部偏暖，压一点饱和，胶片颗粒 + 暗角 + 一丝镜头色散
+  space: { saturation: 0.88, contrast: 1.1, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.52, grain: 0.05, scratch: 0, aberration: 0.0014, lowTint: [0.9, 1.02, 1.05], highTint: [1.06, 1.0, 0.9] },
   // 结局：阳光明媚的征兵报到现场
   finale: { saturation: 1.1, contrast: 1.05, brightness: 0.0, tint: [1.04, 1.0, 0.95], sepia: 0, vignette: 0.3, grain: 0.012, scratch: 0, aberration: 0 },
 };
+const NEUTRAL3 = [1, 1, 1];
 
 // 低画质不走后处理，用 CSS 滤镜凑个近似的色调
 export const CSS_GRADES = {
   normal: '',
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
   toon: 'saturate(1.25) contrast(1.03)',
-  space: 'saturate(1.18) contrast(1.06)',
+  space: 'saturate(0.88) contrast(1.1) brightness(0.97)',
   finale: 'saturate(1.1) contrast(1.05)',
 };
 
 export class GradePass extends ShaderPass {
   constructor() {
     super(GradeShader);
-    this.target = { ...GRADES.normal };
-    this.cur = { ...GRADES.normal };
     this.set('normal', true);
   }
   set(name, instant = false) {
     const g = GRADES[name] || GRADES.normal;
-    this.target = { ...g };
-    if (instant) this.cur = { ...g, tint: [...g.tint] };
+    this.target = { lowTint: NEUTRAL3, highTint: NEUTRAL3, ...g };
+    if (instant) this.cur = { ...this.target, tint: [...g.tint], lowTint: [...this.target.lowTint], highTint: [...this.target.highTint] };
   }
   get warp() { return this.uniforms.warp.value; }
   set warp(v) { this.uniforms.warp.value = v; }
@@ -149,14 +152,21 @@ export class GradePass extends ShaderPass {
       c[key] += (g[key] - c[key]) * k;
       U[key].value = c[key];
     }
-    for (let i = 0; i < 3; i++) c.tint[i] += (g.tint[i] - c.tint[i]) * k;
+    for (let i = 0; i < 3; i++) {
+      c.tint[i] += (g.tint[i] - c.tint[i]) * k;
+      c.lowTint[i] += (g.lowTint[i] - c.lowTint[i]) * k;
+      c.highTint[i] += (g.highTint[i] - c.highTint[i]) * k;
+    }
     U.tint.value.setRGB(c.tint[0], c.tint[1], c.tint[2]);
+    U.lowTint.value.setRGB(c.lowTint[0], c.lowTint[1], c.lowTint[2]);
+    U.highTint.value.setRGB(c.highTint[0], c.highTint[1], c.highTint[2]);
     U.time.value = t;
     U.aspect.value = aspect;
     // 全部参数都是中性时整个 pass 跳过，不浪费一次全屏绘制
     const neutral = Math.abs(c.saturation - 1) < 0.005 && Math.abs(c.contrast - 1) < 0.005 && Math.abs(c.brightness) < 0.002 && c.sepia < 0.005 && c.vignette < 0.005
       && c.grain < 0.002 && c.scratch < 0.01 && c.aberration < 0.0002 && U.warp.value < 0.001 && U.flash.value < 0.001 && U.speed.value < 0.001
-      && Math.abs(c.tint[0] - 1) + Math.abs(c.tint[1] - 1) + Math.abs(c.tint[2] - 1) < 0.01;
+      && Math.abs(c.tint[0] - 1) + Math.abs(c.tint[1] - 1) + Math.abs(c.tint[2] - 1) < 0.01
+      && [0, 1, 2].every((i) => Math.abs(c.lowTint[i] - 1) < 0.004 && Math.abs(c.highTint[i] - 1) < 0.004);
     this.enabled = !neutral;
   }
 }
