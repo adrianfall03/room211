@@ -5004,7 +5004,9 @@ void main() {
   varying vec2 vUv; varying vec3 vW;
   float h(float x) { return fract(sin(x * 91.7 + seed) * 4375.5); }
   void main() {
-    float along = vUv.x, across = vUv.y;
+    // 开了 MSAA 时，光柱边缘的像素会把 uv 外推到 [0,1] 之外；along > 1 时 pow(负数, 1.4) 是 NaN，
+    // 这个 NaN 会被 Bloom 模糊扩散到整个屏幕，画面一下子全黑。先夹到 [0,1]
+    float along = clamp(vUv.x, 0.0, 1.0), across = clamp(vUv.y, 0.0, 1.0);
     float edge = smoothstep(0.0, 0.18, across) * smoothstep(1.0, 0.82, across);
     float fall = pow(1.0 - along, 1.4) * smoothstep(0.0, 0.06, along);
     float flick = 0.75 + 0.25 * sin(time * 0.7 + seed * 3.0 + across * 5.0) * sin(time * 0.37 + along * 4.0);
