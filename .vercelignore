@@ -1,0 +1,11 @@
+# 用 Vercel 命令行（vercel / vercel deploy）部署时，上传文件不看 .gitignore，只看这个文件。
+# 这里照抄 .gitignore 里只留在本地的东西，免得把视频、真人照片和带头像的版本传上去。
+# （不要把 game/dist/ 写进来：它是 Vercel 要发布的构建产物目录）
+node_modules/
+game/dist-face/
+.claude/
+
+*.mp4
+291790246181_.pic.jpg
+game/src/assets/face.jpg
+逃离211宿舍（带头像）.html
