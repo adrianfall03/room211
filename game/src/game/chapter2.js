@@ -1,10 +1,10 @@
-// 第二章：废弃的 211（黄昏 17:30 → 18:00 天黑）
+// 第二章：废弃的 211（黄昏 17:30，天色越来越暗，但不会真的黑透）
 //   日记（未来的自己写的）→ ① 拉电闸，老显示器的雪花屏里闪出数字 → ② 找块布擦干净穿衣镜，口红写的数字
 //   → ③ 数洗手间窗外枯树上的乌鸦 → 铁链挂锁 3 位密码
 import * as THREE from 'three';
 import * as TX from '../core/textures.js';
 import * as TR from '../core/tex_ruin.js';
-import { clamp, lerp, easeOut, easeInOut } from '../core/util.js';
+import { lerp, easeOut, easeInOut } from '../core/util.js';
 
 const _c = new THREE.Color(), _c2 = new THREE.Color();
 const CN = '一二三四五六七八九';
@@ -12,12 +12,9 @@ const CN = '一二三四五六七八九';
 export const CH2 = {
   n: 2, theme: 'ruin',
   title: '第二章 · 废弃的 211', sub: '17:30 · 三十年后的黄昏', tag: '第二章 · 废弃的 211',
-  clock: [17, 30], label: '距离天黑', lockName: '挂锁', codeLen: 3, codeIcons: ['①', '②', '③'],
-  limit: { easy: 15 * 60, normal: 10 * 60, hard: 6 * 60 },
+  clock: [17, 30], lockName: '挂锁', codeLen: 3, codeIcons: ['①', '②', '③'],
+  tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['sheet', 'tally'],
-  failTitle: '天黑了……',
-  failCard: '18:00<small>天彻底黑了……灯泡“啪”地一声炸了</small>',
-  failText: '天黑了，灯泡炸了。你摸黑在废弃的 211 里转了一圈又一圈……恭喜解锁结局：『重修第三十一年』。',
   items: {
     towel: { icon: '🧻', name: '旧毛巾', desc: '硬得像纸板一样的旧毛巾，凑合能擦东西' },
   },
@@ -71,11 +68,10 @@ export const CH2 = {
     g.after(9.8, () => g.beginPlay());
   },
   onPlay(g) {
-    g.ui.toast('第二章 · 在<b>天黑之前</b>逃出废弃的 211', '', '🌆');
+    g.ui.toast('第二章 · 趁着天还没黑，逃出废弃的 211', '', '🌆');
     g.after(1.2, () => g.ui.subtitle('书桌上那本发黄的本子……好像是日记？', 3.6, g.S.name));
   },
   exitLine: () => '走！离开这个鬼地方！',
-  onFail(g) { g.audio.bulbPop(); g.S.f.power = false; g.refs.crt.on = false; g.audio.stopAllLoops(); },
   // 出门时颜色一点点回来：老胶片滤镜褪掉，门口是一个紫色的时空漩涡
   onDoorOpen(g) { addPortal(g); g.gfx.grade.set('normal'); },
 
@@ -103,10 +99,10 @@ export const CH2 = {
     if (!F[2]) return '去洗手间，对着窗户按 E 看看窗外——数数枯树上站了几只乌鸦。';
     return `密码凑齐了！去门口，按①②③的顺序输入：${S.digits.join('')}`;
   },
-  timed(g, remain, frac) {
+  story(g, p) {
     const S = g.S;
-    if (frac < 0.5 && !S.msgSent.half) { S.msgSent.half = true; g.say('天越来越暗了……得抓紧。', 3); }
-    if (frac < 0.2 && !S.msgSent.dark) { S.msgSent.dark = true; g.say('外面快全黑了！', 2.6); g.audio.caw(0.7); }
+    if (p > 0.5 && !S.msgSent.half) { S.msgSent.half = true; g.say('天越来越暗了……', 3); }
+    if (p > 0.8 && !S.msgSent.dark) { S.msgSent.dark = true; g.say('外面快全黑了！', 2.6); g.audio.caw(0.7); }
   },
   clockHands(g) { return { h: 7, m: 59, s: 58 + (Math.sin(g.time * 7) > 0.6 ? 1 : 0) }; },
 
@@ -392,6 +388,7 @@ export const CH2 = {
     });
     g.openModal(box);
   },
+  lockParts: (g) => g.refs.chain,
   unlockVisual(g) {
     const C = g.refs.chain;
     g.collision.setEnabled('lockCable', false);
@@ -425,10 +422,10 @@ export const CH2 = {
     }
   },
 
-  // ---------- 灯光：随着时间从黄昏变成天黑 ----------
+  // ---------- 灯光：随着时间从黄昏变暗（最暗停在快黑透的样子）----------
   world(g, dt, t) {
     const S = g.S, R = g.refs, L = R.lights;
-    const p = S && g.state !== 'title' ? clamp(S.elapsed / S.limit, 0, 1) : 0;
+    const p = g.state !== 'title' ? 0.85 * g.storyP() : 0;
     const kk = 1 - Math.exp(-dt * 3);
     const dusk = Math.pow(1 - p, 0.9);
     L.sun.intensity = lerp(L.sun.intensity, 2.6 * dusk, kk);

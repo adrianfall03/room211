@@ -27,7 +27,7 @@ const faceUrl = import.meta.env.MODE === 'production' ? null
 
 // ---------- 设置（本地记忆，失败时用默认值）----------
 const isMobile = matchMedia('(pointer: coarse)').matches;
-const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', diff: 'normal' };
+const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}')); } catch (e) { /* 忽略 */ }
 const saveSettings = () => { try { localStorage.setItem('dorm404', JSON.stringify(settings)); } catch (e) { /* 忽略 */ } };
 
@@ -282,18 +282,17 @@ async function boot() {
   ui.hideLoading();
   ui.showTitle({
     defaultName: settings.name,
-    defaultDiff: settings.diff,
+    defaultMode: settings.mode,
     quality: settings.quality,
     onQuality: (q) => { settings.quality = q; gfx.setQuality(q); saveSettings(); },
     unlocked: settings.unlocked || 1,
     defaultChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
-    onStart: ({ name, diff, quality, chapter, preview }) => {
+    onStart: ({ name, mode, quality, chapter }) => {
       audio.init();
-      settings.name = name; settings.diff = diff; settings.quality = quality;
-      if (!preview) settings.chapter = chapter;
-      settings.preview = false;
+      settings.name = name; settings.mode = mode; settings.quality = quality;
+      if (mode === 'game') settings.chapter = chapter;
       saveSettings();
-      game.startIntro({ name, diff, chapter, preview });
+      game.startIntro({ name, chapter, view: mode === 'view' });
     },
   });
 

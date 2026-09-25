@@ -1,11 +1,11 @@
-// 第三章：动物园 211（晚上 22:30 → 23:00 熄灯）
+// 第三章：动物园 211（晚上 22:30，宿管阿姨时不时广播催熄灯）
 //   门上一把爱心锁，三个转轮分别画着 🐔🐴🐵：
 //   🐔 两只鸡沉迷打游戏 → 关掉桌下的插线板，鸡毛满天飞，气急败坏地报出数字
 //   🐴 三匹马躺床上刷手机 → 打开大灯，“啊我的眼睛！”
 //   🐵 照镜子的猴子想要个时尚单品 → 把凳子上的红白头盔送给它
 import * as THREE from 'three';
 import * as TT from '../core/tex_toon.js';
-import { clamp, lerp } from '../core/util.js';
+import { lerp } from '../core/util.js';
 import { toonifyScene } from '../world/toonkit.js';
 import { addPortal } from './chapter2.js';
 
@@ -26,12 +26,9 @@ const LIGHT_PORTAL = /* glsl */ `
 export const CH3 = {
   n: 3, theme: 'toon',
   title: '第三章 · 动物园 211', sub: '22:30 · 熄灯之前', tag: '第三章 · 动物园 211',
-  clock: [22, 30], label: '距离熄灯', lockName: '爱心锁', codeLen: 3, codeIcons: ['🐔', '🐴', '🐵'],
-  limit: { easy: 15 * 60, normal: 10 * 60, hard: 6 * 60 },
+  clock: [22, 30], lockName: '爱心锁', codeLen: 3, codeIcons: ['🐔', '🐴', '🐵'],
+  tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['horseA', 'horseB', 'horseC'],
-  failTitle: '熄灯了……',
-  failCard: '23:00<small>“熄灯啦——！”宿管阿姨一声令下，整栋楼陷入黑暗</small>',
-  failText: '熄灯了。动物室友们打起了呼噜，你在黑暗里被小黄啄醒了三次……恭喜解锁结局：『永远的室友』。',
   items: {
     helmet: { icon: '🪖', name: '红白头盔', desc: '一顶很潮的头盔（大概）。好像有只猴子会喜欢' },
   },
@@ -50,7 +47,7 @@ export const CH3 = {
     if (!g.ch.root.userData.toon) { toonifyScene(g.ch.root, { minR: 0.015, maxR: 1 }); g.ch.root.userData.toon = true; }
     g.scene.fog = null;
     g.lightMode = 'game';
-    this._paT = 0; this._blackout = false;
+    this._paT = 0;
   },
 
   intro(g, { prepare }) {
@@ -83,7 +80,7 @@ export const CH3 = {
     g.after(13.4, () => g.beginPlay());
   },
   onPlay(g) {
-    g.ui.toast('第三章 · 在<b>熄灯之前</b>逃出动物园 211', '', '🌙');
+    g.ui.toast('第三章 · 趁着还没熄灯，逃出动物园 211', '', '🌙');
     g.after(1.4, () => g.ui.subtitle('门上挂着一把爱心锁……先去门口看看。', 3.6, g.S.name));
   },
   exitLine: () => '谢谢大家！我先走一步啦！',
@@ -92,17 +89,7 @@ export const CH3 = {
     for (const a of g.refs.animalList) { a.setState('cheer'); a.emote.show('heart', 2.5); }
     g.audio.sparkle();
   },
-  onEnd(g, success) { for (const a of g.refs.animalList) a.setState(success ? 'cheer' : a.state); },
-  // 熄灯：屋里所有的灯一下子全灭了
-  onFail(g) {
-    const R = g.refs, TL = R.toonLights;
-    g.audio.clunk();
-    g.S.f.lightsOn = false; g.S.f.powerCut = true;
-    for (const s of R.gameScreens) s.off = true;
-    R.toonLights.fairyMesh.visible = false;
-    for (const b of TL.bulbs) b.visible = false;
-    this._blackout = true;
-  },
+  onEnd(g) { for (const a of g.refs.animalList) a.setState('cheer'); },
 
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
@@ -126,12 +113,11 @@ export const CH3 = {
     }
     return `密码凑齐了！去门口，按🐔🐴🐵的顺序输入：${S.digits.join('')}`;
   },
-  timed(g, remain, frac) {
+  story(g, p) {
     const S = g.S;
     const pa = (key, text) => { if (S.msgSent[key]) return; S.msgSent[key] = true; g.audio.pa(); g.after(1.1, () => g.ui.subtitle(text, 3.6, '📢 宿管阿姨')); };
-    if (frac < 0.5) pa('half', `同学们注意——还有 ${Math.ceil(remain / 60)} 分钟熄灯！打游戏的、刷手机的，都给我收一收！`);
-    if (remain < 180) pa('three', '还有三分钟熄灯！照镜子的那位同学，别照啦！');
-    if (remain < 60) pa('last', '最后一分钟！马上熄灯！');
+    if (p > 0.5) pa('half', '同学们注意——快熄灯了！打游戏的、刷手机的，都给我收一收！');
+    if (p > 0.8) pa('late', '照镜子的那位同学，别照啦！马上熄灯了！');
   },
 
   handlers(g) {
@@ -194,7 +180,7 @@ export const CH3 = {
       bedE1b: ['', ''],
     };
     for (const [id, [l, t]] of Object.entries(F)) H[id] = flav(l, t);
-    H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => g.say(`${g.clockText}……23:00 熄灯，只剩 ${Math.ceil((S().limit - S().elapsed) / 60)} 分钟了！`) };
+    H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => g.say(`${g.clockText}……23:00 熄灯，还有 ${30 - g.storyMinutes()} 分钟！`) };
     H.popcorn = { label: '爆米花', verb: '吃一口', act: () => {
       if (S().f.popcorn) { g.say('爆米花已经被鸡们吃光了。'); return; }
       S().f.popcorn = true; S().freeHints++;
@@ -382,6 +368,7 @@ export const CH3 = {
     });
     g.openModal(box);
   },
+  lockParts: (g) => g.refs.heartLock,
   unlockVisual(g) {
     const H = g.refs.heartLock;
     g.collision.setEnabled('lockCable', false);
@@ -404,7 +391,7 @@ export const CH3 = {
   world(g, dt, t) {
     const S = g.S, R = g.refs, L = R.lights, TL = R.toonLights;
     const kk = 1 - Math.exp(-dt * 4);
-    const lightsOn = ((S && S.f.lightsOn) || g.lightMode === 'end') && !this._blackout;
+    const lightsOn = (S && S.f.lightsOn) || g.lightMode === 'end';
     const power = !(S && S.f.powerCut);
     let spot = lightsOn ? 11 : 0, tube = lightsOn ? 2.4 : 0;
     g.light.spot = lerp(g.light.spot, spot, 1 - Math.exp(-dt * 8));
@@ -420,9 +407,8 @@ export const CH3 = {
     const hue = (t * 0.08) % 1;
     L.monLight.color.setHSL(hue, 0.8, 0.6); L.monLight.intensity = power ? 0.75 + Math.sin(t * 9) * 0.12 : 0;
     TL.glow2.color.setHSL((hue + 0.5) % 1, 0.8, 0.6); TL.glow2.intensity = power ? 0.7 + Math.sin(t * 7) * 0.12 : 0;
-    TL.vanity.intensity = this._blackout ? 0 : 0.9 + Math.sin(t * 3) * 0.08;
-    TL.fairyL.intensity = this._blackout ? 0 : 1.1 + Math.sin(t * 1.7) * 0.15;
-    if (this._blackout) { L.hemi.intensity = 0.12; L.sun.intensity = 0.3; L.winLight.intensity = 0.4; R.ceilMat.emissiveIntensity = 0.9; }
+    TL.vanity.intensity = 0.9 + Math.sin(t * 3) * 0.08;
+    TL.fairyL.intensity = 1.1 + Math.sin(t * 1.7) * 0.15;
     const A = R.animals;
     TL.phoneA.intensity = A.horseA.state === 'scroll' ? 0.9 : 0;
     TL.phoneB.intensity = A.horseB.state === 'scroll' ? 0.9 : 0;

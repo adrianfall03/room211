@@ -39,9 +39,6 @@ button { font-family: var(--font); }
 @keyframes glitch { 0%, 92%, 100% { transform: none; } 93% { transform: translate(3px, -2px) skewX(-8deg); } 95% { transform: translate(-4px, 1px); } 97% { transform: translate(2px, 2px) skewX(6deg); } }
 #title .t-sub { color: #c9d0dc; font-size: 14px; line-height: 1.65; max-width: 440px; }
 #title .t-sub .t-more { color: #ff9ac4; }
-#title .t-actions { display: flex; gap: 10px; align-items: stretch; margin-top: 4px; }
-#title .t-actions .btn-main { flex: 1.35; margin-top: 0; }
-#title .t-actions .btn-preview { flex: 1; }
 #title .t-sub b { color: var(--warn); }
 #title label { font-size: 12px; color: var(--muted); letter-spacing: 0.12em; }
 #title input[type=text] { width: 100%; margin-top: 6px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.06); color: #fff; font-size: 16px; font-family: var(--font); outline: none; user-select: text; -webkit-user-select: text; }
@@ -75,7 +72,6 @@ button { font-family: var(--font); }
 #hud-tr { position: absolute; right: 18px; top: 16px; text-align: right; padding: 12px 16px; border-radius: 14px; background: var(--panel); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); min-width: 170px; }
 #hud-tr .ct { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 34px; font-weight: 700; letter-spacing: 0.04em; line-height: 1; }
 #hud-tr .cr { font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: 0.08em; }
-#hud-tr.urgent .ct { color: var(--danger); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: 0.55; } }
 #hud-tr .codes { margin-top: 10px; display: flex; gap: 5px; justify-content: flex-end; align-items: center; font-size: 11px; color: var(--muted); }
 #hud-tr .codes b { display: inline-grid; place-items: center; width: 24px; height: 30px; border-radius: 7px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); font-family: 'SF Mono', Menlo, monospace; font-size: 17px; color: var(--muted); }
@@ -107,7 +103,6 @@ button { font-family: var(--font); }
 #keyhints span { white-space: nowrap; }
 #clickToPlay { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); padding: 10px 18px; border-radius: 12px; background: rgba(0,0,0,0.7); border: 1px solid var(--line); font-size: 15px; pointer-events: none; animation: pulse 1.6s infinite; }
 #vignette { position: fixed; inset: 0; z-index: 15; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%); transition: background 0.6s; }
-#vignette.danger { background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(140,0,0,0.45) 100%); animation: pulse 1.1s infinite; }
 #fade { position: fixed; inset: 0; z-index: 55; background: #000; opacity: 0; pointer-events: none; transition: opacity 0.8s; display: flex; align-items: center; justify-content: center; }
 #fade.white { background: #fff; }
 #fade .card { font-family: var(--display); font-size: clamp(28px, 5vw, 48px); letter-spacing: 0.12em; color: #fff; text-align: center; line-height: 1.5; opacity: 0; transition: opacity 0.8s; }
@@ -211,7 +206,6 @@ button { font-family: var(--font); }
 .end { text-align: center; width: min(620px, 94vw); }
 .end h2 { font-size: clamp(40px, 8vw, 64px); margin-bottom: 4px; }
 .end .rank { font-family: var(--display); font-size: 120px; line-height: 1; margin: 8px 0; background: linear-gradient(180deg, #fff, var(--warn)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 30px rgba(255,200,87,0.4)); }
-.end.fail .rank { background: linear-gradient(180deg, #fff, var(--danger)); -webkit-background-clip: text; background-clip: text; }
 .end .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
 .end .stats div { padding: 12px 6px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
 .end .stats b { display: block; font-size: 22px; font-family: 'SF Mono', Menlo, monospace; }
@@ -250,11 +244,14 @@ button { font-family: var(--font); }
   .end .rank { font-size: 90px; }
 }
 
-/* ---------- 章节 / 预览 ---------- */
-.btn-preview { padding: 11px 16px; border-radius: 14px; border: 1px dashed rgba(255,95,162,0.7); background: rgba(255,95,162,0.1); color: #ffd6e8; cursor: pointer; font-size: 16px; font-weight: 700; letter-spacing: 0.08em; transition: background 0.15s, transform 0.15s; }
-.btn-preview small { display: block; margin-top: 3px; font-size: 11px; font-weight: 400; color: #d8aabd; letter-spacing: 0.04em; }
-.btn-preview:hover { background: rgba(255,95,162,0.2); transform: translateY(-1px); }
+/* ---------- 模式 / 章节 ---------- */
+.seg.mode button { padding: 10px 8px; font-size: 15px; font-weight: 700; }
+.seg.mode button[data-v=view].on { border-color: #ff5fa2; background: rgba(255,95,162,0.14); }
+.seg button.locked { opacity: 0.55; cursor: not-allowed; }
 .seg button.locked small { color: #ff9ac4; }
+/* 鉴赏模式：没有任务、没有密码格，提示 / 线索换成"下一关" */
+body.mode-view #hud-tl, body.mode-view #hud-tr .codes, body.mode-view .game-only { display: none; }
+body:not(.mode-view) .view-only { display: none; }
 #hud-tr .chap { margin-top: 6px; font-size: 11px; color: var(--muted); letter-spacing: 0.12em; }
 #hud-tr .codes b[data-ic] { position: relative; margin-top: 12px; }
 #hud-tr .codes b[data-ic]::before { content: attr(data-ic); position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 12px; }
@@ -294,4 +291,5 @@ body.theme-toon #crosshair.active { border-color: #ff8fc0; box-shadow: 0 0 12px 
 #fade.white .card { color: #2a2438; text-shadow: 0 2px 20px rgba(160,120,255,0.35); }
 #fade.white .card small { color: #7a6a8a; }
 .end .stats { grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); }
+.end .stats.totals { margin-top: -6px; }
 .end .rank { font-size: clamp(72px, 14vh, 120px); }
