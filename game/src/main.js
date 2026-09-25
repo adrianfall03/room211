@@ -250,6 +250,14 @@ async function boot() {
     return refs;
   };
   const refs = buildWorld('normal');
+  // 第四章彩蛋：书架背后"那天晚上的 211"——另搭一间写实画风的宿舍，放在单独的场景里（不动主场景的碰撞和灯光）
+  const buildPast = () => {
+    const sc = new THREE.Scene();
+    sc.background = new THREE.Color('#050608');
+    const pastRefs = buildDorm(sc, T, new CollisionWorld(), { faceImg, theme: 'normal' });
+    for (const m of pastRefs.mirrors) m.enabled = () => false;
+    return { scene: sc, refs: pastRefs };
+  };
 
   ui.loading(0.82, '照着照片捏主角……');
   await nextFrame();
@@ -266,7 +274,7 @@ async function boot() {
   gfx.setQuality(settings.quality);
   audio.setVolume(settings.vol);
 
-  const game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings, buildWorld });
+  const game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings, buildWorld, buildPast });
   game.enterTitle();
   game.update(0.016);
 
@@ -308,7 +316,9 @@ async function boot() {
     requestAnimationFrame(frame);
     timer.update(ts);
     const dt = Math.min(timer.getDelta(), 0.05);
+    if (window.__hold) return; // 自动化测试：暂停主循环，用 ff() 推进、render() 手动画一帧
     game.update(dt);
+    game.beforeRender();
     gfx.render(dt, game.time);
   };
   requestAnimationFrame(frame);
@@ -316,7 +326,7 @@ async function boot() {
   // 调试接口（方便测试）
   // ff(秒)：不渲染、只推进游戏逻辑（自动化测试时用，软件渲染一帧要好几秒）
   const ff = async (sec) => { for (let i = 0; i < sec / 0.05; i++) { game.update(0.05); if (i % 10 === 9) await new Promise((r) => setTimeout(r, 0)); } };
-  window.__game = { game, gfx, scene, camera, get refs() { return game.refs; }, ch, ctrl, input, ui, audio, THREE, ff };
+  window.__game = { game, gfx, scene, camera, get refs() { return game.refs; }, ch, ctrl, input, ui, audio, THREE, ff, render: () => { game.beforeRender(); gfx.render(0.016, game.time); } };
 }
 
 boot().catch((e) => {

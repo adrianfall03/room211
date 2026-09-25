@@ -310,6 +310,47 @@ export class Audio {
     for (let t = 0; t < sec; t += 0.5) { this.tone({ f: 880, f2: 660, dur: 0.24, type: 'square', gain: 0.045, delay: t, rev: false }); this.tone({ f: 660, dur: 0.2, type: 'square', gain: 0.03, delay: t + 0.25, rev: false }); }
   }
 
+  // ----- 第四章彩蛋：卡冈图雅 / 书架背后 -----
+  // 大喊（隔着书架、隔着时空，闷闷的）："啊——！" 锯齿波 + 两个元音共振峰
+  shout(pitch = 1, dur = 0.8, muffled = false) {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = this.t;
+    const o = c.createOscillator(); o.type = 'sawtooth';
+    o.frequency.setValueAtTime(240 * pitch, t0);
+    o.frequency.linearRampToValueAtTime(275 * pitch, t0 + dur * 0.3);
+    o.frequency.exponentialRampToValueAtTime(170 * pitch, t0 + dur);
+    const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 5.5; vg.gain.value = 6 * pitch; vib.connect(vg).connect(o.frequency);
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, t0); out.gain.exponentialRampToValueAtTime(0.35, t0 + 0.06); out.gain.setValueAtTime(0.3, t0 + dur * 0.7); out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    for (const [f, q, gn] of [[820, 6, 1], [1250, 8, 0.6], [2600, 10, 0.2]]) {
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const g = c.createGain(); g.gain.value = gn;
+      o.connect(bp).connect(g).connect(out);
+    }
+    let last = out;
+    if (muffled) { const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; out.connect(lp); last = lp; }
+    this._out(last, true);
+    o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
+  }
+  rumble(sec = 3, gain = 0.5) { this.noise({ dur: sec, gain, type: 'lowpass', freq: 140, brown: true, curve: [[0.15, 1], [0.7, 0.8], [1, 0]] }); this.tone({ f: 42, f2: 30, dur: sec, type: 'sine', gain: 0.18, attack: 0.3 }); }
+  crack() { for (let i = 0; i < 5; i++) this.noise({ dur: 0.07, gain: 0.3, type: 'highpass', freq: 3000 + Math.random() * 3000, delay: i * 0.035 + Math.random() * 0.02 }); this.tone({ f: 2400, f2: 900, dur: 0.25, type: 'sine', gain: 0.05 }); }
+  // 摩尔斯电码：'.' 短 '-' 长 ' ' 停顿
+  morse(pattern, f = 740) {
+    let t = 0;
+    for (const ch of pattern) {
+      if (ch === '.') { this.tone({ f, dur: 0.08, type: 'sine', gain: 0.07, delay: t, rev: false }); t += 0.16; }
+      else if (ch === '-') { this.tone({ f, dur: 0.24, type: 'sine', gain: 0.07, delay: t, rev: false }); t += 0.32; }
+      else t += 0.24;
+    }
+    return t;
+  }
+  heartbeat() { this.tone({ f: 60, f2: 40, dur: 0.18, type: 'sine', gain: 0.35 }); this.tone({ f: 55, f2: 38, dur: 0.2, type: 'sine', gain: 0.25, delay: 0.26 }); }
+  thud() { this.noise({ dur: 0.25, gain: 0.45, type: 'lowpass', freq: 380, brown: true }); this.tone({ f: 110, f2: 60, dur: 0.18, type: 'sine', gain: 0.15 }); }
+  // 管风琴一样的长音（五维空间里）：几个八度叠在一起，慢慢起伏
+  organ(sec = 8, root = 110) {
+    for (const [m, g] of [[1, 0.05], [1.5, 0.03], [2, 0.035], [3, 0.015], [4, 0.012]]) this.tone({ f: root * m, dur: sec, type: 'sine', gain: g, attack: 1.5 });
+  }
+
   // ----- 结局：征兵报到 -----
   bugle() { // 号角：简单的五声进行
     const n = [[392, 0.3], [523, 0.3], [659, 0.3], [784, 0.7], [659, 0.3], [784, 1.1]];

@@ -1,5 +1,6 @@
-// 结局过场：新兵报到
-//   从 211 的门里走出来 → 教官喊"向前走" → 红毯尽头立正 → 少校敬礼、双手递上军帽 →
+// 结局过场：梦醒了——新兵报到
+//   眼前一片黑，教官一嗓子"新兵！醒醒！" → 眼皮眨两下睁开：自己坐在征兵站门前的候场区里打瞌睡，
+//   四个 211 原来全是一场梦 → 起立，教官喊"向前走" → 红毯尽头立正 → 少校敬礼、双手递上军帽 →
 //   你接过军帽戴上、回敬一个军礼 → 礼炮彩带、观众欢呼 → 结算
 import * as THREE from 'three';
 import { clamp, lerp, damp, easeInOut, easeOut, dampAngle } from '../core/util.js';
@@ -17,7 +18,7 @@ export class FinaleDirector {
     this.R = R;
     this.t = 0;
     // 各种姿势的权重（平滑过渡）
-    this.w = { oSalute: 0, oHold: 0, pHold: 0, pSalute: 0, pAttention: 0, sSalute: 0 };
+    this.w = { oSalute: 0, oHold: 0, pHold: 0, pSalute: 0, pAttention: 0, sSalute: 0, pSit: 0, nod: 0 };
     this.tw = { ...this.w };
     this.cap = { stage: 0, k: 0, from: V(), fromQ: new THREE.Quaternion() };
     this.walk = null;
@@ -28,79 +29,121 @@ export class FinaleDirector {
   // 世界坐标 → 某个角色躯干坐标系
   _local(ch, p) { ch.root.updateMatrixWorld(true); return ch.J.torso.worldToLocal(p.clone()); }
 
+  // 眼皮：两片黑幕，open 0 = 闭着，1 = 完全睁开
+  _lids() {
+    if (this.lidsEl) return this.lidsEl;
+    const el = document.createElement('div');
+    el.id = 'lids';
+    el.innerHTML = '<div class="lid t"></div><div class="lid b"></div><div class="lid-blur"></div>';
+    document.body.appendChild(el);
+    this.lidsEl = el;
+    return el;
+  }
+  lids(open, dur = 0.6) {
+    const el = this._lids();
+    for (const [c, s] of [['t', -1], ['b', 1]]) { const l = el.querySelector(`.lid.${c}`); l.style.transition = `transform ${dur}s ease-in-out`; l.style.transform = `translateY(${s * open * 102}%)`; }
+    const bl = el.querySelector('.lid-blur'); bl.style.transition = `opacity ${dur * 1.6}s`; bl.style.opacity = String(open >= 1 ? 0 : 1 - open * 0.5);
+    if (open >= 1) setTimeout(() => { if (this.lidsEl) { this.lidsEl.remove(); this.lidsEl = null; } }, dur * 1600 + 200);
+  }
+
   start() {
-    const g = this.g, R = this.R, ch = g.ch, S = g.S;
-    // 主角：站在门里，面朝红毯
-    g.ctrl.float = 0; g.ctrl.pos.set(0, 0, 6.75); g.ctrl.charYaw = Math.PI;
-    ch.root.position.set(0, 0, 6.75); ch.root.rotation.set(0, Math.PI, 0);
-    ch.setFirstPerson(false);
-    ch.setExpression('shock');
-    // 开场：主角从发着白光的 211 门里迈出来
-    this.walk = { to: V(0, 0, 6.05), speed: 0.7 };
-    g._cineSet(V(1.1, 1.45, 3.9), V(0, 1.35, 6.4));
-    g._cineTo(V(0.8, 1.55, 4.3), V(0, 1.45, 6.3), 3.6);
-    g.audio.startMusic('finale');
-    g.audio.cheer(3);
-    this.R.excite = 0.6;
-    const [A] = S.mates;
+    const g = this.g, R = this.R, ch = g.ch, S = g.S, SG = R.sarge;
+    // 主角：坐在候场区的折叠椅上打瞌睡（面朝红毯）
+    g.ctrl.float = 0; g.ctrl.pos.copy(R.seat); g.ctrl.charYaw = Math.PI;
+    ch.root.position.copy(R.seat); ch.root.rotation.set(0, Math.PI, 0);
+    ch.setFirstPerson(true); // 先是主角的眼睛看出去（睁眼），镜头拉远以后再显示头
+    ch.setExpression('sleep');
+    this.w.pSit = this.tw.pSit = 1; this.w.nod = this.tw.nod = 1;
+    // 教官已经站到跟前，弯着腰冲他喊
+    this.sPost = SG.root.position.clone(); this.sPostYaw = SG.root.rotation.y;
+    SG.root.position.set(0.18, 0, 5.72); SG.root.rotation.y = 0;
+    this.sLean = 1;
+    // 闭着眼：两片黑幕挡着（外面的白光正在退去）
+    this._lids(); this.lids(0, 0.01);
+    g._cineSet(V(0.02, 1.22, 6.22), V(0.16, 1.66, 5.62));
+    g.audio.cheer(2);
+    this.R.excite = 0.3;
+    const me = S.name, sg = '教官 · SGT. JOHNSON';
     const seq = [
-      [1.3, () => g.ui.subtitle('这……这是哪儿？我不是在太空舱里吗？', 2.6, S.name)],
-      [3.9, () => { g._cineTo(V(1.3, 1.85, 6.1), V(0, 4.4, -6.0), 1.8); ch.setExpression('focus'); }],
-      [4.4, () => g.ui.subtitle('横幅上写着：WELCOME, NEW RECRUITS! · 欢迎新兵报到', 2.8, '')],
-      [7.2, () => {
+      [0.8, () => { g.audio.snap(); g.ui.subtitle('新兵！醒醒！', 1.6, sg); }],
+      [1.8, () => this.lids(0.3, 0.25)],
+      [2.2, () => this.lids(0, 0.2)],
+      [2.7, () => { g.audio.snap(); g.ui.subtitle('说你呢！报到的日子还能睡着？！', 2.0, sg); }],
+      [3.4, () => this.lids(0.55, 0.35)],
+      [3.9, () => this.lids(0.2, 0.25)],
+      [4.4, () => { this.lids(1, 1.2); ch.setExpression('shock'); this.tw.nod = 0; }],
+      [5.2, () => g.ui.subtitle('……这……这是哪儿？', 2.0, me)],
+      [6.4, () => {
+        // 镜头拉远：征兵站门前的广场，自己正坐在一排折叠椅中间
+        ch.setFirstPerson(false);
+        g._cineSet(V(2.6, 1.5, 9.2), V(0, 1.0, 6.2));
+        g._cineTo(V(1.8, 2.6, 10.2), V(0, 2.2, -2.5), 4.5);
+        g.audio.startMusic('finale');
+      }],
+      [6.9, () => g.ui.subtitle('我不是……在太空舱里吗？', 2.2, me)],
+      [9.2, () => { ch.setExpression('focus'); g.ui.subtitle('四个 211……原来……全都是一场梦？', 2.8, me); }],
+      [12.2, () => {
+        g._cineTo(V(1.3, 1.65, 7.6), V(0.1, 1.4, 5.9), 1.0);
+        g.audio.snap(); g._shake(0.05);
+        g.ui.subtitle(`发什么呆！新兵 ${me}——起立！`, 2.2, sg);
+      }],
+      [13.4, () => { this.tw.pSit = 0; ch.setExpression('neutral'); this.sWalk = { to: this.sPost, speed: 1.6 }; this.sLean = 0; }],
+      [14.8, () => { g._cineTo(V(1.1, 1.85, 8.4), V(0, 4.4, -6.0), 1.8); ch.setExpression('focus'); }],
+      [15.3, () => g.ui.subtitle('横幅上写着：WELCOME, NEW RECRUITS! · 欢迎新兵报到', 2.8, '')],
+      [18.0, () => {
         g._cineTo(V(2.6, 1.7, 1.2), V(1.4, 1.75, -0.3), 1.2);
         g.audio.snap();
-        g.ui.subtitle(`新兵 ${S.name}！——向前，走！`, 2.4, '教官 · SGT. JOHNSON');
+        g.ui.subtitle(`新兵 ${me}！——向前，走！`, 2.4, sg);
       }],
-      [8.8, () => {
+      [19.6, () => {
         this.walk = { to: V(0, 0, 1.18), speed: 1.15 };
         ch.setExpression('neutral');
         g._cineTo(V(2.4, 1.55, 4.2), V(0, 1.2, 3.2), 1.5);
       }],
-      [11.0, () => g._cineTo(V(2.0, 1.55, 2.2), V(0, 1.25, 0.9), 2.4)],
-      [13.4, () => {
+      [21.8, () => g._cineTo(V(2.0, 1.55, 2.2), V(0, 1.25, 0.9), 2.4)],
+      [24.2, () => {
         this.tw.pAttention = 1;
         g.audio.snap(); g._shake(0.05);
         g.ui.subtitle('立——正！', 1.6, '教官 · SGT. JOHNSON');
       }],
-      [14.6, () => {
+      [25.4, () => {
         g._cineSet(V(0.42, 1.18, 1.05), V(-0.02, 1.72, -0.1));
         g._cineTo(V(0.36, 1.22, 0.95), V(-0.02, 1.74, -0.1), 6);
         g.ui.subtitle(`欢迎报到，新兵 ${S.name}。`, 2.4, '少校 · MAJ. SMITH');
         R.officer.setExpression('neutral');
       }],
-      [16.6, () => { this.tw.oSalute = 1; g.audio.snap(); g.audio.bugle(); }],
-      [19.4, () => {
+      [27.4, () => { this.tw.oSalute = 1; g.audio.snap(); g.audio.bugle(); }],
+      [30.2, () => {
         this.tw.oSalute = 0;
         g._cineTo(V(2.1, 1.5, 0.75), V(0, 1.38, 0.55), 1.2);
       }],
-      [19.9, () => { this.cap.stage = 1; this.cap.k = 0; this.tw.oHold = 1; }],
-      [20.6, () => g.ui.subtitle('这是你的军帽。', 2, '少校 · MAJ. SMITH')],
-      [21.2, () => { this.cap.stage = 2; this.cap.k = 0; }],
-      [22.4, () => { this.tw.pHold = 1; this.tw.pAttention = 0; g.ui.subtitle('从今天起，你就是一名士兵了。', 2.6, '少校 · MAJ. SMITH'); }],
-      [23.4, () => { this.cap.stage = 3; this.cap.k = 0; this.tw.oHold = 0; ch.setExpression('grin'); }],
-      [24.2, () => g._cineTo(V(0.62, 1.72, 0.42), V(0, 1.7, 1.18), 1.3)],
-      [25.4, () => { this.cap.stage = 4; this.cap.k = 0; }],
-      [26.6, () => {
+      [30.7, () => { this.cap.stage = 1; this.cap.k = 0; this.tw.oHold = 1; }],
+      [31.4, () => g.ui.subtitle('这是你的军帽。', 2, '少校 · MAJ. SMITH')],
+      [32.0, () => { this.cap.stage = 2; this.cap.k = 0; }],
+      [33.2, () => { this.tw.pHold = 1; this.tw.pAttention = 0; g.ui.subtitle('从今天起，你就是一名士兵了。', 2.6, '少校 · MAJ. SMITH'); }],
+      [34.2, () => { this.cap.stage = 3; this.cap.k = 0; this.tw.oHold = 0; ch.setExpression('grin'); }],
+      [35.0, () => g._cineTo(V(0.62, 1.72, 0.42), V(0, 1.7, 1.18), 1.3)],
+      [36.2, () => { this.cap.stage = 4; this.cap.k = 0; }],
+      [37.4, () => {
         this.cap.stage = 5; this.tw.pHold = 0; this.tw.pAttention = 1;
         g.audio.sparkle();
         g.fx.emit('star', ch.J.head.getWorldPosition(V()).add(V(0, 0.2, 0)), { count: 14, speed: 0.6, spread: 0.8, up: 0.5, gravity: -0.3, drag: 1.2, life: 1.4, size: 0.05, colors: ['#ffe08a', '#ffffff'], spin: 2 });
         S.ach.add('enlist');
       }],
-      [27.4, () => {
+      [38.2, () => {
         this.tw.pSalute = 1; this.tw.oSalute = 1; this.tw.sSalute = 1;
         g.audio.snap(); g.audio.drumRoll(1.2);
         g._cineTo(V(2.6, 1.6, 2.4), V(0, 1.5, 0.55), 1.4);
       }],
-      [28.6, () => {
+      [39.4, () => {
         g.audio.fanfare(); g.audio.cheer(4);
         this.R.excite = 1;
         this.confetti(8);
         this.flashes(14);
         this.card();
       }],
-      [31.0, () => { this.tw.pSalute = 0; this.tw.oSalute = 0; this.tw.sSalute = 0; this.orbit = 0; }],
-      [34.5, () => this.finish()],
+      [41.8, () => { this.tw.pSalute = 0; this.tw.oSalute = 0; this.tw.sSalute = 0; this.orbit = 0; }],
+      [45.3, () => this.finish()],
     ];
     for (const [t, fn] of seq) g.after(t, () => { if (g.state === 'finale') fn(); });
     g._showSkip(() => this.finish());
@@ -136,6 +179,10 @@ export class FinaleDirector {
     if (this.done) return;
     this.done = true;
     if (this.cardEl) { this.cardEl.classList.add('out'); const el = this.cardEl; setTimeout(() => el.remove(), 900); }
+    if (this.lidsEl) { this.lidsEl.remove(); this.lidsEl = null; }
+    g.ch.setFirstPerson(false);
+    if (this.w.pSit > 0.5 || this.tw.pSit) { this.tw.pSit = 0; this.w.pSit = 0; this.w.nod = this.tw.nod = 0; }
+    if (this.sPost) { this.sWalk = null; this.sLean = 0; this.R.sarge.root.position.copy(this.sPost); this.R.sarge.root.rotation.y = this.sPostYaw; }
     if (g._skipBtn) { g._skipBtn.remove(); g._skipBtn = null; }
     // 跳过的话：直接把帽子戴好
     if (this.cap.stage < 5) { this.cap.stage = 5; this.g.S.ach.add('enlist'); this.walk = null; g.ctrl.pos.set(0, 0, 1.18); }
@@ -166,7 +213,9 @@ export class FinaleDirector {
 
   playerPrm(speed = 0) {
     const g = this.g, ch = g.ch, w = this.w;
-    const prm = { speed, attention: w.pAttention * (speed > 0.05 ? 0 : 1), lookPitch: 0.05 };
+    // 坐着打瞌睡：头一点一点的；醒来站起来
+    const nod = w.nod * (0.45 + 0.15 * Math.sin(this.t * 1.3));
+    const prm = { speed, attention: w.pAttention * (speed > 0.05 ? 0 : 1), sit: w.pSit, lookPitch: lerp(0.05, -0.6, nod / 0.6) };
     if (w.pHold > 0.01) {
       const cp = this.R.giftCap.position;
       const right = _b.set(1, 0, 0); // 主角面朝 -z，右手边是 +x
@@ -235,7 +284,16 @@ export class FinaleDirector {
       oPrm.ikL = { p: V(0.2, 0.08, 0.12), w: 0.8 };
     }
     O.update(dt, oPrm);
-    const sPrm = { attention: 1, lookYaw: 0.25, lookPitch: 0.02 };
+    // 教官：先在候场区弯腰冲主角喊，喊醒了再走回自己的位置
+    let sSpeed = 0;
+    if (this.sWalk) {
+      const d = _a.copy(this.sWalk.to).sub(SG.root.position); d.y = 0;
+      const dist = d.length();
+      if (dist < 0.04) { this.sWalk = null; SG.root.rotation.y = dampAngle(SG.root.rotation.y, this.sPostYaw, 6, dt); }
+      else { sSpeed = this.sWalk.speed; SG.root.position.addScaledVector(d.normalize(), Math.min(dist, sSpeed * dt)); SG.root.rotation.y = dampAngle(SG.root.rotation.y, Math.atan2(d.x, d.z), 8, dt); }
+    } else if (this.sPost && !this.sLean && SG.root.position.distanceTo(this.sPost) < 0.05) SG.root.rotation.y = dampAngle(SG.root.rotation.y, this.sPostYaw, 4, dt);
+    const lean = this.sLean || 0;
+    const sPrm = sSpeed > 0 ? { speed: sSpeed } : { attention: 1 - lean, lookYaw: 0.25 * (1 - lean), lookPitch: lerp(0.02, -0.45, lean), crouch: lean * 0.35 };
     if (w.sSalute > 0.01) sPrm.ikR = { p: SALUTE_R, pole: SALUTE_POLE, w: w.sSalute, wr: [0.1, 0, 0.2] };
     SG.update(dt, sPrm);
   }

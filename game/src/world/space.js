@@ -1,7 +1,8 @@
 // 第四章：失重太空舱 211 —— 还是那间宿舍的布局，被搬进了近地轨道上的一节太空舱。
 //   日式动画（赛璐璐）渲染：两阶明暗 + 冷色暗部 + 深蓝描边 + 人物边缘光 + 集中线；
 //   窗外（跟着镜头走的天空盒）：平涂的地球（昼夜交替、城市灯光、大气光环）、月亮、带星芒的太阳、会眨眼的星星；
-//   屋里：所有没固定住的东西都飘在半空，三个室友裹着睡袋飘在上铺打呼噜（吹鼻涕泡），失控的机器人小圆在天花板附近打转
+//   屋里：宿舍的家具全换成了舱内设备（见 spacegear.js：休眠舱、资料库、信息接收站、驾驶舱……），
+//   所有没固定住的东西都飘在半空；舱里除了你，只有一个失控的机器人小圆在天花板附近打转
 import * as THREE from 'three';
 import * as TX from '../core/textures.js';
 import * as TS from '../core/tex_space.js';
@@ -9,6 +10,7 @@ import * as TT from '../core/tex_toon.js';
 import { mulberry32, clamp, lerp, smoothstep } from '../core/util.js';
 import { toonifyScene, toonMat, addOutline, addRim, GRAD_ANIME, STYLES } from './toonkit.js';
 import { LightShafts, Emote } from './fx.js';
+import { buildSpaceGear } from './spacegear.js';
 
 export function buildSpaceTextures(B) {
   const T = {};
@@ -363,7 +365,7 @@ function makeRobot() {
   return { root, body, faceCanvas: fc, faceTex, faceMat, ears, ring, tipMat, jet, emote, mode: 'dizzy' };
 }
 
-// ================= 裹着睡袋飘在上铺的室友（动画脸）=================
+// ================= 水球的材质（动画风格的高光 + 菲涅尔边缘）=================
 const BUBBLE_VERT = /* glsl */ `
   uniform float time, wob; varying vec3 vN; varying vec3 vV;
   void main() {
@@ -396,59 +398,6 @@ export function waterMaterial({ color = '#8fd8ff', wob = 0.02, opacity = 1 } = {
     uniforms: { time: { value: 0 }, wob: { value: wob }, color: { value: new THREE.Color(color) }, opacity: { value: opacity } },
     vertexShader: BUBBLE_VERT, fragmentShader: BUBBLE_FRAG, transparent: true, depthWrite: false,
   });
-}
-
-function makeSleeper({ bag = '#3a6fd8', hair = '#2a2a3a', skin = '#ffe0c8', style = 'spiky', mouth = 'o', seed = 0 }) {
-  const root = new THREE.Group();
-  const body = new THREE.Group(); root.add(body);
-  const bagMat = new THREE.MeshStandardMaterial({ map: TS.genSleepingBag(bag), roughness: 0.8 });
-  // 睡袋沿本地 z 躺着，头在 +z
-  body.add(mesh(new THREE.CapsuleGeometry(0.2, 1.05, 8, 18), bagMat, { rx: Math.PI / 2, s: [1, 1, 0.78] }));
-  body.add(mesh(new THREE.TorusGeometry(0.14, 0.045, 10, 24), std('#ff8a3d'), { z: 0.66, s: [1, 0.85, 1] }));
-  // 两根固定带
-  for (const z of [-0.3, 0.25]) body.add(mesh(new THREE.TorusGeometry(0.21, 0.012, 6, 28), std('#243452'), { z, s: [1, 0.8, 1] }));
-  // 头：朝上（+y 是脸朝的方向），睡着的脸 + 翘起来的头发
-  const head = new THREE.Group(); head.position.set(0, 0.03, 0.78); body.add(head);
-  const faceTex = TS.genSleeperFace(skin, { mouth, seed });
-  const headM = mesh(new THREE.SphereGeometry(0.13, 28, 20), new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.6 }));
-  // 球体贴图的正脸在 +z、头顶在 +y：绕 (0,1,1) 转半圈，脸朝 +y（天花板），头顶朝 +z（睡袋外面）
-  headM.quaternion.setFromAxisAngle(V(0, 1, 1).normalize(), Math.PI);
-  head.add(headM);
-  const hairMat = std(hair, { roughness: 0.5 });
-  const hairG = new THREE.Group(); head.add(hairG);
-  hairG.add(mesh(new THREE.SphereGeometry(0.138, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat, { rx: Math.PI / 2 + 0.35, z: 0.005 }));
-  const spikes = [];
-  const rnd = mulberry32(900 + seed);
-  const nSp = style === 'spiky' ? 9 : style === 'bob' ? 0 : 3;
-  for (let i = 0; i < nSp; i++) {
-    // 刺猬头：一圈短尖刺，从头顶往后脑勺方向翘（失重里头发全都飘起来）
-    const a = (i / nSp) * Math.PI * 2;
-    const sp = new THREE.Group(); sp.position.set(Math.sin(a) * 0.07, -0.03 + Math.cos(a) * 0.06, 0.1); head.add(sp);
-    sp.rotation.set(Math.PI / 2 + 0.35 - Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.7);
-    sp.add(mesh(new THREE.ConeGeometry(0.03, 0.09 + rnd() * 0.05, 7), hairMat, { y: 0.045 }));
-    spikes.push({ g: sp, ph: rnd() * 6.28, base: sp.rotation.clone() });
-  }
-  if (style === 'bob') {
-    for (const s of [-1, 1]) hairG.add(mesh(new THREE.SphereGeometry(0.075, 14, 10), hairMat, { x: s * 0.11, y: -0.02, z: 0.02, s: [0.7, 1, 1.2] }));
-  }
-  // 呆毛（动画人物必备）
-  const ahoge = new THREE.Group(); ahoge.position.set(0, 0.02, 0.13); head.add(ahoge);
-  ahoge.add(mesh(new THREE.TorusGeometry(0.05, 0.008, 6, 16, Math.PI * 1.3), hairMat, { y: 0.05, rz: 0.3 }));
-  // 飘起来的两只胳膊（失重时人睡着，手会自己浮起来）
-  const arms = [];
-  for (const s of [-1, 1]) {
-    const a = new THREE.Group(); a.position.set(s * 0.17, 0.08, 0.45); body.add(a);
-    a.add(mesh(new THREE.CapsuleGeometry(0.045, 0.3, 5, 10), bagMat, { y: 0.17 }));
-    a.add(mesh(new THREE.SphereGeometry(0.045, 12, 10), std(skin), { y: 0.36 }));
-    a.rotation.set(0.5, 0, s * -0.35);
-    arms.push({ g: a, s });
-  }
-  // 鼻涕泡
-  const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.05, 20, 16), waterMaterial({ color: '#bfe8ff', wob: 0.004 }));
-  bubble.position.set(0.02, 0.13, 0.02); bubble.renderOrder = 6; bubble.userData.noRay = true; bubble.raycast = () => {};
-  head.add(bubble);
-  const emote = new Emote(root, 0.5);
-  return { root, body, head, spikes, arms, bubble, emote, ph: seed * 1.3 };
 }
 
 // ================= 装饰整个太空舱 =================
@@ -621,15 +570,12 @@ export function decorateSpace(ctx) {
   P(beaconLight); P(beaconLight.target);
   refs.hatch = { wheel, keypad: { canvas: kpC, tex: kpTex }, beacon: { mat: beaconMat, light: beaconLight } };
 
-  // ===== 显示器：轨道图 / 生命维持 =====
-  const screens = [];
-  for (const [mon, mode] of [[refs.monitor.group, 'orbit'], [refs.monitor2, 'life']]) {
-    const c = TX.makeCanvas(320, 180);
-    TS.drawOrbitScreen(c, 0, {});
-    const tex = TX.toTex(c, { wrap: false });
-    mon.userData.screenMat.map = tex; mon.userData.screenMat.toneMapped = false; mon.userData.screenMat.needsUpdate = true;
-    screens.push({ canvas: c, tex, mode });
-  }
+  // ===== 宿舍的家具 → 舱内设备（休眠舱、资料库、信息接收站、驾驶舱、储藏室……）=====
+  const gear = buildSpaceGear(ctx, P);
+  refs.gear = gear;
+  // 屏幕：生命维持（报警）、观测台的轨道图、驾驶舱的系统屏；信息接收站的大屏由第四章自己画
+  const screens = [[gear.life.screen, 'life'], [gear.obs.screen, 'orbit'], [gear.cockpit.sysScreen, 'orbit']].map(([sc, mode]) => ({ canvas: sc.canvas, tex: sc.tex, mode }));
+  for (const sc of screens) TS.drawOrbitScreen(sc.canvas, 0, {});
   refs.spaceScreens = screens;
 
   // ===== 飘在半空的东西 =====
@@ -742,16 +688,6 @@ export function decorateSpace(ctx) {
     addF(helmet, -0.75, 1.3, 2.3, { spin: 0.5 });
   }
 
-  // ===== 睡袋里的三个室友（上铺）=====
-  const sleepers = [
-    { ...makeSleeper({ bag: '#3a6fd8', hair: '#2a2a3a', style: 'spiky', mouth: 'o', seed: 1 }), anchor: V(-1.28, 2.02, 0.21), yaw: 0, roll: -0.5, id: 'sleeperA' },
-    { ...makeSleeper({ bag: '#ff8a3d', hair: '#e8b04a', style: 'spiky', mouth: 'smile', seed: 2 }), anchor: V(-1.28, 2.0, -2.34), yaw: Math.PI, roll: 0.5, id: 'sleeperB' },
-    { ...makeSleeper({ bag: '#2ec4c9', hair: '#6a3a8a', style: 'bob', mouth: 'o', seed: 3 }), anchor: V(1.28, 2.04, -2.34), yaw: 0, roll: 0.55, id: 'sleeperC' },
-  ];
-  for (const s of sleepers) {
-    s.root.position.copy(s.anchor); s.root.rotation.set(0, s.yaw, s.roll);
-    P(s.root); mark(s.id, s.root);
-  }
   // ===== 机器人小圆（天花板附近打转）=====
   const robot = makeRobot();
   robot.home = V(-0.2, 2.5, 1.5);
@@ -804,7 +740,6 @@ export function decorateSpace(ctx) {
   const rimmed = new Set();
   const rimAll = (o) => o.traverse((c) => { if (c.isMesh && c.material && c.material.isMeshToonMaterial && !c.material.transparent && !rimmed.has(c.material)) { rimmed.add(c.material); addRim(c.material, 0.3); } });
   for (const f of floaters) rimAll(f.obj);
-  for (const s of sleepers) rimAll(s.root);
   rimAll(robot.root);
   refs.gap.line.color.set('#bfe8ff');
   // 门外不再是宿舍走廊（开门时会被一道光门挡住），只留下那盏灯
@@ -815,7 +750,6 @@ export function decorateSpace(ctx) {
     // 一次冲击（太空垃圾擦过、开舱门）：所有东西被推一把
     impulse(s = 1, dir = null) { for (const f of floaters) { f.vel.add(dir ? dir.clone().multiplyScalar(s) : V((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s)); f.ang.multiplyScalar(1 + s * 2); } },
   };
-  refs.sleepers = sleepers;
   refs.robot = robot;
   refs.candies = { group: candies, items: candyItems };
 
@@ -825,41 +759,38 @@ export function decorateSpace(ctx) {
   refs.updaters.push((dt, t, g) => {
     // 飘浮的杂物：弹簧拉回原位 + 被人推开 + 慢慢自转
     const pl = g && g.ctrl ? g.ctrl.pos : null;
+    const fdt = dt * (refs.floaters.timeScale ?? 1); // 彩蛋里“时间停住了”
     for (const f of floaters) {
       const o = f.obj;
       _d.copy(f.anchor).sub(o.position);
-      f.vel.addScaledVector(_d, 0.35 * dt);
-      f.vel.y += Math.sin(t * 0.6 + f.ph) * f.amp * dt;
+      f.vel.addScaledVector(_d, 0.35 * fdt);
+      f.vel.y += Math.sin(t * 0.6 + f.ph) * f.amp * fdt;
       if (pl) {
         // 人的身体近似成一根竖着的胶囊
         const cy = clamp(o.position.y, pl.y + 0.2, pl.y + 1.7);
         _p.set(pl.x, cy, pl.z);
         const dist = o.position.distanceTo(_p);
-        if (dist < 0.45 && dist > 1e-4) { _d.copy(o.position).sub(_p).normalize(); f.vel.addScaledVector(_d, (0.45 - dist) * 9 * dt * f.push); f.ang.x += (Math.random() - 0.5) * dt * 3; }
+        if (dist < 0.45 && dist > 1e-4) { _d.copy(o.position).sub(_p).normalize(); f.vel.addScaledVector(_d, (0.45 - dist) * 9 * fdt * f.push); f.ang.x += (Math.random() - 0.5) * fdt * 3; }
       }
-      f.vel.multiplyScalar(Math.exp(-0.45 * dt));
-      o.position.addScaledVector(f.vel, dt);
+      f.vel.multiplyScalar(Math.exp(-0.45 * fdt));
+      o.position.addScaledVector(f.vel, fdt);
       o.position.x = clamp(o.position.x, -1.7, 1.7); o.position.y = clamp(o.position.y, 0.1, 2.88);
-      f.ang.multiplyScalar(Math.exp(-0.05 * dt));
-      o.rotation.x += f.ang.x * dt; o.rotation.y += f.ang.y * dt; o.rotation.z += f.ang.z * dt;
+      f.ang.multiplyScalar(Math.exp(-0.05 * fdt));
+      o.rotation.x += f.ang.x * fdt; o.rotation.y += f.ang.y * fdt; o.rotation.z += f.ang.z * fdt;
     }
     for (const c of candyItems) { c.m.position.set(Math.cos(t * c.sp + c.ph) * c.r, c.y + Math.sin(t * c.sp * 1.3 + c.ph) * 0.05, Math.sin(t * c.sp + c.ph) * c.r); c.m.rotation.y += dt * 2; }
     candies.position.y = 1.85 + Math.sin(t * 0.5) * 0.06;
     for (const d of drops) { d.m.position.set(d.a.x + Math.sin(t * 0.3 + d.ph) * 0.2, d.a.y + Math.sin(t * 0.41 + d.ph * 2) * 0.15, d.a.z + Math.cos(t * 0.27 + d.ph) * 0.2); }
     dropMat.uniforms.time.value = t;
-    // 睡着的室友：慢慢飘、头发飘、胳膊浮着、鼻涕泡一鼓一鼓
-    for (const s of sleepers) {
-      s.root.position.set(s.anchor.x, s.anchor.y + Math.sin(t * 0.7 + s.ph) * 0.05, s.anchor.z + Math.sin(t * 0.33 + s.ph) * 0.04);
-      s.body.rotation.set(Math.sin(t * 0.4 + s.ph) * 0.06, 0, Math.sin(t * 0.5 + s.ph) * 0.08);
-      for (const sp of s.spikes) { sp.g.rotation.x = sp.base.x + Math.sin(t * 1.7 + sp.ph) * 0.12; sp.g.rotation.z = sp.base.z + Math.sin(t * 1.3 + sp.ph) * 0.1; }
-      for (const a of s.arms) a.g.rotation.x = 0.5 + Math.sin(t * 0.8 + s.ph + a.s) * 0.12;
-      const br = (t * 0.45 + s.ph) % 1;
-      const bs = br < 0.85 ? 0.2 + (br / 0.85) * 0.9 : 1.1 * (1 - (br - 0.85) / 0.15);
-      s.bubble.scale.setScalar(Math.max(0.05, bs));
-      s.bubble.material.uniforms.time.value = t;
-      if (br > 0.97 && !s._pop) { s._pop = true; if (Math.random() < 0.5) s.emote.show('zzz', 1.6, 0.22); } else if (br < 0.5) s._pop = false;
-      s.emote.update(dt);
+    // 舱内设备：休眠舱的指示灯一闪一闪、压缩机风扇在转、接收站的天线慢慢转、约束环转个不停
+    for (const [pi, p] of gear.pods.entries()) {
+      p.fan.rotation.x += dt * 9;
+      p.leds.forEach((l, i) => (l.visible = Math.sin(t * (1.3 + i * 0.7) + pi * 2 + i) > -0.4));
     }
+    gear.station.dish.rotation.y = Math.sin(t * 0.25) * 1.2;
+    const bhR = gear.blackHole;
+    gear.storage.rings.forEach((r, i) => { r.rotation.x += dt * (0.6 + i * 0.35) * (bhR.agitate || 1); r.rotation.y += dt * (0.4 + i * 0.2) * (bhR.agitate || 1); });
+    bhR.update(dt, t);
     // 水球：晃来晃去
     const W = refs.waterBall;
     if (W.group.visible) {

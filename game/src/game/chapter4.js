@@ -1,28 +1,20 @@
 // 第四章：太空舱 211（近地轨道 408 km，失重）
+//   舱里只剩你和一个失控的机器人：室友们的休眠舱都空了——他们早就坐返回舱回地球了，只在舱里给你留了言。
 //   气闸舱门上是一个三位数的授权码面板：
 //   🤖 失控的机器人小圆在天花板附近打转 → 按住空格飘上去抓住它，它重启后告诉你第一位
-//   💧 洗手间里飘着一颗大水球，里面泡着一张纸条 → 一口一口把水球喝掉
+//   💧 驾驶舱（原来的洗手间）里飘着一颗大水球，里面泡着一张纸条 → 一口一口把水球喝掉
 //   🌍 室友说第三位"写在地球上" → 打开遮光板，等太空舱绕到地球背面（地球"关灯"），城市灯光拼出了数字
+//   另外还有一条隐藏任务线（索引卡 → 信息接收站的频道 211 → 储藏室的货柜 G → 卡冈图雅），见 secret.js
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, smoothstep } from '../core/util.js';
 import { ensureToonStyle } from '../world/toonkit.js';
 import * as TS from '../core/tex_space.js';
-import { addPortal } from './chapter2.js';
+import { drawPodScreen, drawComms } from '../world/spacegear.js';
+import { Secret } from './secret.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _p = V(), _q = V(), _c = new THREE.Color();
 const ORBIT = 100; // 绕地球一圈（秒），真实的是 90 分钟
-
-const SPACE_PORTAL = /* glsl */ `
-  uniform float time; varying vec2 vUv;
-  void main() {
-    vec2 c = vUv - 0.5; c.x *= 0.5;
-    float r = length(c) * 2.0, a = atan(c.y, c.x);
-    float rays = pow(abs(sin(a * 10.0 - time * 2.0)), 8.0) * 0.5;
-    vec3 col = mix(vec3(0.55, 0.85, 1.0), vec3(1.0), smoothstep(0.8, 0.0, r));
-    float alpha = smoothstep(1.05, 0.25, r) + rays * smoothstep(1.2, 0.35, r);
-    gl_FragColor = vec4(col * alpha * 2.0, alpha);
-  }`;
 
 // 轨道相位 → 太阳绕舱转的角度：满地球和日食附近走得慢，中间的月牙阶段走得快
 const thetaOf = (p) => Math.PI * 2 * p - 0.4 * Math.sin(Math.PI * 4 * p);
@@ -32,12 +24,12 @@ export const CH4 = {
   title: '第四章 · 太空舱 211', sub: '近地轨道 408 km · 失重', tag: '第四章 · 太空舱 211',
   clock: [3, 0], lockName: '气闸舱门', doorName: '气闸舱门', codeLen: 3, codeIcons: ['🤖', '💧', '🌍'],
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
-  big: ['sleeperA', 'sleeperB', 'sleeperC', 'waterBall', 'signZeroG'],
+  big: ['waterBall', 'signZeroG', 'station', 'dashboard', 'lockerG', 'monitor2', 'telescope', 'pilotSeat', 'dispenser', 'storageRack'],
   items: {},
 
   // 氧气随故事钟慢慢往下掉，最低停在 20%，不会耗尽
   o2: (g) => Math.ceil(100 - 80 * g.storyP()),
-  clockText(g) { return `O₂ ${this.o2(g)}%`; },
+  clockText(g) { return this.secret && this.secret.collapsing ? `⚠ ${this.secret.remain()}s` : `O₂ ${this.o2(g)}%`; },
   // 任务钟：从 03:00:00 开始走
   clockHands(g) {
     const e = g.S ? g.S.elapsed : 0;
@@ -62,6 +54,22 @@ export const CH4 = {
     this._phase = 0.08; this._lapse = null; this._alarm = 0; this._speed = 0; this._look = 0; this._pa = 0;
     this._drawKeypad(g, 'locked');
     const rb = R.robot; rb.state = 'tumble'; rb.mode = 'dizzy';
+    // 休眠舱床头的状态屏：室友们的都空了，只有我的是"已苏醒"
+    const [A, B, C] = S.mates;
+    for (const p of R.gear.pods) {
+      const me = p.who < 0;
+      drawPodScreen(p.screen.canvas, { code: p.code, name: me ? S.name : S.mates[p.who], status: me ? '已苏醒 · 超时 2:58' : '空 · 06:52 已离舱', ok: me, warn: !me });
+      p.screen.tex.needsUpdate = true;
+    }
+    // 信息接收站：返回舱发回来的消息
+    this._comms = [
+      { text: `[06:52] ${A}：上返回舱了！他还没醒？`, color: '#ffd9a8' },
+      { text: `[06:53] ${B}：叫了八百遍，睡得跟死猪一样`, color: '#bff4ff' },
+      { text: `[06:55] ${C}：授权码拆成三份了 🤖💧🌍`, color: '#ffc2e0' },
+      { text: '[07:10] 返回舱：已脱离轨道，三小时后溅落', color: '#8fffc0' },
+    ];
+    this._commsT = 0; this._mistT = 0;
+    this.secret = new Secret(g, this);
   },
 
   _drawKeypad(g, mode) {
@@ -80,65 +88,67 @@ export const CH4 = {
     K.tex.needsUpdate = true;
   },
 
+  portal: 'space',
+  lockView: { cam: V(-1.15, 1.72, 2.95), look: V(-1.78, 1.6, 3.4) },
+  relockLine: '……气闸舱门又锁上了？！',
   intro(g, { prepare }) {
-    const R = g.refs, D = R.door, [A, B, C] = g.S.mates;
-    if (prepare) {
-      g.ctrl.float = 1; g.ctrl.floatTarget = 0.35;
-      g.ctrl.teleport(-1.62, 4.0, Math.PI / 2);
-      g.ctrl.yaw = Math.PI / 2 + Math.PI; g.ctrl.pitch = -0.05;
-      g.ch.root.position.set(-1.62, 0.35, 4.0); g.ch.root.rotation.y = Math.PI / 2;
-      g.ch.setExpression('focus');
-      D.pivot.rotation.y = D.base + D.openAngle;
-      g._cineSet(V(-0.3, 1.95, 2.5), V(-1.3, 1.55, 3.95));
-      return;
-    }
-    g.auto = { path: [V(-1.0, 0, 3.85)], speed: 0.8, i: 0 };
-    g._afterReach = null;
-    g.after(0.9, () => { g.tween(0.45, (k) => (D.pivot.rotation.y = D.base + D.openAngle * (1 - k))); g.audio.hiss(); });
-    g.after(1.5, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.3, lookPitch: -0.2 }; g.ui.subtitle('……嗯？脚底下怎么空空的？', 1.8, g.S.name); });
-    g.after(3.0, () => {
+    const R = g.refs, [A, B, C] = g.S.mates;
+    if (prepare) { g.ctrl.float = 1; g.ctrl.floatTarget = 0.35; g.enterRoom({ prepare: true }); return; }
+    const T = g.enterRoom({ prepare: false });
+    g.after(T - 0.4, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.3, lookPitch: -0.2 }; g.ui.subtitle('……嗯？脚底下怎么空空的？', 1.8, g.S.name); });
+    g.after(T + 1.1, () => {
       this.speedLines(g, 1.2);
       g._shake(0.12);
       g.ui.subtitle('我……我飘起来了？！', 2.0, g.S.name);
       g._cineTo(V(-0.35, 2.05, 3.5), V(-0.98, 1.95, 3.85), 0.6);
     });
-    g.after(5.0, () => {
+    g.after(T + 3.1, () => {
       const rp = R.robot.root.position;
       g._cutPose = { lookYaw: 0.9, lookPitch: 0.35 };
       g._cineTo(rp.clone().add(V(0.5, -0.12, 0.75)), rp.clone(), 1.6);
       R.robot.emote.show('!', 1.4); g.audio.robotBeep(3);
     });
-    g.after(5.8, () => g.ui.subtitle('警……警告……陀螺仪……失、失、失控……', 2.4, '？？？（机器人）'));
-    g.after(8.3, () => {
+    g.after(T + 3.9, () => g.ui.subtitle('警……警告……陀螺仪……失、失、失控……', 2.4, '？？？（机器人）'));
+    g.after(T + 6.4, () => {
       g._cutPose = { lookYaw: -0.2, lookPitch: 0.25 };
-      g._cineTo(V(-0.25, 2.25, 1.55), V(-1.28, 2.0, 0.1), 1.6);
-      for (const s of R.sleepers) s.emote.show('zzz', 2.4, 0.24);
-      g.audio.snore();
+      g._cineTo(V(-0.2, 1.75, 1.6), V(-1.3, 0.7, 0.1), 1.6);
+      g.audio.robotBeep(1, 400);
     });
-    g.after(9.0, () => g.ui.subtitle(`${A}、${B}、${C}……你们怎么都裹着睡袋飘在床上？！`, 2.8, g.S.name));
-    g.after(11.8, () => {
+    g.after(T + 7.1, () => g.ui.subtitle(`休眠舱……上面写着${A}、${B}、${C}的名字。里面……都是空的？`, 3.0, g.S.name));
+    g.after(T + 10.1, () => {
       g._cineTo(V(-0.4, 1.9, 2.6), V(-1.2, 1.5, 3.8), 1.4);
       g.audio.pa();
-      g.ui.subtitle('【211 舱广播】早上好。生命维持系统故障，舱内氧气正在缓慢下降。请乘员尽快经气闸舱撤离。', 4.2, '📢 舱内广播');
+      g.ui.subtitle(`【211 舱广播】早上好，${g.S.name}。你是本舱最后一位苏醒的乘员。其他乘员已于 06:52 乘返回舱离开。生命维持系统故障，请尽快经气闸舱撤离。`, 4.6, '📢 舱内广播');
     });
-    g.after(16.2, () => { g._cutPose = null; g.ch.setExpression('neutral'); g.ui.subtitle('气闸舱门……又是密码锁。这回是太空版的密室逃脱？', 2.6, g.S.name); g._cineTo(null, null, 1.2); });
-    g.after(17.6, () => g.beginPlay());
+    g.after(T + 14.9, () => { g.ch.setExpression('shock'); g.ui.subtitle('……又把我一个人丢下了？！这帮家伙！', 2.4, g.S.name); });
+    g.after(T + 17.4, () => { g._cutPose = null; g.ch.setExpression('neutral'); g.ui.subtitle('气闸舱门……又是密码锁。这回是太空版的密室逃脱？', 2.6, g.S.name); g._cineTo(null, null, 1.2); });
+    g.after(T + 18.8, () => g.beginPlay());
+  },
+  onSlam(g) { g.audio.hiss(); },
+  // 气闸舱门：'hide' 面板是绿的（门开着）/ 'anim' 转轮自己拧紧、面板变红、警示灯闪一下 / 'show' 直接锁好
+  relock(g, mode) {
+    const H = g.refs.hatch;
+    if (!H.wheel.userData.home) H.wheel.userData.home = H.wheel.rotation.z;
+    const w0 = H.wheel.userData.home;
+    if (mode === 'hide') { this._drawKeypad(g, 'open'); H.wheel.rotation.z = w0 + Math.PI * 2; return; }
+    if (mode !== 'anim') { H.wheel.rotation.z = w0; this._drawKeypad(g, 'locked'); return; }
+    g.audio.hiss(); g.audio.clunk();
+    g.tween(0.8, (k) => (H.wheel.rotation.z = w0 + Math.PI * 2 * (1 - k)), { ease: easeInOut }).cut = true;
+    g.after(0.5, () => { this._drawKeypad(g, 'error'); g.audio.robotBeep(2, 500); this._alarm = 1.2; });
+    g.after(1.0, () => this._drawKeypad(g, 'locked'));
   },
   onPlay(g) {
     g.ui.toast('第四章 · 趁着氧气还够，打开气闸舱门', '', '🧑‍🚀');
     this.floatTip(g);
-    g.after(3.2, () => g.ui.subtitle('先去门口看看那个密码面板……窗户的遮光板也还关着。', 3.6, g.S.name));
+    g.after(3.2, () => g.ui.subtitle('我的休眠舱……舱盖还开着，里面好像贴着什么东西？', 3.6, g.S.name));
   },
   // 鉴赏模式也要知道怎么在失重里飘
   onViewPlay(g) { this.floatTip(g); },
   floatTip(g) { g.after(1.6, () => g.ui.toast('失重操作：按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉 · 松手还会往前飘', '', '🪐')); },
   exitLine: () => '小圆，替我跟他们说声再见！',
   onDoorOpen(g) {
-    addPortal(g, SPACE_PORTAL);
-    g.refs.lights.corridor.color.set('#cfe8ff');
     const rb = g.refs.robot;
     rb.mode = 'happy'; rb.emote.show('heart', 2.4);
-    for (const s of g.refs.sleepers) s.emote.show('zzz', 2, 0.24);
     g.refs.floaters.impulse(0.5, V(-0.5, 0.1, 0.3));
     this.speedLines(g, 1.6);
     g.audio.hiss(); g.audio.sparkle();
@@ -147,8 +157,9 @@ export const CH4 = {
   onEnd() {},
 
   objectives(g) {
+    if (this.secret && this.secret.collapsing) return this.secret.objectives();
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.triedDoor) return [{ text: '去看看门口的气闸舱门', done: false }];
+    if (!f.readNote && !f.triedDoor) return [{ text: '看看自己那台开着的休眠舱', done: false }];
     return [
       { text: '🤖 让失控的机器人冷静下来', done: F[0] },
       { text: '💧 找到泡在水里的那一位', done: F[1] },
@@ -158,9 +169,12 @@ export const CH4 = {
   },
   hint(g) {
     const S = g.S, f = S.f, F = S.found;
+    const sh = this.secret && this.secret.hint();
+    if (sh) return sh;
+    if (!f.readNote) return '东边那台舱盖开着的休眠舱是你的——里面贴着室友留的纸条。';
     if (!f.triedDoor) return '去门口看看那扇气闸舱门，门框边上有个密码面板。';
     if (!F[0]) return '天花板附近有个转个不停的机器人……按住空格飘上去，抓住它！';
-    if (!F[1]) return f.talkedB ? '洗手间里飘着一颗大水球，里面泡着一张纸条……一口一口把它喝掉。' : '去听听上铺的室友们在说什么梦话，或者问问小圆。';
+    if (!F[1]) return f.talkedB ? '驾驶舱（原来的洗手间）里飘着一颗大水球，里面泡着一张纸条……一口一口把它喝掉。' : `去看看${S.mates[1]}的休眠舱（西边靠窗那台）里的留言，或者问问小圆。`;
     if (!F[2]) {
       if (!f.curtainOpen) return '窗户的遮光板还关着——先打开它看看外面。';
       return '等太空舱绕到地球背面、地球"关灯"的时候，看看城市的灯光。（对着窗户"看风景"可以快进）';
@@ -183,7 +197,6 @@ export const CH4 = {
     this.speedLines(g, 1.4);
     g.refs.floaters.impulse(1.1);
     g.refs.robot.emote.show('!', 1.5);
-    for (const s of g.refs.sleepers) s.emote.show('!', 1.2, 0.24);
     g.after(1.2, () => g.ui.subtitle('哇啊啊啊——！！', 1.6, g.S.name));
   },
   // 动画里的"眼缘"：找到一位密码时，屏幕上"啪"地弹出一格漫画分镜
@@ -206,49 +219,25 @@ export const CH4 = {
     const S = () => g.S;
     const flav = (label, text) => ({ label, verb: '查看', reach: false, act: () => g.say(g._fill(text), 3.6) });
     const F = {
+      shelf: ['资料库', '资料库：每一本书都拿松紧带勒着，不然全飘走了。顶上还有一盒索引卡。'],
+      monitor2: ['生命维持控制台', '屏幕一片红：LIFE SUPPORT FAILURE。氧气条在一点点往下掉。'],
+      farDesks: ['观测台', '窗前的观测台：一台望远镜、一张星图，还有一行小字："别在值班时偷看月亮"。'],
+      shoeRack: ['氧气瓶架', '一排备用氧气瓶，用绑带勒得死死的。瓶身上写着"211 专用"。'],
+      storageBox: ['补给货箱', '补给货箱："太空泡面 ×48，太空辣条 ×12，高数习题集 ×4"……为什么太空里也要做高数？'],
+      blackTable: ['太空厨房', '太空厨房：加热器、饮水嘴，墙上用魔术贴粘着一排食物包。泡面桶……又飘走了一个。'],
+      foldTable: ['舱外宇航服', '舱外宇航服，尺码 XL。头盔的金色面罩上映着我的脸。……我可不会穿这玩意儿出舱。'],
+      pilotSeat: ['驾驶座', '（系好安全带）……操纵杆是锁着的，屏幕上写着"自动驾驶中"。'],
+      dashboard: ['仪表台', '导航屏上是一条弯弯的返航轨道——室友们的返回舱早就沿着它回地球了。'],
+      dispenser: ['饮水机', '饮水机漏水了，漏出来的水在失重下团成了一颗大水球……'],
+      storageRack: ['储物架', '储物架上塞满了补给箱。最里面贴墙立着一个贴满警示条的货柜，门上写着一个大大的"G"。'],
+      telescope: ['望远镜', ''],
       pinkBag: ['货物袋', '一袋真空包装的零食，标签上写着"太空辣条"。'],
-      foldTable: ['折叠桌', '门边的小桌子被魔术贴牢牢粘在地板上。'],
-      broom: ['吸尘器', '扫把变成了一根吸尘管——太空里扫地得靠吸。'],
-      blackTable: ['杂物桌', '桌上的东西都用魔术贴粘着，只有一桶泡面没粘住，飘走了。'],
-      bedW1: ['{A}的床', '{A}的床。上铺那个蓝色睡袋里就是他，睡得正香。'],
-      bedW2: ['{B}的床', '{B}的床，床上的束缚网里塞满了袜子。'],
-      shelf: ['书架', '书架上每本书都拿松紧带勒着，不然全飘走了。'],
-      shoeRack: ['鞋架', '鞋架上是一排魔术贴拖鞋——在这儿根本用不上。'],
-      storageBox: ['收纳箱', '收纳箱上贴着："易飘物品，打开前请抓紧"。'],
-      polkaBag: ['收纳袋', '装着换季衣服的收纳袋……太空里没有季节。'],
+      suitcase: ['个人储物箱', '我的储物箱被绑带固定在休眠舱边上。'],
       box350: ['饮用水', '一整包 350ml 的饮用水袋，每袋都带吸管。'],
-      bedE1: ['我的床', '我的床。枕头飘到了半空中，被子也飘成了一个球。'],
-      patternRoll: ['睡垫卷', '卷起来的睡垫，绑在床柱上。'],
-      bedE2: ['{C}的床', '{C}的床。青绿色睡袋里的{C}正在说梦话。'],
-      farDesks: ['窗边书桌', '窗边的书桌上摆着一台望远镜——镜头盖已经不知道飘哪去了。'],
-      yellowBag: ['黄色袋子', '黄底蓝点的袋子，里面是……一袋子漂浮的弹珠？'],
-      toteBag: ['红色袋子', '红白相间的大袋子，上学期搬宿舍用的——居然也带上太空了。'],
-      redBag: ['红色收纳包', '收纳包上贴着便签："{C}的太空服，别动"。'],
-      paper: ['复习资料', '高数复习资料在半空中翻页……写满了"失重状态下的积分"。'],
-      mouse: ['鼠标', '鼠标用魔术贴粘在桌上，线在空中飘成了一个圈。'],
-      pcTower: ['主机', '主机的风扇呼呼转——在太空里散热全靠它。'],
-      stoolMe: ['凳子', '凳子被螺丝固定在地板上。反正也坐不下去。'],
-      keyboard: ['键盘', '键盘的缝里飘出来一粒薯片渣。'],
-      phone: ['手机', '手机没信号：距离最近的基站 408 公里。'],
-      calendar: ['台历', '台历上今天那一栏写着："09:00 返回舱分离——别睡过头！"'],
-      notebook: ['笔记本', '笔记本上画着一个圆滚滚的机器人，旁边写着："小圆，别乱转"。'],
-      apple: ['苹果', '一个在空中慢慢自转的苹果。牛顿看了会沉默。'],
-      drawer: ['抽屉', '抽屉一拉开，一群回形针像小鱼一样游了出来。'],
-      suitcase: ['行李箱', '行李箱被绑带固定在床边。'],
-      stoolH: ['木凳', '门边的凳子被固定在地板上。'],
-      ac: ['空气循环机', '空气循环机呼呼地吹——氧气就靠它了……现在它在报警。'],
       basket: ['脏衣篓', '脏衣篓的盖子扣得死死的——在太空里，脏衣服会飘出来追着你跑。'],
-      roster: ['值日表', ''],
-      towels: ['毛巾', '四条毛巾拿夹子夹在绳子上，飘成了四面小旗。'],
-      wcBucket: ['水桶', '水桶是封口的——在太空里敞口放水，水会自己爬出来。'],
-      shower: ['淋浴', '太空淋浴：一个封闭的袋子 + 一根吸管。你决定今天不洗了。'],
-      graffiti: ['隔板涂鸦', '隔板上写着"窗外有猴!!"……后面加了一句"——包括太空里。"'],
       bin: ['垃圾桶', '垃圾桶是抽气式的，盖子一开就"呼"地一声。'],
-      remote: ['遥控器', '空调遥控器在空中转圈。'],
-      folder: ['文件夹', '《失重环境下的高数复习——{C}整理》'],
-      headset: ['耳机', '{B}的电竞耳机，线缠在了扶手上。'],
-      monitor2: ['生命维持面板', '屏幕一片红：LIFE SUPPORT FAILURE。氧气条在一点点往下掉。'],
-      monitor: ['轨道图', '屏幕上是太空舱的轨道：一条弯弯的线绕着地球转。我们现在在……太平洋上空？'],
+      ac: ['空气循环机', '空气循环机呼呼地吹——氧气就靠它了……现在它在报警。'],
+      roster: ['值日表', ''],
       extinguisher: ['灭火器', '太空专用灭火器。千万别在这里按——后坐力会把你喷到对面墙上。'],
       firstAid: ['急救包', '急救包上写着：晕太空请吃一片。'],
       signZeroG: ['警示牌', '⚠ ZERO-G 失重区域 · 请抓紧扶手。'],
@@ -260,14 +249,11 @@ export const CH4 = {
       pillow: ['枕头', '我的枕头飘到了这儿……难怪我脖子疼。'],
       headphones: ['头戴耳机', '一副耳机在空中慢慢翻跟头。'],
       helmet: ['红白头盔', '红白头盔在舱里飘着……可惜它不是宇航员头盔。'],
-      sticky: ['便利贴', '便利贴上写着：“别忘了给小圆充电”。'],
-      acNote: ['便签', '出风口夹着一张便签："滤网该换了——小圆"。'],
-      drawerNote: ['纸条', '纸条上写着："太空里别乱扔东西，会飘回来砸你。"'],
-      latiao: ['太空辣条', '一包真空包装的辣条……拆开的话辣油会飘得满屋都是。'],
-      strip: ['插线板', '插线板上贴着："舱内电源，严禁拔插"。'],
-      suitNote: ['便利贴', '行李箱上的便利贴："返回地球之后再打开"。'],
+      paper: ['复习资料', '高数复习资料在半空中翻页……写满了"失重状态下的积分"。'],
+      apple: ['苹果', '一个在空中慢慢自转的苹果。牛顿看了会沉默。'],
       ticket: ['准考证', '准考证……考场在地球上。'],
-      uvLight: ['紫光手电', '紫光手电在抽屉里飘着。这次用不上它了。'],
+      uvLight: ['紫光手电', '紫光手电在储物箱里飘着。这次用不上它了。'],
+      suitNote: ['便利贴', '储物箱上的便利贴："返回地球之后再打开"。'],
     };
     for (const [id, [l, t]] of Object.entries(F)) H[id] = flav(l, t);
     H.roster = flav('值日表', '值日表：周一 {A}　周二 {B}　周三 {C}　周四 我……周五 小圆（机器人）。');
@@ -296,26 +282,20 @@ export const CH4 = {
     // ---- 🌍 窗户 ----
     H.curtain = { label: '遮光板', verb: () => (S().f.curtainOpen ? '关上' : '打开'), act: () => this.toggleShutter(g) };
     H.window = { label: '舷窗', verb: () => (S().f.curtainOpen ? '看风景' : '查看'), reach: false, act: () => this.lookEarth(g) };
-    // ---- 室友 ----
-    const talk = (i) => () => this.sleepTalk(g, i);
-    H.sleeperA = { label: () => `${g.S.mates[0]}（睡袋）`, verb: '叫醒他', reach: false, act: talk(0) };
-    H.sleeperB = { label: () => `${g.S.mates[1]}（睡袋）`, verb: '叫醒他', reach: false, act: talk(1) };
-    H.sleeperC = { label: () => `${g.S.mates[2]}（睡袋）`, verb: '叫醒他', reach: false, act: talk(2) };
+    // ---- 休眠舱：室友们的都空了，只留下一段留言；我的那台舱盖开着 ----
+    H.bedW1 = { label: () => `休眠舱 W-01 · ${g.S.mates[0]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 0) };
+    H.bedW2 = { label: () => `休眠舱 W-02 · ${g.S.mates[1]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 1) };
+    H.bedE2 = { label: () => `休眠舱 E-02 · ${g.S.mates[2]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 2) };
+    H.bedE1 = { label: '我的休眠舱', verb: () => (S().f.readNote ? '查看' : '看看里面'), reach: false, act: () => this.myPod(g) };
+    H.telescope = { label: '望远镜', verb: '看一眼', reach: false, act: () => g.say(S().f.curtainOpen ? '望远镜里，地球的海面反着光，云一团一团地往后退……' : '镜头对着舷窗——可遮光板还关着，只看得到一片灰。', 3.4) };
+    H.station = { label: '信息接收站', verb: '查看消息', act: () => this.openStation(g) };
+    // ---- 隐藏任务线（索引卡 / 货柜 G / 卡冈图雅 / 那本书）----
+    Object.assign(H, this.secret.handlers());
     // ---- 开关、门、洗手间 ----
     H.switch = { label: '舱内照明', verb: () => (S().f.lightsOn ? '切回夜间模式' : '打开照明'), act: () => this.toggleLights(g) };
     H.door = { label: '气闸舱门', verb: () => (S().f.unlocked ? '出舱' : '输入授权码'), act: () => this.onDoor(g) };
-    H.wcDoor = { label: '洗手间门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
-    H.cubDoor = { label: '厕所隔间', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
-    H.sink = { label: '洗漱台', verb: '打开水龙头', act: () => {
-      g.audio.water(1.2);
-      const p = g.refs.sink.group.localToWorld(V(1.165, 0.95, 6.0));
-      g.fx.emit('drop', p, { count: 16, speed: 0.25, spread: 0.8, up: 0.5, gravity: 0, drag: 0.4, life: 4, size: 0.05, colors: ['#bfe8ff', '#9fe0ff', '#ffffff'], sway: 0.05 });
-      g.say('水龙头里冒出来的水没有往下流——变成一颗颗小水珠飘了起来。', 3.4);
-    } };
-    H.toilet = { label: '太空马桶', verb: '研究一下', act: () => {
-      g.audio.vacuum();
-      g.say('太空马桶：使用前请系好大腿固定带，对准吸气口……还是算了，憋着吧。', 3.6);
-    } };
+    H.wcDoor = { label: '驾驶舱门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
+    H.cubDoor = { label: '储藏室舱门', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
     H.mirror = { label: '穿衣镜', verb: '照镜子', reach: false, act: () => g.say('镜子里的我头发全都竖了起来——失重版的超级赛亚人。', 3) };
     H.wcMirror = H.mirror;
     H.wcWindow = { label: '小窗', verb: '看窗外', reach: false, act: () => {
@@ -345,7 +325,7 @@ export const CH4 = {
     g.audio.robotBeep(2);
     const [A, B, C] = S.mates;
     let line;
-    if (!S.found[1]) { line = `💧那一位？${B}昨天把一张纸条泡进水球里了，就在洗手间！`; S.f.talkedB = true; }
+    if (!S.found[1]) { line = `💧那一位？${B}走之前把一张纸条泡进水球里了，就飘在驾驶舱！`; S.f.talkedB = true; }
     else if (!S.found[2]) line = S.f.curtainOpen ? `🌍那一位……${A}说他"写在地球上了"。等我们飞到地球背面，城市的灯光就亮了！` : '先把舷窗的遮光板打开吧！外面的风景超——美的！';
     else if (!S.f.unlocked) line = `授权码是 ${S.digits.join('')}！快去门口的面板输入！`;
     else line = '气闸舱已就绪！一路顺风！';
@@ -374,7 +354,7 @@ export const CH4 = {
     g.after(10.6, () => {
       rb.state = 'follow'; rb.talkT = 3.6;
       g.ui.subtitle(`另外两位……💧在${B}泡的水球里，🌍……${A}说他"写在地球上了"？`, 3.8, '小圆（机器人）');
-      g.clue('robot', `小圆：💧那一位在${B}泡的<b>水球</b>里（洗手间）；🌍那一位被${A}"写在了<b>地球</b>上"。`);
+      g.clue('robot', `小圆：💧那一位在${B}泡的<b>水球</b>里（驾驶舱）；🌍那一位被${A}"写在了<b>地球</b>上"。`);
     });
   },
 
@@ -457,35 +437,70 @@ export const CH4 = {
     g.after(auto ? 4.2 : 8.6, () => { g._cineTo(null, null, 1.2); this._lapse = null; });
   },
 
-  sleepTalk(g, i) {
-    const S = g.S, s = g.refs.sleepers[i], name = S.mates[i];
-    s.emote.show(['zzz', 'dots', 'note'][(g._stN = (g._stN || 0) + 1) % 3], 1.8, 0.24);
-    g.audio.snore();
-    const L = [
-      ['嘿嘿……🌍那一位……我用城市的灯光……写在地球上了……zzz', '五杀……再来一把……zzz', '地球……关灯的时候……才看得见……zzz'],
-      ['别喝我的水球……里面有纸条的……zzz', '洗手间……水球……嘬一口……zzz', '哪个傻子把袜子挂天花板上了……zzz'],
-      ['小圆……别转了……转得我头晕……zzz', '气闸舱……三位数……🤖💧🌍……zzz', '天花板……飘上去……抓住它……zzz'],
+  // 室友的休眠舱：舱是空的，床头屏幕上留着一段语音留言（转成了文字）
+  podLog(g, i) {
+    const S = g.S, [A, B, C] = S.mates, name = S.mates[i];
+    const code = ['W-01', 'W-02', 'E-02'][i];
+    const msg = [
+      `🌍那一位我用<b>城市的灯光</b>写在地球上了——太空舱每一百秒绕地球一圈，等地球"关灯"了再看！`,
+      `💧那一位我泡进<b>水球</b>里了，就飘在驾驶舱（原来的洗手间）里。在太空里喝水全靠嘬 😎`,
+      `对不起……小圆的陀螺仪被我碰坏了，现在它在天花板那儿乱转。🤖那一位它记着呢，<b>飘上去抓住它</b>就行。`,
     ][i];
-    const line = L[(s.talkN = (s.talkN || 0) + 1) % L.length];
-    g.ui.subtitle(line, 3.2, `${name}（梦话）`);
+    g.audio.robotBeep(1, 900);
+    const node = g.ui.doc({ title: `休眠舱 ${code} · ${name}`, variant: 'plain', html: `<div style="line-height:1.8">状态：<b style="color:#ff6a7a">空</b>　·　乘员已于 06:52 乘返回舱离舱<br><br>留言（语音转文字）：<br>"${msg}"<div class="sig" style="text-align:right;color:#888">—— ${name}</div></div>` });
+    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
     if (i === 1) S.f.talkedB = true;
-    if (i === 0) g.clue('sleepA', `${name}的梦话：🌍那一位"用城市的灯光写在地球上"，要等地球"关灯"才看得见。`);
-    if (i === 1) g.clue('sleepB', `${name}的梦话：洗手间的<b>水球</b>里有纸条。`);
-    if (i === 2) g.clue('sleepC', `${name}的梦话：天花板附近那个转个不停的机器人叫<b>小圆</b>。`);
+    if (!S.f[`pod${i}`]) {
+      S.f[`pod${i}`] = true;
+      g.clue(`pod${i}`, [`${A}的休眠舱留言：🌍那一位"用城市的灯光写在地球上"，要等地球"关灯"才看得见。`, `${B}的休眠舱留言：驾驶舱的<b>水球</b>里泡着纸条。`, `${C}的休眠舱留言：天花板附近乱转的机器人<b>小圆</b>记着🤖那一位。`][i]);
+      if ([0, 1, 2].every((k) => S.f[`pod${k}`])) g.after(0.6, () => g.say('三台休眠舱全是空的……整节舱里，真的只剩我一个人了。', 3.4));
+    }
+  },
+  // 我的休眠舱：舱盖开着，里面还冒着冷气；舱壁上贴着室友留的纸条（就像第一章显示器上那张便利贴）
+  myPod(g) {
+    const S = g.S;
+    if (S.f.readNote) { g.say('我的休眠舱……还冒着冷气。我就是从这里醒过来的吗？', 3); return; }
+    S.f.readNote = true;
+    g.audio.paper();
+    const node = g.ui.doc({
+      variant: 'sticky',
+      html: `睡神：<br>叫了你八百遍都不醒 😤 我们先坐返回舱回地球了。<br>气闸舱门的<span class="red">授权码</span>拆成了三份：<span class="red">🤖 💧 🌍</span><br>去我们的休眠舱看留言吧～<br>氧气够你用的，别慌！（大概）<div class="sig">—— 211 全体室友<br>${S.mates.join('、')}</div>`,
+    });
+    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
+    g.clue('note', '室友们坐返回舱先走了：气闸授权码 3 位（🤖 💧 🌍），线索在他们各自的<b>休眠舱留言</b>里。');
+    g.after(0.4, () => g.say('又是这一套……好，一个一个来！', 2.6));
+  },
+  // 信息接收站：返回舱发回来的消息（像第一章的宿舍群）；隐藏任务线解锁之后多一个"频道 211"
+  openStation(g) {
+    const S = g.S, [A, B, C] = S.mates;
+    if (this.secret.stationChannel()) return;
+    g.audio.robotBeep(2, 1200);
+    const node = g.ui.phone({
+      title: '返回舱通讯 · CH-01', time: '07:3x', battery: 88, members: 4, footer: '信号延迟 1.3 秒……发出去的消息没有回音 📡',
+      messages: [
+        { time: '06:52', who: A, text: '我们上返回舱了！他还没醒？' },
+        { who: B, text: '叫了八百遍，睡得跟死猪一样 🐷' },
+        { who: C, text: '算了算了，给他留点"惊喜" 😏' },
+        { time: '06:55', who: C, text: '气闸授权码拆成三份了：🤖💧🌍' },
+        { who: A, text: '留言都在我们的休眠舱里，自己去看～' },
+        { time: '07:10', who: '返回舱', text: '已脱离轨道，预计三小时后溅落。' },
+        { who: B, text: '别忘了喝水！驾驶舱那台饮水机漏水了哈哈哈' },
+      ],
+    });
+    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
+    if (!S.f.station) { S.f.station = true; g.clue('station', '信息接收站：室友们坐<b>返回舱</b>先走了，授权码拆成 🤖💧🌍 三份，留言在他们的休眠舱里。'); }
   },
 
   toggleLights(g) {
     const S = g.S;
     S.f.lightsOn = !S.f.lightsOn;
     g.audio.switchClick(); g.audio.fluoro();
-    if (S.f.lightsOn) {
-      for (const s of g.refs.sleepers) s.emote.show('anger', 1.4, 0.24);
-      g.after(0.6, () => g.ui.subtitle('关灯……！！（梦话）', 1.6, S.mates[(Math.random() * 3) | 0]));
-    }
+    if (S.f.lightsOn) g.after(0.4, () => g.ui.subtitle('照明模式已开启。……舱里亮堂堂的，更显得空荡荡了。', 2.6, '📢 舱内广播'));
   },
 
   onDoor(g) {
     const S = g.S;
+    if (this.secret && this.secret.collapsing) { g.audio.lockedRattle(); g.say('舱门被扭曲的时空卡死了，打不开！', 2.4); return; }
     if (S.f.unlocked) { g.win(); return; }
     if (!S.f.triedDoor) {
       S.f.triedDoor = true;
@@ -534,6 +549,7 @@ export const CH4 = {
 
   update(g, dt) {
     const S = g.S;
+    this.secret.update(dt);
     if (g.ctrl.floatTarget > 1.08 && !S.ach.has('spacewalk')) { S.ach.add('spacewalk'); g.ui.toast('飘到了天花板！', '', '🧑‍🚀'); }
     // 窗外正好是日食（地球全黑）的时候盯着地球看，也能自己发现
     if (!S.found[2] && S.f.curtainOpen && !this._lapse && g.state === 'play' && !g.cine) {
@@ -605,6 +621,22 @@ export const CH4 = {
     L.monLight.color.set(alarm ? '#ff8a9a' : '#7fe0ff');
     L.wc.intensity = on ? 1.8 : 0.9;
     g._updateDust(dt, 0.6);
+    // 信息接收站的大屏（10 帧/秒）
+    this._commsT -= dt;
+    if (this._commsT <= 0 && R.gear && this.secret) {
+      this._commsT = 0.1;
+      const st = R.gear.station.screen;
+      drawComms(st.canvas, { t, lines: this.secret.commsLines(this._comms), channel: this.secret.commsChannel(), anomaly: this.secret.anomaly(), alert: !!(S && S.f.alarm) });
+      st.tex.needsUpdate = true;
+    }
+    // 我的休眠舱还在往外冒冷气
+    this._mistT -= dt;
+    if (this._mistT <= 0 && R.gear && this.secret && this.secret.stage < 5) {
+      this._mistT = 0.3;
+      const p = R.gear.pods.find((q) => q.who < 0);
+      g.fx.emit('dust', p.mistW, { count: 2, speed: 0.12, spread: 1, up: 0.25, gravity: 0.02, drag: 0.6, life: 3, size: 0.1, colors: ['#e8f7ff', '#bfe8ff'], grow: 1.6 });
+    }
+    if (this.secret) this.secret.world(dt, t);
     // 机器人
     this._robot(g, dt, t);
   },

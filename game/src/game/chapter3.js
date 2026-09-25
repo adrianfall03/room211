@@ -5,23 +5,11 @@
 //   🐵 照镜子的猴子想要个时尚单品 → 把凳子上的红白头盔送给它
 import * as THREE from 'three';
 import * as TT from '../core/tex_toon.js';
-import { lerp } from '../core/util.js';
+import { lerp, easeOutBack } from '../core/util.js';
 import { toonifyScene } from '../world/toonkit.js';
-import { addPortal } from './chapter2.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _p = V(), _c = new THREE.Color();
-
-const LIGHT_PORTAL = /* glsl */ `
-  uniform float time; varying vec2 vUv;
-  void main() {
-    vec2 c = vUv - 0.5; c.x *= 0.5;
-    float r = length(c) * 2.0, a = atan(c.y, c.x);
-    float rays = pow(abs(sin(a * 8.0 + time * 1.5)), 6.0) * 0.4;
-    vec3 col = mix(vec3(1.0, 0.85, 0.95), vec3(1.0), smoothstep(0.8, 0.0, r));
-    float alpha = smoothstep(1.05, 0.3, r) + rays * smoothstep(1.2, 0.4, r);
-    gl_FragColor = vec4(col * alpha * 2.0, alpha);
-  }`;
 
 export const CH3 = {
   n: 3, theme: 'toon',
@@ -50,34 +38,48 @@ export const CH3 = {
     this._paT = 0;
   },
 
+  // 进门：人从门口的光里走进来，门在身后关上，彩色的锁链一节一节自己缠回门把手上，爱心锁"啵"地扣上
+  portal: 'light',
+  lockView: { cam: V(-0.9, 1.1, 3.25), look: V(-1.6, 0.68, 3.68) },
+  relockLine: '……锁链自己缠回去了？！又锁上了！',
   intro(g, { prepare }) {
-    const R = g.refs, D = R.door, A = R.animals;
-    if (prepare) {
-      g.ctrl.teleport(-1.62, 4.0, Math.PI / 2);
-      g.ctrl.yaw = Math.PI / 2 + Math.PI; g.ctrl.pitch = -0.08;
-      g.ch.root.position.set(-1.62, 0, 4.0); g.ch.root.rotation.y = Math.PI / 2;
-      g.ch.setExpression('focus');
-      D.pivot.rotation.y = D.base + D.openAngle;
-      g._cineSet(V(-0.6, 1.55, 2.6), V(-1.4, 1.2, 3.95));
-      return;
-    }
-    g.auto = { path: [V(-1.0, 0, 3.85)], speed: 1.1, i: 0 };
-    g._afterReach = null;
-    g.after(0.8, () => { g.tween(0.35, (k) => (D.pivot.rotation.y = D.base + D.openAngle * (1 - k))); g.audio.doorOpen(); g.audio.sparkle(); });
-    g.after(1.4, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.6 }; g.ui.subtitle('……又来？', 1.6, g.S.name); });
-    g.after(2.4, () => {
+    const A = g.refs.animals;
+    if (prepare) { g.enterRoom({ prepare: true }); return; }
+    const T = g.enterRoom({ prepare: false });
+    g.after(T - 0.2, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.6 }; g.ui.subtitle('……又来？', 1.6, g.S.name); });
+    g.after(T + 0.8, () => {
       g._cineTo(V(-0.2, 1.7, 1.9), V(1.2, 0.95, -0.3), 2.2);
       A.chickA.talk(2.4); A.chickB.talk(2.4); A.chickA.emote.show('?', 1.6); A.chickB.emote.show('?', 1.6);
       g.audio.cluck(1.1);
     });
-    g.after(3.4, () => g.ui.subtitle('咯？新来的？别挡着屏幕！', 2.4, '咯咯（鸡）'));
-    g.after(5.0, () => { g._cineTo(V(0.3, 1.4, 1.6), V(-1.3, 0.75, -0.6), 1.8); A.horseA.talk(2); A.horseA.emote.show('note', 1.5); g.audio.giggle(); });
-    g.after(5.6, () => g.ui.subtitle('哈哈哈哈这条视频笑死我了……', 2.2, '马大哈（马）'));
-    g.after(7.2, () => { g._cineTo(V(-0.2, 1.5, 2.6), V(-0.7, 1.2, 4.4), 1.6); A.monkeyA.emote.show('star', 1.6); });
-    g.after(7.8, () => g.ui.subtitle('镜子镜子，谁是 211 最靓的猴？', 2.2, '猴赛雷（猴）'));
-    g.after(9.6, () => { g._cutPose = { lookYaw: -0.3, lookPitch: 0.1 }; g.ui.subtitle('我的室友们……变成了鸡、马和猴子？！', 2.8, g.S.name); g._cineTo(V(-0.3, 1.6, 2.4), V(-1.1, 1.2, 3.85), 1.2); });
-    g.after(12.2, () => { g._cutPose = null; g.ch.setExpression('neutral'); g._cineTo(null, null, 1.2); });
-    g.after(13.4, () => g.beginPlay());
+    g.after(T + 1.8, () => g.ui.subtitle('咯？新来的？别挡着屏幕！', 2.4, '咯咯（鸡）'));
+    g.after(T + 3.4, () => { g._cineTo(V(0.3, 1.4, 1.6), V(-1.3, 0.75, -0.6), 1.8); A.horseA.talk(2); A.horseA.emote.show('note', 1.5); g.audio.giggle(); });
+    g.after(T + 4.0, () => g.ui.subtitle('哈哈哈哈这条视频笑死我了……', 2.2, '马大哈（马）'));
+    g.after(T + 5.6, () => { g._cineTo(V(-0.2, 1.5, 2.6), V(-0.7, 1.2, 4.4), 1.6); A.monkeyA.emote.show('star', 1.6); });
+    g.after(T + 6.2, () => g.ui.subtitle('镜子镜子，谁是 211 最靓的猴？', 2.2, '猴赛雷（猴）'));
+    g.after(T + 8.0, () => { g._cutPose = { lookYaw: -0.3, lookPitch: 0.1 }; g.ui.subtitle('我的室友们……变成了鸡、马和猴子？！', 2.8, g.S.name); g._cineTo(V(-0.3, 1.6, 2.4), V(-1.1, 1.2, 3.85), 1.2); });
+    g.after(T + 10.6, () => { g._cutPose = null; g.ch.setExpression('neutral'); g._cineTo(null, null, 1.2); });
+    g.after(T + 11.8, () => g.beginPlay());
+  },
+  onSlam(g) { g.audio.sparkle(); },
+  // 门锁：'hide' / 'anim'（锁链一节一节缠回去，爱心锁弹出来）/ 'show'
+  relock(g, mode) {
+    const H = g.refs.heartLock, l = H.lock;
+    const links = H.group.children.filter((c) => c !== l);
+    H.dropped.visible = false;
+    l.scale.setScalar(1);
+    if (mode === 'hide') { H.group.visible = false; g.collision.setEnabled('lockCable', false); return; }
+    H.group.visible = true; g.collision.setEnabled('lockCable', true);
+    for (const c of links) c.visible = true;
+    if (mode !== 'anim') return;
+    l.scale.setScalar(0.001);
+    g.tween(0.5, (k) => { links.forEach((c, i) => (c.visible = i < k * links.length + 0.5)); }, { ease: (t) => t }).cut = true;
+    g.after(0.35, () => g.audio.chainDrop());
+    g.after(0.5, () => {
+      g.audio.sparkle(); g.audio.clunk();
+      g.tween(0.35, (k) => l.scale.setScalar(Math.max(0.001, easeOutBack(k))), { ease: (t) => t }).cut = true;
+      g.fx.emit('heart', l.getWorldPosition(V()).add(V(0.15, 0.1, 0)), { count: 8, speed: 0.5, spread: 0.8, up: 0.9, gravity: 0.1, drag: 0.8, life: 1.4, size: 0.06, colors: ['#ff6a9a', '#ffb0c8', '#ffd36e'] });
+    });
   },
   onPlay(g) {
     g.ui.toast('第三章 · 趁着还没熄灯，逃出动物园 211', '', '🌙');
@@ -85,7 +87,6 @@ export const CH3 = {
   },
   exitLine: () => '谢谢大家！我先走一步啦！',
   onDoorOpen(g) {
-    addPortal(g, LIGHT_PORTAL);
     for (const a of g.refs.animalList) { a.setState('cheer'); a.emote.show('heart', 2.5); }
     g.audio.sparkle();
   },
@@ -130,6 +131,7 @@ export const CH3 = {
       broom: ['扫把', '扫把上画了一张笑脸。'],
       blackTable: ['杂物桌', '一桌子零食：玉米片、胡萝卜干、香蕉……'],
       bedW1: ['马大哈的床', '马大哈四仰八叉地躺着刷手机，被子踢到了一边。'],
+      fallenBooks: ['掉在地上的书', '书架前的地上掉着三本书……今天晚上也有书自己掉下来？'],
       bedW2: ['马赛克的床', '马赛克缩在蚊帐里侧着身子刷视频，笑得直抖。'],
       shelf: ['书架', '书架上全是漫画：《鸡械师》《马到成功》《猴王出世》……'],
       shoeRack: ['鞋架', '鞋架上摆着四双蹄子用的鞋、两双鸡爪套，还有一双猴子的豆豆鞋。'],
