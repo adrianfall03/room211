@@ -359,6 +359,17 @@ export class Audio {
   organ(sec = 8, root = 110) {
     for (const [m, g] of [[1, 0.05], [1.5, 0.03], [2, 0.035], [3, 0.015], [4, 0.012]]) this.tone({ f: root * m, dur: sec, type: 'sine', gain: g, attack: 1.5 });
   }
+  // 断电：一声闷响，电流声一路往下掉
+  powerDown() {
+    this.clunk();
+    this.tone({ f: 240, f2: 38, dur: 1.5, type: 'sawtooth', gain: 0.045 });
+    this.noise({ dur: 1.0, gain: 0.22, type: 'lowpass', freq: 2400, freq2: 120, curve: [[0.04, 1], [1, 0]] });
+  }
+  // 被白光吞没：一束越来越高、越来越亮的声音
+  riser(sec = 6) {
+    this.noise({ dur: sec, gain: 0.16, type: 'bandpass', freq: 220, freq2: 5200, Q: 1.3, curve: [[0.2, 0.25], [0.85, 1], [1, 0]] });
+    this.tone({ f: 196, f2: 784, dur: sec, type: 'sine', gain: 0.035, attack: sec * 0.85 });
+  }
 
   // ----- 结局：征兵报到 -----
   bugle() { // 号角：简单的五声进行

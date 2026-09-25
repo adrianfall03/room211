@@ -164,8 +164,14 @@ class Gfx {
     this.grade.update(dt, t, this.width / Math.max(1, this.height));
     // 阴影：这一帧第一次画主场景时更新一次（灯灭着的不画、不动的东西用缓存），见 core/shadows.js
     this.shadows.arm();
+    // viewScene：第四章彩蛋里有几个镜头直接拍"那天晚上的 211"（另一个场景）；那边不受太空舱的裁剪面影响
+    const sc = this.viewScene || this.scene;
+    if (this.renderPass.scene !== sc) { this.renderPass.scene = sc; this.gtao.scene = sc; }
+    const planes = this.renderer.clippingPlanes;
+    if (sc !== this.scene) this.renderer.clippingPlanes = [];
     if (this.useComposer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    else this.renderer.render(sc, this.camera);
+    this.renderer.clippingPlanes = planes;
   }
 }
 
@@ -273,7 +279,7 @@ async function boot() {
   const buildWorld = (theme) => {
     collision.boxes.length = 0;
     // 结局：不是宿舍了，是征兵站门前的广场
-    if (theme === 'finale') return buildFinale(scene);
+    if (theme === 'finale') return buildFinale(scene, gfx.renderer);
     const th = THEMES[theme] || THEMES.normal;
     const refs = buildDorm(scene, th.tex(), collision, { faceImg, theme, decorate: th.decorate, outside: th.outside });
     setupMirrors(refs);

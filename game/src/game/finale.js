@@ -2,6 +2,7 @@
 //   眼前一片黑，教官一嗓子"新兵！醒醒！" → 眼皮眨两下睁开：自己坐在征兵站门前的候场区里打瞌睡，
 //   四个 211 原来全是一场梦 → 起立，教官喊"向前走" → 红毯尽头立正 → 少校敬礼、双手递上军帽 →
 //   你接过军帽戴上、回敬一个军礼 → 礼炮彩带、观众欢呼 → 结算
+//   这是在美国的征兵站：场景里的字、所有人说的话、字幕全是英文
 import * as THREE from 'three';
 import { clamp, lerp, damp, easeInOut, easeOut, dampAngle } from '../core/util.js';
 
@@ -63,16 +64,16 @@ export class FinaleDirector {
     g._cineSet(V(0.02, 1.22, 6.22), V(0.16, 1.66, 5.62));
     g.audio.cheer(2);
     this.R.excite = 0.3;
-    const me = S.name, sg = '教官 · SGT. JOHNSON';
+    const me = S.name, sg = 'SGT. JOHNSON', maj = 'MAJ. SMITH';
     const seq = [
-      [0.8, () => { g.audio.snap(); g.ui.subtitle('新兵！醒醒！', 1.6, sg); }],
+      [0.8, () => { g.audio.snap(); g.ui.subtitle('Recruit! Wake up!', 1.6, sg); }],
       [1.8, () => this.lids(0.3, 0.25)],
       [2.2, () => this.lids(0, 0.2)],
-      [2.7, () => { g.audio.snap(); g.ui.subtitle('说你呢！报到的日子还能睡着？！', 2.0, sg); }],
+      [2.7, () => { g.audio.snap(); g.ui.subtitle('Yes, YOU! Asleep on reporting day?!', 2.0, sg); }],
       [3.4, () => this.lids(0.55, 0.35)],
       [3.9, () => this.lids(0.2, 0.25)],
       [4.4, () => { this.lids(1, 1.2); ch.setExpression('shock'); this.tw.nod = 0; }],
-      [5.2, () => g.ui.subtitle('……这……这是哪儿？', 2.0, me)],
+      [5.2, () => g.ui.subtitle('…W-where… where am I?', 2.0, me)],
       [6.4, () => {
         // 镜头拉远：征兵站门前的广场，自己正坐在一排折叠椅中间
         ch.setFirstPerson(false);
@@ -80,20 +81,19 @@ export class FinaleDirector {
         g._cineTo(V(1.8, 2.6, 10.2), V(0, 2.2, -2.5), 4.5);
         g.audio.startMusic('finale');
       }],
-      [6.9, () => g.ui.subtitle('我不是……在太空舱里吗？', 2.2, me)],
-      [9.2, () => { ch.setExpression('focus'); g.ui.subtitle('四个 211……原来……全都是一场梦？', 2.8, me); }],
+      [6.9, () => g.ui.subtitle("Wasn't I just… in the space capsule?", 2.2, me)],
+      [9.2, () => { ch.setExpression('focus'); g.ui.subtitle('Four Room 211s… it was all… a dream?', 2.8, me); }],
       [12.2, () => {
         g._cineTo(V(1.3, 1.65, 7.6), V(0.1, 1.4, 5.9), 1.0);
         g.audio.snap(); g._shake(0.05);
-        g.ui.subtitle(`发什么呆！新兵 ${me}——起立！`, 2.2, sg);
+        g.ui.subtitle(`Quit daydreaming! Recruit ${me} — on your feet!`, 2.2, sg);
       }],
       [13.4, () => { this.tw.pSit = 0; ch.setExpression('neutral'); this.sWalk = { to: this.sPost, speed: 1.6 }; this.sLean = 0; }],
       [14.8, () => { g._cineTo(V(1.1, 1.85, 8.4), V(0, 4.4, -6.0), 1.8); ch.setExpression('focus'); }],
-      [15.3, () => g.ui.subtitle('横幅上写着：WELCOME, NEW RECRUITS! · 欢迎新兵报到', 2.8, '')],
       [18.0, () => {
         g._cineTo(V(2.6, 1.7, 1.2), V(1.4, 1.75, -0.3), 1.2);
         g.audio.snap();
-        g.ui.subtitle(`新兵 ${me}！——向前，走！`, 2.4, sg);
+        g.ui.subtitle(`Recruit ${me}! Forward — march!`, 2.4, sg);
       }],
       [19.6, () => {
         this.walk = { to: V(0, 0, 1.18), speed: 1.15 };
@@ -104,12 +104,12 @@ export class FinaleDirector {
       [24.2, () => {
         this.tw.pAttention = 1;
         g.audio.snap(); g._shake(0.05);
-        g.ui.subtitle('立——正！', 1.6, '教官 · SGT. JOHNSON');
+        g.ui.subtitle('Ten-HUT!', 1.6, sg);
       }],
       [25.4, () => {
         g._cineSet(V(0.42, 1.18, 1.05), V(-0.02, 1.72, -0.1));
         g._cineTo(V(0.36, 1.22, 0.95), V(-0.02, 1.74, -0.1), 6);
-        g.ui.subtitle(`欢迎报到，新兵 ${S.name}。`, 2.4, '少校 · MAJ. SMITH');
+        g.ui.subtitle(`Welcome aboard, Recruit ${S.name}.`, 2.4, maj);
         R.officer.setExpression('neutral');
       }],
       [27.4, () => { this.tw.oSalute = 1; g.audio.snap(); g.audio.bugle(); }],
@@ -118,9 +118,9 @@ export class FinaleDirector {
         g._cineTo(V(2.1, 1.5, 0.75), V(0, 1.38, 0.55), 1.2);
       }],
       [30.7, () => { this.cap.stage = 1; this.cap.k = 0; this.tw.oHold = 1; }],
-      [31.4, () => g.ui.subtitle('这是你的军帽。', 2, '少校 · MAJ. SMITH')],
+      [31.4, () => g.ui.subtitle('This is your service cap.', 2, maj)],
       [32.0, () => { this.cap.stage = 2; this.cap.k = 0; }],
-      [33.2, () => { this.tw.pHold = 1; this.tw.pAttention = 0; g.ui.subtitle('从今天起，你就是一名士兵了。', 2.6, '少校 · MAJ. SMITH'); }],
+      [33.2, () => { this.tw.pHold = 1; this.tw.pAttention = 0; g.ui.subtitle("As of today, you're a soldier.", 2.6, maj); }],
       [34.2, () => { this.cap.stage = 3; this.cap.k = 0; this.tw.oHold = 0; ch.setExpression('grin'); }],
       [35.0, () => g._cineTo(V(0.62, 1.72, 0.42), V(0, 1.7, 1.18), 1.3)],
       [36.2, () => { this.cap.stage = 4; this.cap.k = 0; }],
@@ -170,7 +170,7 @@ export class FinaleDirector {
     const S = this.g.S;
     const el = document.createElement('div');
     el.id = 'enlist-card';
-    el.innerHTML = `<div class="ec-k">四个 211，全部逃脱！</div><div class="ec-t">新兵报到</div><div class="ec-s">ENLISTED · ${S.name}</div>`;
+    el.innerHTML = `<div class="ec-k">ALL FOUR ROOM 211s — ESCAPED</div><div class="ec-t">ENLISTED</div><div class="ec-s">RECRUIT ${S.name} · CLASS 211</div>`;
     document.body.appendChild(el);
     this.cardEl = el;
   }
@@ -296,5 +296,7 @@ export class FinaleDirector {
     const sPrm = sSpeed > 0 ? { speed: sSpeed } : { attention: 1 - lean, lookYaw: 0.25 * (1 - lean), lookPitch: lerp(0.02, -0.45, lean), crouch: lean * 0.35 };
     if (w.sSalute > 0.01) sPrm.ikR = { p: SALUTE_R, pole: SALUTE_POLE, w: w.sSalute, wr: [0.1, 0, 0.2] };
     SG.update(dt, sPrm);
+    // 红毯尽头的两名仪仗兵：一直立正，敬礼的时候跟着敬礼
+    for (const gd of R.guards || []) gd.update(dt, { attention: 1, lookPitch: 0.02, ikR: w.sSalute > 0.01 ? { p: SALUTE_R, pole: SALUTE_POLE, w: w.sSalute, wr: [0.1, 0, 0.2] } : undefined });
   }
 }

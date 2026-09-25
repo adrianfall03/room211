@@ -2,16 +2,38 @@
 //   整间宿舍另外搭在一个单独的场景里，绕着书架背板转了 180°：两个书架背靠背，太空舱这边抽掉一本书，
 //   从空隙里看过去，就是宿舍书架上书与书之间的缝——电脑前两个人在打排位（其中一个是你自己），
 //   另外两个室友站在后面指指点点。画面每帧用同一个镜头渲染到一张贴图上，贴在资料库那一格的背板上。
+//   反过来也行：有几个镜头就架在这间宿舍里（主画面直接画这个场景），书架那道缝后面贴着"反向的窗"，
+//   里面是同一个镜头拍到的太空舱——隔着两个背靠背的书架，两边的人能互相看见。
 import * as THREE from 'three';
 import { createCharacter } from '../player/character.js';
 import * as TX from '../core/textures.js';
 import { FALLEN_BOOKS } from '../world/dorm.js';
 import { clamp, lerp, dampAngle, easeInOut } from '../core/util.js';
 
+const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
+// 书架缝后面的"反向的窗"：按屏幕坐标去取太空舱那一帧；没有画面时只是一片暖光
+const REV_FRAG = /* glsl */ `
+  uniform sampler2D tSpace; uniform vec2 res; uniform float power, glow, time;
+  varying vec2 vUv;
+  void main() {
+    vec2 uv = gl_FragCoord.xy / res;
+    float e = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+    uv += vec2(sin(uv.y * 90.0 + time * 3.0), cos(uv.x * 80.0 - time * 2.0)) * 0.0012 * (1.0 - smoothstep(0.0, 0.25, e));
+    vec3 col = vec3(0.0);
+    if (power > 0.001) col = texture2D(tSpace, uv).rgb * power;
+    float flick = 0.88 + 0.12 * sin(time * 5.0 + vUv.y * 7.0);
+    col += vec3(1.0, 0.84, 0.6) * glow * flick * (0.5 + 0.5 * (1.0 - smoothstep(0.0, 0.5, e)));
+    col += vec3(1.0, 0.82, 0.55) * (1.0 - smoothstep(0.0, 0.08, e)) * 0.35 * max(power, glow);
+    gl_FragColor = vec4(col, 1.0);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`;
+
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V();
-// K.book(w, t, d) 是躺平的一本书（w 宽、t 厚、d 长）；立在书架上：w → 高（y）、t → 沿着书架（z）、d → 进深（x，书脊朝屋里）
-const STAND = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(0, 1, 0), V(0, 0, 1), V(1, 0, 0)));
+// K.book(w, t, d) 是躺平的一本书（w 宽、t 厚、d 长，书脊在 -x 那一面）；
+// 立在书架上：w → 进深（书脊朝屋里 +x、书口朝墙）、t → 沿着书架（z）、d → 高（y）
+const STAND = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(V(-1, 0, 0), V(0, 0, 1), V(0, 1, 0)));
 
 // 过去的宿舍：本地坐标就是宿舍自己的坐标；绕 (x=-1.8, z=-1.075) 转半圈，书架背板正好贴着太空舱资料库的背板
 export const PAST_POS = V(-3.6, 0, -2.15);
@@ -47,10 +69,12 @@ export class PastDorm {
     L.sun.intensity = 0;
     for (const s of L.ceilSpots) s.intensity = 0;
     for (const m of L.tubeMats) m.emissiveIntensity = 0;
-    L.monLight.intensity = 2.2; L.monLight.color.set('#bcd4ff'); L.monLight.distance = 3.6;
-    const mon2Light = new THREE.PointLight('#c8d8ff', 1.8, 3.4, 1.6); mon2Light.position.set(1.32, 1.1, -0.8); root.add(mon2Light);
+    L.monLight.intensity = 1.5; L.monLight.color.set('#bcd4ff'); L.monLight.distance = 3.6;
+    const mon2Light = new THREE.PointLight('#c8d8ff', 1.3, 3.4, 1.6); mon2Light.position.set(1.32, 1.1, -0.8); root.add(mon2Light);
     const lamp = new THREE.PointLight('#ffc98a', 1.1, 4.5, 1.5); lamp.position.set(-0.7, 1.25, -3.0); root.add(lamp);
     const fill = new THREE.PointLight('#ffd9b0', 0.5, 4, 1.4); fill.position.set(-1.1, 2.0, -1.05); root.add(fill);
+    // 书架那盏补光：书缝里透出光来的时候，它跟着变暖、变亮（不另外加灯，免得整个场景的着色器重编译）
+    this.fill = fill; this.fillBase = { color: fill.color.clone(), intensity: fill.intensity, pos: fill.position.clone() };
     if (L.wc) L.wc.intensity = 0;
     if (L.corridor) L.corridor.intensity = 0;
     scene.traverse((o) => { if (o.isLight) o.castShadow = false; });
@@ -68,6 +92,13 @@ export class PastDorm {
     this._buildShelf(K);
     // 四个人
     this._buildPeople(R, K);
+    // 书架那道缝后面的"反向的窗"（朝屋里；从太空舱那边看是背面，不会画）
+    this.revU = { tSpace: { value: null }, res: { value: new THREE.Vector2(1, 1) }, power: { value: 0 }, glow: { value: 0 }, time: { value: 0 } };
+    const rev = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.356), new THREE.ShaderMaterial({ uniforms: this.revU, vertexShader: VERT, fragmentShader: REV_FRAG }));
+    rev.position.set(-1.79, 1.81, -1.02); rev.rotation.y = Math.PI / 2;
+    rev.castShadow = false; rev.receiveShadow = false; rev.visible = false; rev.raycast = () => {};
+    root.add(rev);
+    this.rev = rev;
     root.updateMatrixWorld(true);
     // 渲染目标
     this.rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, depthBuffer: true, samples: 4 });
@@ -95,7 +126,7 @@ export class PastDorm {
           FALLEN_BOOKS.forEach(([fx, fy, fz, rx, ry, rz, c, th], i) => {
             const b = K.book(0.2, th, 0.24, c);
             // 竖起来立在书架上：书脊朝屋里（本地 +x）
-            const home = { p: V(X1 - 0.13, y0 + 0.011 + 0.1, -1.12 + i * 0.09), q: STAND.clone() };
+            const home = { p: V(X1 - 0.12, y0 + 0.011 + 0.12, -1.12 + i * 0.09), q: STAND.clone() };
             b.position.copy(home.p); b.quaternion.copy(home.q);
             root.add(b);
             this.pushables.push({ mesh: b, home, rest: { p: V(fx, fy, fz), r: new THREE.Euler(rx, ry, rz) }, pushed: false });
@@ -103,7 +134,7 @@ export class PastDorm {
           z = -0.87;
           continue;
         }
-        const b = K.book(h, t, d, cols[Math.floor(rnd() * cols.length)]);
+        const b = K.book(d, t, h, cols[Math.floor(rnd() * cols.length)]);
         b.position.set(X1 - 0.02 - d / 2, y0 + 0.011 + h / 2, z + t / 2);
         b.quaternion.copy(STAND);
         g.add(b);
@@ -126,7 +157,7 @@ export class PastDorm {
     // A：白 T 恤 + 白色棒球帽，站在两台电脑后面
     const A = mk({ skin: [222, 172, 138], skinColor: '#dca88a', hairColor: '#1a1410' }, { top: '#e8e6e0', pants: '#3a4a6a', hair: '#1a1410' });
     A.root.position.set(0.3, 0, -0.55); A.root.rotation.y = Math.PI / 2 + 0.25;
-    const cap = K.whiteCap(); cap.scale.setScalar(0.95); cap.position.set(0, -0.005, 0.0); A.helmetSlot.add(cap);
+    const cap = K.whiteCap(); cap.scale.set(1.0, 1.35, 1.0); cap.position.set(0, -0.012, 0.0); A.helmetSlot.add(cap); // 帽冠加高一点，别让头发从帽顶戳出来
     // B：红色卫衣，站在我身后探头看
     const B = mk({ skin: [205, 158, 120], skinColor: '#cc9a78', hairColor: '#3a2a1a' }, { top: '#b8352a', pants: '#1e2026', hair: '#3a2a1a' });
     B.root.position.set(0.42, 0, 0.15); B.root.rotation.y = Math.PI / 2 - 0.3;
@@ -146,8 +177,9 @@ export class PastDorm {
       scr2: R.monitor2.localToWorld(V(0, 0.3, 0)),
       shelf: root.localToWorld(V(-1.45, 1.75, -1.07)),
     };
-    // 各人的状态：A 可能会走到书架前面去
-    this.st = { A: { mode: 'watch', t: 0, pos: A.root.position.clone(), yaw: A.root.rotation.y }, react: 0, meTurn: 0, cheerT: 0 };
+    // 各人的状态：A 可能会走到书架前面去；电脑前的我最后会停下来，转过身看着书架
+    this.st = { A: { mode: 'watch', t: 0, pos: A.root.position.clone(), yaw: A.root.rotation.y }, me: { mode: 'type', k: 0 }, react: 0, cheerT: 0 };
+    for (const ch of [me, A]) ch.prepare && ch.prepare(['warm', 'sad']);
   }
 
   // 世界坐标 → 某人躯干坐标系
@@ -199,7 +231,20 @@ export class PastDorm {
       });
       ch.root.rotation.y = lerp(ch.root.rotation.y, Math.PI / 2 - turn, 1 - Math.exp(-dt * 4));
     };
-    typer(P.me, pts.kb1, pts.ms1, 0, startled ? 0.9 : 0);
+    const M = st.me;
+    if (M.mode === 'type') typer(P.me, pts.kb1, pts.ms1, 0, startled ? 0.9 : 0);
+    else {
+      // 手从键盘上放下来，停一拍，然后在凳子上慢慢转过身，看着书架那道缝
+      M.k = Math.min(1, M.k + dt / (M.mode === 'turn' ? 2.6 : 1e9));
+      const e = easeInOut(clamp(M.k, 0, 1));
+      P.me.root.rotation.y = lerp(Math.PI / 2, 3.72, e);
+      const lk = this._look(P.me, pts.shelf);
+      const hands = 1 - clamp(M.t0 += dt, 0, 0.6) / 0.6;
+      P.me.update(dt, {
+        sit: 1, lookYaw: lerp(0, lk.lookYaw, e), lookPitch: lerp(-0.05, lk.lookPitch, e),
+        ikL: { p: this._local(P.me, _b.copy(pts.kb1).add(V(0, 0, -0.08))), w: hands }, ikR: { p: this._local(P.me, _b.copy(pts.ms1)), w: hands },
+      });
+    }
     typer(P.C, pts.kb2, pts.ms2, 1.7, 0);
     // 站着的两个：指着屏幕比划，偶尔激动得举手
     const pointer = (ch, target, s) => {
@@ -261,6 +306,32 @@ export class PastDorm {
       ch.update(dt, { speed: dist > 0.04 ? 1.0 : 0 });
     }
   }
+  // 电脑前的我：停下手（'stop'），再转过身来（'turn'）
+  stopMe() { if (this.st.me.mode === 'type') { this.st.me.mode = 'stop'; this.st.me.k = 0; this.st.me.t0 = 0; } }
+  turnMe(instant = false) { this.stopMe(); this.st.me.mode = 'turn'; if (instant) { this.st.me.k = 1; this.st.me.t0 = 1; } }
+  // 跳过过场时：三本书直接躺在地上
+  dropAll() {
+    for (const b of this.pushables) {
+      b.pushed = true;
+      b.mesh.visible = true;
+      b.mesh.position.copy(b.rest.p); b.mesh.rotation.copy(b.rest.r);
+    }
+    if (this.st.A.mode !== 'watch') { this.st.A.mode = 'watch'; this.people.A.root.position.copy(this.st.A.pos); this.people.A.root.rotation.y = this.st.A.yaw; }
+  }
+  get typing() { return this.st.me.mode === 'type'; }
+  // B 退到门那边去伸懒腰了（最后那几个镜头拍电脑前的我、望向书架，他原来站的地方正好挡着）
+  moveB() { const B = this.people.B; B.root.position.set(-0.3, 0, 1.0); B.root.rotation.y = Math.PI / 2 + 0.4; }
+  // 结局：A 挪到 C 身后看他打（结算画面的镜头对着电脑前的我，A 原来站的地方在画面边上）
+  moveA() { const A = this.people.A; this.st.A.mode = 'watch'; A.root.position.set(1.15, 0, -1.45); A.root.rotation.y = Math.PI / 2 - 0.2; }
+  // 书缝里透出来的光：反向窗的亮度 + 书架那盏补光
+  setGlow(k, power = 0) {
+    const U = this.revU;
+    U.glow.value = k; U.power.value = power;
+    this.rev.visible = k > 0.005 || power > 0.005;
+    const f = this.fill, b = this.fillBase;
+    f.intensity = b.intensity + k * 2.4 + power * 0.8;
+    f.color.copy(b.color).lerp(_col.set('#ffc98a'), clamp(k + power, 0, 1));
+  }
   // A 把书放回地上，回去接着看
   leave() {
     const A = this.st.A;
@@ -277,9 +348,12 @@ export class PastDorm {
     const planes = renderer.clippingPlanes;
     renderer.clippingPlanes = [];
     const prev = renderer.getRenderTarget();
+    const wall = this.refs.westWall.visible;
+    this.refs.westWall.visible = false; // 从太空舱那边看过来：宿舍的西墙（有厚度）会挡在书架前面
     renderer.setRenderTarget(this.rt);
     renderer.render(this.scene, camera);
     renderer.setRenderTarget(prev);
+    this.refs.westWall.visible = wall;
     renderer.clippingPlanes = planes;
   }
 
@@ -291,4 +365,4 @@ export class PastDorm {
     });
   }
 }
-const _q = new THREE.Quaternion(), _b2 = new THREE.Vector2();
+const _q = new THREE.Quaternion(), _b2 = new THREE.Vector2(), _col = new THREE.Color();

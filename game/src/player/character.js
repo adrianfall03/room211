@@ -195,20 +195,23 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   const curve = (a, cp, b) => { ctx.moveTo(...P(...a)); ctx.quadraticCurveTo(...P(...cp), ...P(...b)); };
 
   // ---- 眉毛（浓、略平）----
-  const browLift = brows === 'raised' ? 0.008 : brows === 'relaxed' ? -0.002 : 0;
+  const browLift = brows === 'raised' ? 0.008 : brows === 'relaxed' ? -0.002 : brows === 'worried' ? 0.002 : 0;
+  // 眉头（靠鼻梁那一端）往上挑：着急、难过的时候
+  const browTilt = brows === 'worried' ? 0.009 : 0;
+  const BT = (x, y) => [x, y + browTilt * (1 - clamp((Math.abs(x) - 0.011) / 0.04, 0, 1))];
   for (const s of [-1, 1]) {
     const y0 = 0.029 + browLift;
     ctx.fillStyle = O.brow;
     ctx.beginPath();
-    ctx.moveTo(...P(s * 0.011, y0 - 0.002));
-    ctx.quadraticCurveTo(...P(s * 0.03, y0 + 0.008), ...P(s * 0.05, y0 + 0.0015));
-    ctx.quadraticCurveTo(...P(s * 0.031, y0 + 0.0015), ...P(s * 0.012, y0 - 0.0095));
+    ctx.moveTo(...P(...BT(s * 0.011, y0 - 0.002)));
+    ctx.quadraticCurveTo(...P(...BT(s * 0.03, y0 + 0.008)), ...P(...BT(s * 0.05, y0 + 0.0015)));
+    ctx.quadraticCurveTo(...P(...BT(s * 0.031, y0 + 0.0015)), ...P(...BT(s * 0.012, y0 - 0.0095)));
     ctx.closePath();
     ctx.fill();
     ctx.strokeStyle = 'rgba(26,20,17,0.6)'; ctx.lineWidth = 1.2;
     for (let k = 0; k < 14; k++) {
       const t = k / 13, ss = s * (0.012 + t * 0.036), yy = y0 - 0.004 + Math.sin(t * Math.PI) * 0.006;
-      ctx.beginPath(); ctx.moveTo(...P(ss, yy - 0.003)); ctx.lineTo(...P(ss + s * 0.004, yy + 0.003)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(...P(...BT(ss, yy - 0.003))); ctx.lineTo(...P(...BT(ss + s * 0.004, yy + 0.003))); ctx.stroke();
     }
   }
 
@@ -216,8 +219,8 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   for (const s of [-1, 1]) {
     const ex = s * 0.031, ey = 0.009;
     const hw = 0.0135;
-    if (eyes === 'open' || eyes === 'wide') {
-      const hh = eyes === 'wide' ? 0.0068 : 0.0046;
+    if (eyes === 'open' || eyes === 'wide' || eyes === 'squint') {
+      const hh = eyes === 'wide' ? 0.0068 : eyes === 'squint' ? 0.0026 : 0.0046;
       ctx.fillStyle = '#f1ebe4';
       ctx.beginPath();
       curve([ex - hw, ey], [ex, ey + hh * 2.1], [ex + hw, ey + 0.001]);
@@ -307,6 +310,27 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
     ctx.beginPath(); curve([-0.019, my], [0, my - 0.001], [0.019, my]); ctx.stroke();
     ctx.strokeStyle = lip; ctx.lineWidth = 4.5;
     ctx.beginPath(); curve([-0.014, my - 0.005], [0, my - 0.009], [0.014, my - 0.005]); ctx.stroke();
+  } else if (mouth === 'yell') {
+    // 张大嘴喊：上排牙、舌头，嘴角往下拉
+    ctx.strokeStyle = 'rgba(130,75,62,0.45)'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); curve([s * 0.016, -0.031], [s * 0.03, -0.046], [s * 0.029, -0.068]); ctx.stroke(); }
+    const mw = 0.022;
+    ctx.fillStyle = '#3a0f0c';
+    ctx.beginPath();
+    curve([-mw, my + 0.002], [0, my + 0.009], [mw, my + 0.002]);
+    ctx.quadraticCurveTo(...P(mw * 0.9, my - 0.022), ...P(0, my - 0.026));
+    ctx.quadraticCurveTo(...P(-mw * 0.9, my - 0.022), ...P(-mw, my + 0.002));
+    ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = '#f2ede4';
+    ctx.beginPath(); curve([-mw, my + 0.004], [0, my + 0.009], [mw, my + 0.004]); ctx.lineTo(...P(mw * 0.85, my - 0.002)); ctx.quadraticCurveTo(...P(0, my + 0.001), ...P(-mw * 0.85, my - 0.002)); ctx.fill();
+    ctx.fillStyle = '#b04a44';
+    ctx.beginPath(); ctx.ellipse(...P(0, my - 0.021), 30, 11, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = lip; ctx.lineWidth = 3.4;
+    ctx.beginPath(); curve([-mw - 0.001, my + 0.002], [0, my + 0.0095], [mw + 0.001, my + 0.002]); ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(...P(-mw, my + 0.001)); ctx.quadraticCurveTo(...P(-mw * 0.9, my - 0.023), ...P(0, my - 0.027)); ctx.quadraticCurveTo(...P(mw * 0.9, my - 0.023), ...P(mw, my + 0.001)); ctx.stroke();
   } else if (mouth === 'O') {
     ctx.fillStyle = '#3a110e';
     ctx.beginPath(); ctx.ellipse(...P(0, my - 0.004), 15, 20, 0, 0, Math.PI * 2); ctx.fill();
@@ -461,7 +485,12 @@ export function createCharacter(opts = {}) {
     shock: { eyes: 'wide', mouth: 'O', brows: 'raised' },
     sleep: { eyes: 'closed', mouth: 'neutral', brows: 'relaxed' },
     focus: { eyes: 'open', mouth: 'neutral', brows: 'normal' },
+    // 下面几种只有第四章彩蛋的过场用得上：不预先生成，用到之前调 prepare() 在后台画好
+    shout: { eyes: 'squint', mouth: 'yell', brows: 'worried' },
+    warm: { eyes: 'smile', mouth: 'smile', brows: 'relaxed' },
+    sad: { eyes: 'open', mouth: 'neutral', brows: 'worried' },
   };
+  const LAZY = new Set(['shout', 'warm', 'sad']);
   const faceMat = new THREE.MeshStandardMaterial({ map: faceTex('neutral', EXPR.neutral), roughness: 0.55 });
   const headMesh = addMesh(headGeo, faceMat, head);
   // 鼻子
@@ -563,11 +592,12 @@ export function createCharacter(opts = {}) {
   }
   function blinkTex(on) {
     const e = EXPR[st.expr];
-    if (e.eyes === 'closed' || e.eyes === 'smile') return;
+    if (e.eyes === 'closed' || e.eyes === 'smile' || e.eyes === 'squint') return;
     headMesh.material.map = on ? faceTex(`${st.expr}_blink`, { ...e, eyes: 'closed' }) : faceTex(st.expr, e);
   }
   // 预生成常用表情，避免运行时卡顿
-  for (const k of Object.keys(EXPR)) { faceTex(k, EXPR[k]); if (EXPR[k].eyes === 'open' || EXPR[k].eyes === 'wide') faceTex(`${k}_blink`, { ...EXPR[k], eyes: 'closed' }); }
+  const prepare = (names = [...LAZY]) => { for (const k of names) { if (!EXPR[k]) continue; faceTex(k, EXPR[k]); if (EXPR[k].eyes === 'open' || EXPR[k].eyes === 'wide') faceTex(`${k}_blink`, { ...EXPR[k], eyes: 'closed' }); } };
+  prepare(Object.keys(EXPR).filter((k) => !LAZY.has(k)));
 
   const tgt = (j, x, y, z, w = 1) => {
     const p = pose[j];
@@ -762,7 +792,7 @@ export function createCharacter(opts = {}) {
   const setFirstPerson = (fp) => { J.neck.visible = !fp; };
 
   return {
-    root, J, mats, update, setExpression, setFirstPerson, torch, torchTip, helmetSlot, headMesh,
+    root, J, mats, update, setExpression, setFirstPerson, torch, torchTip, helmetSlot, headMesh, prepare,
     get expression() { return st.expr; },
     faceTexture: () => headMesh.material.map,
   };
