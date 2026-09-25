@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { beginMirror, endMirror } from './mirrorcull.js';
 import { Kit } from './kit.js';
 import { buildOutside } from './outside.js';
 import { LightShafts } from './fx.js';
@@ -270,6 +271,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   // 同一时间只渲染一层反射；低画质、覆盖材质的 pass（GTAO / 描边）或不在可见区域时用普通反光材质代替
   const mirrorFake = new THREE.MeshStandardMaterial({ color: '#c9d0d4', metalness: 1, roughness: 0.06 });
   let reflecting = false;
+  const culled = [];
   const makeMirror = (w, h, cfg = {}) => {
     const m = new Reflector(new THREE.PlaneGeometry(w, h), { textureWidth: 768, textureHeight: 768, color: 0xb4b4b4, clipBias: 0.003, multisample: 0 });
     const refl = m.material, reflect = m.onBeforeRender;
@@ -282,7 +284,9 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
       if (!on || scn.overrideMaterial) return;
       const st0 = c.pre ? c.pre() : null;
       reflecting = true;
-      try { reflect.call(this, renderer, scn, cam, ...rest); } finally { reflecting = false; }
+      // 只画镜子里看得见的那一块（见 mirrorcull.js）
+      beginMirror(this, cam, scn, culled);
+      try { reflect.call(this, renderer, scn, cam, ...rest); } finally { endMirror(culled); reflecting = false; }
       if (c.post) c.post(st0);
     };
     return m;

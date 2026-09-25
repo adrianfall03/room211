@@ -6,7 +6,10 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { ShadowCache } from './core/shadows.js';
 import * as TX from './core/textures.js';
 import { audio } from './core/audio.js';
 import { Input } from './core/input.js';
@@ -34,6 +37,40 @@ try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}'
 const saveSettings = () => { try { localStorage.setItem('dorm404', JSON.stringify(settings)); } catch (e) { /* 忽略 */ } };
 
 // ---------- 渲染 ----------
+// 场景本身照旧用 4×MSAA 画，画完解析成普通贴图，后面的 GTAO / 描边 / Bloom / 调色都在普通缓冲里做。
+// 以前整条后处理链的缓冲全是 4×MSAA 半浮点，每个全屏 pass 都要多读写 4 倍的数据、再 resolve 一次，白白发热。
+class MSAARenderPass extends RenderPass {
+  constructor(scene, camera) {
+    super(scene, camera);
+    this.msaa = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    this.copy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(CopyShader.uniforms), vertexShader: CopyShader.vertexShader, fragmentShader: CopyShader.fragmentShader, depthTest: false, depthWrite: false }));
+    this.copy.material.uniforms.tDiffuse.value = this.msaa.texture;
+  }
+  setSize(w, h) { this.msaa.setSize(w, h); }
+  render(renderer, writeBuffer, readBuffer, dt, mask) {
+    super.render(renderer, writeBuffer, this.msaa, dt, mask);
+    renderer.setRenderTarget(readBuffer);
+    this.copy.render(renderer);
+  }
+}
+
+// GTAO 放到半分辨率算：AO 本来就是很柔和的低频信号，还要经过泊松降噪，半分辨率算完再双线性放大几乎看不出区别，
+// 法线 / AO / 降噪三步的开销都只剩四分之一。结果直接乘到当前画面上，省掉原来先整屏拷贝一遍的那一步。
+class HalfResGTAOPass extends GTAOPass {
+  constructor(...args) {
+    super(...args);
+    this.output = GTAOPass.OUTPUT.Off; // 只算 AO，输出由下面自己做
+    this.needsSwap = false;
+  }
+  setSize(w, h) { super.setSize(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2))); }
+  render(renderer, writeBuffer, readBuffer, dt, mask) {
+    super.render(renderer, writeBuffer, readBuffer, dt, mask);
+    this.blendMaterial.uniforms.intensity.value = this.blendIntensity;
+    this.blendMaterial.uniforms.tDiffuse.value = this.pdRenderTarget.texture;
+    this._renderPass(renderer, this.blendMaterial, readBuffer);
+  }
+}
+
 class Gfx {
   constructor(container) {
     const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -53,14 +90,16 @@ class Gfx {
   init(scene, camera) {
     this.scene = scene;
     this.camera = camera;
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+    this.shadows = new ShadowCache(this.renderer, scene);
+    // 后处理缓冲：不用多重采样、也不要深度（场景在 MSAARenderPass 自己的缓冲里画）
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
     this.composer = new EffectComposer(this.renderer, rt);
-    this.renderPass = new RenderPass(scene, camera);
-    this.gtao = new GTAOPass(scene, camera, 1, 1);
-    this.gtao.output = GTAOPass.OUTPUT.Default;
+    this.renderPass = new MSAARenderPass(scene, camera);
+    this.gtao = new HalfResGTAOPass(scene, camera, 1, 1);
     this.gtao.blendIntensity = 0.85;
     this.gtao.updateGtaoMaterial({ radius: 0.35, distanceExponent: 1.2, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
-    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    // 降噪半径按半分辨率折半，模糊范围和原来全分辨率时一样
+    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 3, rings: 2, samples: 12 });
     this.outline = new OutlinePass(new THREE.Vector2(1, 1), scene, camera);
     this.outline.edgeStrength = 2.6;
     this.outline.edgeGlow = 0.4;
@@ -98,6 +137,7 @@ class Gfx {
     if (this.renderer.shadowMap.enabled !== shadows) {
       this.renderer.shadowMap.enabled = shadows;
       this.scene.traverse((o) => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => (m.needsUpdate = true)); });
+      this.shadows.invalidate();
     }
     this.gtao.enabled = q === 'high' && this.theme !== 'toon' && this.theme !== 'space';
     this.bloom.enabled = q !== 'low';
@@ -122,18 +162,8 @@ class Gfx {
   }
   render(dt = 0, t = 0) {
     this.grade.update(dt, t, this.width / Math.max(1, this.height));
-    // 阴影只在灯亮时更新，省性能
-    if (!this.shadowLights) {
-      this.shadowLights = [];
-      this.scene.traverse((o) => { if (o.isLight && o.castShadow) this.shadowLights.push(o); });
-    }
-    for (const l of this.shadowLights) {
-      // 静态阴影（洗手间的灯）：只在第一次和开关门时由游戏逻辑手动刷新
-      if (l.userData.staticShadow) { l.shadow.autoUpdate = false; if (l.shadow.map === null) l.shadow.needsUpdate = true; continue; }
-      const on = l.intensity > 0.01;
-      if (l.shadow.map === null || on !== l.userData.shadowOn) { l.userData.shadowOn = on; l.shadow.needsUpdate = true; }
-      l.shadow.autoUpdate = on;
-    }
+    // 阴影：这一帧第一次画主场景时更新一次（灯灭着的不画、不动的东西用缓存），见 core/shadows.js
+    this.shadows.arm();
     if (this.useComposer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }
@@ -309,11 +339,19 @@ async function boot() {
     },
   });
 
-  // 主循环
+  // 主循环：最多约 60 帧/秒。高刷屏（MacBook 的 120Hz ProMotion 等）上 rAF 一秒来 120 次，
+  // 每次都画的话 GPU 的活直接翻倍；这里按屏幕刷新间隔隔几次画一次（120Hz → 60，144Hz → 72），节奏均匀不抖
+  const MAX_FPS = 60;
   const timer = new THREE.Timer();
   timer.connect(document);
+  let rafAvg = 1000 / MAX_FPS, rafLast = 0, rafSkip = 0;
   const frame = (ts) => {
     requestAnimationFrame(frame);
+    const d = ts - rafLast;
+    rafLast = ts;
+    if (d > 2 && d < 50) rafAvg += (d - rafAvg) * 0.05;
+    if (++rafSkip < Math.max(1, Math.floor(1000 / MAX_FPS / rafAvg + 0.2))) return;
+    rafSkip = 0;
     timer.update(ts);
     const dt = Math.min(timer.getDelta(), 0.05);
     if (window.__hold) return; // 自动化测试：暂停主循环，用 ff() 推进、render() 手动画一帧

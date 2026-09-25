@@ -1476,7 +1476,7 @@ export class Game {
     this.refs = this.buildWorld(theme);
     this.ctrl.camBoxes = this.refs.camBoxes;
     this.ctrl.bounds = this.refs.bounds;
-    this.gfx.shadowLights = null;
+    this.gfx.shadows.invalidate();
     this.gfx.setOutline(null);
     this.gfx.setTheme(theme);
     this.ui.setTheme(theme);
