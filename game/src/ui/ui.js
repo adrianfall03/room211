@@ -31,12 +31,12 @@ export class UI {
         <div id="subtitle" style="opacity:0"></div>
         <div id="toasts"></div>
         <div id="hud-inventory"></div>
-        <div id="keyhints"><span><kbd>WASD</kbd> 移动</span><span><kbd>Shift</kbd> 跑</span><span><kbd>C</kbd> 蹲</span><span><kbd>E</kbd> 互动</span><span><kbd>F</kbd> 手电</span><span><kbd>V</kbd> 视角</span><span class="game-only"><kbd>H</kbd> 提示</span><span class="game-only"><kbd>J</kbd> 线索</span><span class="view-only"><kbd>N</kbd> 下一关</span><span><kbd>Esc</kbd> 菜单</span></div>
+        <div id="keyhints"><span><kbd>WASD</kbd> 移动</span><span><kbd>Shift</kbd> 跑</span><span class="walk-only"><kbd>C</kbd> 蹲</span><span class="float-only"><kbd>Space</kbd> 上浮</span><span class="float-only"><kbd>C</kbd> 下沉</span><span><kbd>E</kbd> 互动</span><span><kbd>F</kbd> 手电</span><span><kbd>V</kbd> 视角</span><span class="game-only"><kbd>H</kbd> 提示</span><span class="game-only"><kbd>J</kbd> 线索</span><span class="view-only"><kbd>N</kbd> 下一关</span><span><kbd>Esc</kbd> 菜单</span></div>
         <div id="clickToPlay" class="hidden">点击画面继续</div>
       </div>
       <div id="touch" class="hidden"><div id="stick"><i></i></div>
         <div class="tbtns-top"><button class="tbtn" data-k="Escape">☰</button><button class="tbtn game-only" data-k="KeyH">提示</button><button class="tbtn game-only" data-k="KeyJ">线索</button><button class="tbtn view-only" data-k="KeyN">下一关</button><button class="tbtn" data-k="KeyV">视角</button></div>
-        <div class="tbtns"><button class="tbtn" data-k="KeyF">手电</button><button class="tbtn" data-k="KeyC">蹲</button><button class="tbtn big" data-k="KeyE" style="grid-column: span 2; width: 100%; border-radius: 32px;">互动</button></div>
+        <div class="tbtns"><button class="tbtn float-only" data-hold="Space">▲<small>上浮</small></button><button class="tbtn float-only" data-hold="KeyC">▼<small>下沉</small></button><button class="tbtn" data-k="KeyF">手电</button><button class="tbtn walk-only" data-k="KeyC">蹲</button><button class="tbtn big" data-k="KeyE" style="grid-column: span 2; width: 100%; border-radius: 32px;">互动</button></div>
       </div>
       <div id="modal" class="hidden"></div>
       <div id="fade"><div class="card"></div></div>
@@ -143,13 +143,24 @@ export class UI {
 
   // ---------- HUD ----------
   showHUD(v) { this.el.hud.classList.toggle('hidden', !v); }
-  showTouch(v) { this.el.touch.classList.toggle('hidden', !v); }
+  showTouch(v) { this.el.touch.classList.toggle('hidden', !v); document.body.classList.toggle('touch-ui', !!v); }
   bindTouchButtons(input) {
     this.el.touch.querySelectorAll('[data-k]').forEach((b) => {
       b.addEventListener('touchstart', (e) => { e.preventDefault(); input.press(b.dataset.k); }, { passive: false });
       b.addEventListener('click', () => input.press(b.dataset.k));
     });
+    // 按住不放的键（失重时的上浮 / 下沉）：手指按着就一直算按下，松开 / 滑出去就松开
+    this.el.touch.querySelectorAll('[data-hold]').forEach((b) => {
+      const k = b.dataset.hold;
+      const on = (e) => { e.preventDefault(); input.hold(k, true); b.classList.add('on'); };
+      const off = () => { input.hold(k, false); b.classList.remove('on'); };
+      b.addEventListener('touchstart', on, { passive: false });
+      b.addEventListener('touchend', off); b.addEventListener('touchcancel', off);
+      b.addEventListener('mousedown', on); b.addEventListener('mouseup', off); b.addEventListener('mouseleave', off);
+    });
   }
+  // 失重（第四章）：触屏按钮和键位提示换成上浮 / 下沉
+  setZeroG(v) { document.body.classList.toggle('zero-g', !!v); }
   setClock(time, sub) {
     this.el.ct.textContent = time;
     this.el.cr.textContent = sub;
@@ -159,7 +170,7 @@ export class UI {
   setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
-    document.body.classList.remove('theme-ruin', 'theme-toon', 'theme-space', 'theme-finale');
+    document.body.classList.remove('theme-ruin', 'theme-jungle', 'theme-space', 'theme-finale');
     if (theme !== 'normal') document.body.classList.add(`theme-${theme}`);
   }
   setCodes(digits, found, icons = null) {

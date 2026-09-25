@@ -1,4 +1,5 @@
 // 全程序化音效（WebAudio 合成，无外部音频文件）
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -333,6 +334,14 @@ export class Audio {
     o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
   }
   rumble(sec = 3, gain = 0.5) { this.noise({ dur: sec, gain, type: 'lowpass', freq: 140, brown: true, curve: [[0.15, 1], [0.7, 0.8], [1, 0]] }); this.tone({ f: 42, f2: 30, dur: sec, type: 'sine', gain: 0.18, attack: 0.3 }); }
+  // 雷：近的先"咔啦"一声炸开，再是长长的滚雷；远的只有闷闷的一串低音。dist 0（头顶）…1（很远）
+  thunder(dist = 0.5, delay = 0) {
+    const near = 1 - clamp01(dist);
+    if (near > 0.55) { this.noise({ dur: 0.45, gain: 0.3 * near, type: 'highpass', freq: 1400, delay, curve: [[0.02, 1], [0.2, 0.4], [1, 0]] }); this.noise({ dur: 0.25, gain: 0.35 * near, type: 'lowpass', freq: 900, brown: true, delay }); }
+    const d = 3.2 + dist * 2.5;
+    this.noise({ dur: d, gain: 0.22 + near * 0.4, type: 'lowpass', freq: 130 + near * 260, brown: true, delay: delay + 0.04, curve: [[0.06, 1], [0.3, 0.6], [0.5, 0.85], [0.75, 0.4], [1, 0]] });
+    this.tone({ f: 46, f2: 30, dur: d * 0.8, type: 'sine', gain: 0.08 + near * 0.14, delay: delay + 0.1, attack: 0.25 });
+  }
   crack() { for (let i = 0; i < 5; i++) this.noise({ dur: 0.07, gain: 0.3, type: 'highpass', freq: 3000 + Math.random() * 3000, delay: i * 0.035 + Math.random() * 0.02 }); this.tone({ f: 2400, f2: 900, dur: 0.25, type: 'sine', gain: 0.05 }); }
   // 摩尔斯电码：'.' 短 '-' 长 ' ' 停顿
   morse(pattern, f = 740) {
@@ -410,7 +419,7 @@ export class Audio {
   startMusic(theme = 'normal') {
     if (!this.ctx || this._musicTimer) return;
     if (theme === 'ruin') return this._musicRuin();
-    if (theme === 'toon') return this._musicToon();
+    if (theme === 'jungle') return this._musicJungle();
     if (theme === 'space') return this._musicSpace();
     if (theme === 'finale') return this._musicFinale();
     const chords = [[220, 261.6, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 233.1, 293.7]];
@@ -463,23 +472,44 @@ export class Audio {
     play();
     this._musicTimer = setInterval(play, 7200);
   }
-  // 卡通：蹦蹦跳跳的尤克里里 + 低音
-  _musicToon() {
-    const prog = [[262, 330, 392], [220, 262, 330], [175, 220, 262], [196, 247, 294]];
-    const mel = [0, 2, 1, 2, 0, 1, 2, 1];
+  // 雨林：暴雨夜的配乐——雨声盖着一层很低的弦乐铺底，偶尔几下木琴一样的拨弦（像雨滴敲在叶子上），越紧张低音越重
+  _musicJungle() {
+    const prog = [[65.4, 98, 155.6], [58.3, 87.3, 146.8], [61.7, 92.5, 138.6], [55, 82.4, 130.8]];
+    const pent = [392, 440, 523.3, 587.3, 659.3, 784];
     let i = 0;
     const play = () => {
-      const ch = prog[i % prog.length];
-      for (let k = 0; k < 8; k++) {
-        const f = ch[mel[k]] * 2;
-        this.tone({ f, dur: 0.22, type: 'triangle', gain: 0.03, delay: k * 0.25, dest: this.mus });
-        if (k % 2 === 0) this.tone({ f: ch[0] / 2, dur: 0.3, type: 'sine', gain: 0.05, delay: k * 0.25, dest: this.mus });
+      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t, T = 9.2;
+      ch.forEach((f) => {
+        for (const det of [-6, 6]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          fl.type = 'lowpass'; fl.Q.value = 0.6;
+          fl.frequency.setValueAtTime(200 + this.tension * 400, t0);
+          fl.frequency.linearRampToValueAtTime(360 + this.tension * 700, t0 + T * 0.5);
+          fl.frequency.linearRampToValueAtTime(190 + this.tension * 300, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.026, t0 + 3); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); o.stop(t0 + T + 0.1);
+        }
+      });
+      // 木琴似的拨弦：稀稀拉拉几下，音高随机但都在五声音阶里
+      const n = 3 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < n; k++) {
+        const f = pent[Math.floor(Math.random() * pent.length)] * (Math.random() < 0.3 ? 0.5 : 1);
+        const d = 0.8 + Math.random() * 7.4;
+        this.tone({ f, dur: 1.1, type: 'sine', gain: 0.02, delay: d, dest: this.mus });
+        this.tone({ f: f * 3.01, dur: 0.25, type: 'sine', gain: 0.005, delay: d, dest: this.mus });
       }
-      if (this.tension > 0.5) for (let k = 0; k < 8; k++) this.noise({ dur: 0.02, gain: 0.03 * this.tension, type: 'highpass', freq: 7000, delay: k * 0.25, rev: false });
+      if (this.tension > 0.35) for (let k = 0; k < 8; k++) { this.tone({ f: 49, dur: 0.3, type: 'sine', gain: 0.03 * this.tension, delay: k * 1.15, dest: this.mus }); this.tone({ f: 46, dur: 0.25, type: 'sine', gain: 0.02 * this.tension, delay: k * 1.15 + 0.3, dest: this.mus }); }
       i++;
     };
     play();
-    this._musicTimer = setInterval(play, 2000);
+    this._musicTimer = setInterval(play, 8600);
+  }
+  // 暴雨：两层噪声——高频的雨点 + 低频的雨声轰鸣
+  startRain(gain = 1) {
+    this.startLoop('rain', { type: 'bandpass', freq: 2400, Q: 0.35, gain: 0.07 * gain, brown: false });
+    this.startLoop('rainLow', { type: 'lowpass', freq: 420, Q: 0.5, gain: 0.1 * gain, brown: true });
   }
   // 太空：空灵的合成器长音 + 慢慢的琶音（动画里宇宙场景的配乐）
   // 第四章：太空舱 —— 电影配乐式的氛围音：低沉的弦乐铺底、舱里空气循环的底噪、偶尔一声很远的金属回响；越紧张滤波开得越大，还有心跳一样的低音

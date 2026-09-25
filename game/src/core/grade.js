@@ -112,7 +112,8 @@ const GradeShader = {
 export const GRADES = {
   normal: { saturation: 1, contrast: 1, brightness: 0, tint: [1, 1, 1], sepia: 0, vignette: 0, grain: 0, scratch: 0, aberration: 0 },
   ruin: { saturation: 0.72, contrast: 1.08, brightness: -0.015, tint: [1.04, 0.97, 0.86], sepia: 0.32, vignette: 0.55, grain: 0.07, scratch: 1, aberration: 0.0025 },
-  toon: { saturation: 1.22, contrast: 1.04, brightness: 0.01, tint: [1.03, 1.0, 1.02], sepia: 0, vignette: 0.28, grain: 0, scratch: 0, aberration: 0 },
+  // 雨林：暴雨夜——暗部偏青绿、亮部（钨丝灯、马灯）偏琥珀，压饱和，胶片颗粒 + 较重的暗角
+  jungle: { saturation: 0.86, contrast: 1.12, brightness: -0.01, tint: [1, 1, 1], sepia: 0, vignette: 0.58, grain: 0.055, scratch: 0, aberration: 0.0012, lowTint: [0.88, 1.03, 1.0], highTint: [1.08, 1.0, 0.86] },
   // 太空舱：写实电影感——暗部偏青、亮部偏暖，压一点饱和，胶片颗粒 + 暗角 + 一丝镜头色散
   space: { saturation: 0.88, contrast: 1.1, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.52, grain: 0.05, scratch: 0, aberration: 0.0014, lowTint: [0.9, 1.02, 1.05], highTint: [1.06, 1.0, 0.9] },
   // 结局：阳光明媚的征兵报到现场
@@ -124,7 +125,7 @@ const NEUTRAL3 = [1, 1, 1];
 export const CSS_GRADES = {
   normal: '',
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
-  toon: 'saturate(1.25) contrast(1.03)',
+  jungle: 'saturate(0.86) contrast(1.12) brightness(0.96)',
   space: 'saturate(0.88) contrast(1.1) brightness(0.97)',
   finale: 'saturate(1.1) contrast(1.05)',
 };

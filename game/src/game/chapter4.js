@@ -13,7 +13,7 @@ import { drawPodScreen, drawComms } from '../world/spacegear.js';
 import { Secret } from './secret.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-const _p = V(), _q = V(), _c = new THREE.Color();
+const _p = V(), _q = V(), _h = V(), _d = V(), _c = new THREE.Color();
 const ORBIT = 100; // 绕地球一圈（秒），真实的是 90 分钟
 
 // 轨道相位 → 太阳绕舱转的角度：满地球和日食附近走得慢，中间的月牙阶段走得快
@@ -29,7 +29,7 @@ export const CH4 = {
 
   // 氧气随故事钟慢慢往下掉，最低停在 20%，不会耗尽
   o2: (g) => Math.ceil(100 - 80 * g.storyP()),
-  clockText(g) { return this.secret && this.secret.collapsing ? `⚠ ${this.secret.remain()}s` : `O₂ ${this.o2(g)}%`; },
+  clockText(g) { return this.secret && this.secret.collapsing ? this.secret.clockText() : `O₂ ${this.o2(g)}%`; },
   // 任务钟：从 03:00:00 开始走
   clockHands(g) {
     const e = g.S ? g.S.elapsed : 0;
@@ -150,7 +150,7 @@ export const CH4 = {
   },
   // 鉴赏模式也要知道怎么在失重里飘
   onViewPlay(g) { this.floatTip(g); },
-  floatTip(g) { g.after(1.6, () => g.ui.toast('失重操作：按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉 · 松手还会往前飘', '', '🪐')); },
+  floatTip(g) { g.after(1.6, () => g.ui.toast(g.input.isTouch ? '失重操作：右下角按住 <b>▲上浮</b> / <b>▼下沉</b> · 松手还会往前飘' : '失重操作：按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉 · 松手还会往前飘', '', '🪐')); },
   exitLine: () => '小圆，替我跟他们说声再见！',
   onDoorOpen(g) {
     const rb = g.refs.robot;
@@ -322,8 +322,8 @@ export const CH4 = {
     const S = g.S, rb = g.refs.robot;
     if (rb.state === 'tumble') {
       if (g.ctrl.pos.y < 0.72) {
-        g.say('够不着……得飘高一点！（按住 <b>空格</b> 往上飘）', 3);
-        g.ui.toast('按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉', '', '🪐');
+        g.say(g.input.isTouch ? '够不着……得飘高一点！（按住右下角的 <b>▲上浮</b>）' : '够不着……得飘高一点！（按住 <b>空格</b> 往上飘）', 3);
+        g.ui.toast(g.input.isTouch ? '按住 <b>▲上浮</b> 往上飘 · 按住 <b>▼下沉</b> 往下沉' : '按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉', '', '🪐');
         return;
       }
       this.catchRobot(g);
@@ -690,8 +690,24 @@ export const CH4 = {
       const C = g.ctrl;
       const yaw = C.charYaw;
       _p.set(C.pos.x - Math.cos(yaw) * 0.6 + Math.sin(yaw) * 0.3, clamp(C.pos.y + 1.5 + Math.sin(t * 1.6) * 0.05, 0.4, 2.7), C.pos.z + Math.sin(yaw) * 0.6 + Math.cos(yaw) * 0.3);
+      // 储藏室太窄：它在门外等着（不然会和人、门挤成一团，把门和货柜都挡住）
+      const inStorage = C.pos.x < -0.58 && C.pos.z > 4.7;
+      if (inStorage && rb.state === 'follow') _p.set(-0.22, clamp(C.pos.y + 1.55, 1.2, 2.3) + Math.sin(t * 1.6) * 0.04, 4.98);
       const cp = g.camera.position;
       if (_p.distanceTo(cp) < 0.7) { _q.subVectors(_p, cp).setY(0); if (_q.lengthSq() < 1e-4) _q.set(1, 0, 0); _p.addScaledVector(_q.normalize(), 0.7 - _p.distanceTo(cp)); }
+      // 挡在镜头和人之间：往旁边让开
+      if (rb.state === 'follow') {
+        _h.set(C.pos.x, C.pos.y + 1.35, C.pos.z);
+        _d.subVectors(_h, cp); const L2 = _d.lengthSq();
+        const u = L2 > 1e-6 ? clamp(_q.subVectors(_p, cp).dot(_d) / L2, 0, 1) : 0;
+        _q.copy(cp).addScaledVector(_d, u);
+        const off = _p.distanceTo(_q);
+        if (u > 0.05 && u < 0.98 && off < 0.42) {
+          _q.subVectors(_p, _q); if (_q.lengthSq() < 1e-4) _q.set(Math.cos(yaw), 0.4, -Math.sin(yaw));
+          _p.addScaledVector(_q.normalize(), 0.42 - off);
+        }
+      }
+      r.userData.soft = rb.state === 'follow';
       if (rb.state === 'rescue') {
         rb.rescueT += dt;
         const k = clamp(rb.rescueT / 1.2, 0, 1);

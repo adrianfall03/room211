@@ -3,7 +3,8 @@
 //   ② 信息接收站切到频道 211：一段来源不明的摩尔斯电码，时间戳是考试前一天夜里 02:47，解码出 INDEX 002：储藏室 · 货柜 G 的授权码
 //   ③ 打开货柜 G：里面约束着一颗微型黑洞"卡冈图雅"。凑近去看——失重里刹不住，胳膊肘撞上了控制杆……
 //   ④ 约束失效，时空开始破碎：整间舱从南往北一截一截被"切掉"（全局裁剪面），黑洞越长越大、把人往回拽，
-//      能待的地方越来越少；45 秒内飘回资料库，抽出那本发光的《高等数学（下）》。没赶上 / 被吸进去：时间倒流回货柜前，再来
+//      能待的地方越来越少。约束失效后先有 15 秒的反应时间（警报响、黑洞在胀，但舱还是完整的），
+//      然后才开始坍缩：45 秒内飘回资料库，抽出那本发光的《高等数学（下）》。没赶上 / 被吸进去：时间倒流回货柜前，再来
 //   ⑤ 书缝后面，是考试前一天夜里的 211：电脑前两个人在打排位，其中一个就是你自己，另外两个室友站在后面指指点点。
 //      你拼命地喊（他们听不见），只能从书架背后把书推下去……第二天早上，那三本书就躺在书架前的地上。
 //   → 彩蛋结局
@@ -13,6 +14,7 @@ import { PastDorm, PAST_POS } from './pastdorm.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _a = V(), _b = V();
+const T_GRACE = 15; // 约束失效 → 时空开始坍缩之间的反应时间（秒）
 const T_COLLAPSE = 45; // 时空坍缩倒计时（秒）
 const FRONT0 = 6.45, FRONT1 = -0.7; // 切面从储藏室的南墙一路推到资料库跟前
 const MORSE = { G: '--.', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.' };
@@ -100,17 +102,20 @@ export class Secret {
     };
   }
   hint() {
-    if (this.stage === 5) return '往北（舷窗那头）飞！资料库在西墙两台休眠舱中间，第五层（和眼睛一样高）那本发光的《高等数学（下）》——抽出来！按住 Shift 飞得更快。';
+    if (this.stage === 5) return `往北（舷窗那头）飞！资料库在西墙两台休眠舱中间，第五层（和眼睛一样高）那本发光的《高等数学（下）》——抽出来！${this.g.input.isTouch ? '摇杆推到底' : '按住 Shift '}飞得更快。`;
     if (this.stage === 4) return '……货柜 G 里的装置，最好别碰。（碰了会怎样呢？）';
     return null;
   }
   objectives() {
     return [
       { text: '📚 飞回资料库，抽出那本发光的书！', done: false },
-      { text: `🕳️ 时空坍缩：还剩 ${this.remain()} 秒`, done: false },
+      this.grace() > 0 ? { text: `⚠ ${this.grace()} 秒后时空开始坍缩`, done: false } : { text: `🕳️ 时空坍缩：还剩 ${this.remain()} 秒`, done: false },
     ];
   }
+  // 反应时间还剩几秒（0 = 已经开始坍缩）
+  grace() { return this.C ? Math.max(0, Math.ceil(this.C.grace)) : 0; }
   remain() { return this.C ? Math.max(0, Math.ceil(T_COLLAPSE - this.C.t)) : T_COLLAPSE; }
+  clockText() { return this.grace() > 0 ? `⚠ ${this.grace()}s` : `🕳 ${this.remain()}s`; }
   get collapsing() { return this.stage === 5; }
 
   onShelf() {
@@ -270,7 +275,7 @@ export class Secret {
   startCollapse() {
     const g = this.g, R = g.refs;
     this.stage = 5;
-    this.C = { t: 0, front: FRONT0, alarmT: 0, crackT: 0.5, sparkT: 0 };
+    this.C = { t: 0, grace: T_GRACE, front: FRONT0, alarmT: 0, crackT: 0.5, sparkT: 0 };
     // 倒流用的存档
     this.snap = {
       floaters: R.floaters.list.map((f) => ({ f, anchor: f.anchor.clone(), pos: f.obj.position.clone(), vis: f.obj.visible })),
@@ -283,14 +288,45 @@ export class Secret {
     R.root.traverse((o) => { if (o.isMesh && o.visible && !skip.has(o) && o.material && (o.material.isShaderMaterial && !o.material.clipping || o.isReflector)) this.free.push(o); });
     this.rift.visible = true;
     g.audio.stopMusic();
-    g.audio.startLoop('collapse', { freq: 120, gain: 0.16 });
-    g.gfx.grade.target.aberration = 0.0045;
+    g.audio.startLoop('collapse', { freq: 120, gain: 0.08 });
+    g.gfx.grade.target.aberration = 0.0025;
     g.S.ach.add('gargantua');
-    g.ui.toast(`⚠ 时空坍缩！${T_COLLAPSE} 秒内飞回资料库，抽出那本发光的书！`, 'clue', '🕳️');
+    g.ui.toast(`⚠ 约束失效！${T_GRACE} 秒后时空开始坍缩——趁现在飞回资料库，抽出那本发光的书！`, 'clue', '🕳️');
+    g._refreshHUD(true);
+  }
+  // 反应时间：舱还完整，切面停在储藏室南墙上，裂纹一点点亮起来；黑洞在胀，但还不拽人
+  updateGrace(dt) {
+    const g = this.g, C = this.C;
+    const was = Math.ceil(C.grace);
+    C.grace -= dt;
+    const k = 1 - clamp(C.grace / T_GRACE, 0, 1);
+    this.riftU.power.value = 0.15 + 0.45 * k * k;
+    this.BH.radius = lerp(0.032, 0.09, k);
+    const sh = 0.004 + 0.008 * k;
+    g.camera.position.x += (Math.random() - 0.5) * sh; g.camera.position.y += (Math.random() - 0.5) * sh;
+    C.alarmT -= dt; if (C.alarmT <= 0) { C.alarmT = 2.4; g.audio.alarm(1); }
+    C.crackT -= dt; if (C.crackT <= 0) { C.crackT = 1.2 + Math.random() * 1.6; g.audio.crack(); }
+    this.CH._alarm = 0.5;
+    const now = Math.ceil(C.grace);
+    if (now !== was) {
+      g._refreshHUD(true);
+      if (now > 0 && now <= 3) g.audio.robotBeep(1, 880);
+    }
+    if (!C.saidG && C.grace < T_GRACE - 4) { C.saidG = true; g.audio.pa(); g.ui.subtitle(`【警报】时空结构将在 ${Math.ceil(C.grace)} 秒后开始坍缩，请立即撤离储藏室！`, 2.8, '📢 舱内广播'); }
+    if (C.grace > 0) return;
+    // 开始坍缩
+    C.grace = 0;
+    g.audio.stopLoop('collapse', 0.1);
+    g.audio.startLoop('collapse', { freq: 120, gain: 0.16 });
+    g.audio.rumble(2.2, 0.6); g.audio.crack();
+    g._shake(0.35);
+    g.gfx.grade.target.aberration = 0.0045;
+    g.ui.toast(`🕳️ 时空开始坍缩！${T_COLLAPSE} 秒内抽出那本发光的书！`, 'clue', '🕳️');
     g._refreshHUD(true);
   }
   updateCollapse(dt) {
     const g = this.g, C = this.C, R = g.refs;
+    if (C.grace > 0) { this.updateGrace(dt); return; }
     C.t += dt;
     const k = clamp(C.t / T_COLLAPSE, 0, 1);
     C.front = FRONT0 - (FRONT0 - FRONT1) * (0.3 * k + 0.7 * k * k);
@@ -342,7 +378,7 @@ export class Secret {
       g.after(1.4, () => g.ui.subtitle('……？时间……倒流回去了？我又站在货柜 G 前面……', 3.4, g.S.name));
       g.after(4.4, () => {
         this.cutEnd();
-        g.ui.toast('🔁 黑洞一炸开就往资料库冲（按住 <kbd>Shift</kbd> 飞得更快），抽出第五层那本发光的书！再碰一下装置可以重来。', 'clue', '🕳️');
+        g.ui.toast(`🔁 黑洞一炸开就往资料库冲（${g.input.isTouch ? '摇杆推到底' : '按住 <kbd>Shift</kbd> '}飞得更快），抽出第五层那本发光的书！再碰一下装置可以重来。`, 'clue', '🕳️');
       });
     });
   }

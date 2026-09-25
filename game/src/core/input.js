@@ -144,4 +144,8 @@ export class Input {
   press(code) {
     this.pressed.add(code);
   }
+  // 触屏上"按住"的按钮
+  hold(code, v) {
+    if (v) { if (!this.keys.has(code)) this.pressed.add(code); this.keys.add(code); } else this.keys.delete(code);
+  }
 }
