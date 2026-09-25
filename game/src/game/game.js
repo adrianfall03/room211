@@ -4,6 +4,8 @@ import * as TX from '../core/textures.js';
 import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
 import { FX } from '../world/fx.js';
 import { CHAPTERS } from './chapters.js';
+import { FinaleDirector } from './finale.js';
+import { untoonify } from '../world/toonkit.js';
 
 // 不限时：故事里的钟从开局时间往后走，越走越慢，永远差一点才到点（8:00 开考 / 18:00 天黑 / 23:00 熄灯）
 // 走到一半所需的时间 ≈ TAU × 0.7；第二、三章用 CH.tau
@@ -85,7 +87,12 @@ const ACH = [
   ['feather', '🪶 鸡飞狗跳', '让两只鸡的游戏掉线'],
   ['fashion', '🪖 时尚猴王', '把头盔送给爱照镜子的猴子'],
   ['chick', '🐣 撸鸡', '摸了摸小黄的脑袋'],
-  ['loop', '🔁 轮回终结者', '逃出全部三个 211'],
+  ['robot', '🤖 机器人救星', '救下失控的机器人小圆'],
+  ['water', '💧 太空饮水机', '一口一口喝光了一整颗水球'],
+  ['earth', '🌍 地球夜景', '看到城市灯光拼出的数字'],
+  ['spacewalk', '🧑‍🚀 天花板漫步', '在失重的太空舱里飘到天花板'],
+  ['enlist', '🎖️ 新兵报到', '接过少校递来的军帽，回敬一个军礼'],
+  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部四个 211'],
 ];
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -376,8 +383,10 @@ export class Game {
     this.auto = null;
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
-    if (this.S.view) this.ui.toast(`鉴赏模式：随便逛，走到宿舍门口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < 3 ? '去下一关' : '看结局'}`, '', '🎬');
-    else if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
+    if (this.S.view) {
+      this.ui.toast(`鉴赏模式：随便逛，走到${this._doorName()}口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < 4 ? '去下一关' : '看结局'}`, '', '🎬');
+      if (this.CH && this.CH.onViewPlay) this.CH.onViewPlay(this);
+    } else if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
     else {
       this.ui.toast('WASD 移动 · 鼠标转视角 · E 互动 · H 提示', '', '🎮');
       this.after(1.2, () => this.ui.subtitle('冷静……先看看显示器上那张便利贴。', 4, this.S.name));
@@ -398,6 +407,7 @@ export class Game {
       case 'cut': this._updateOutro(dt); break;
       case 'transition': this._updateOutro(dt); break;
       case 'end': this._updateOutro(dt); break;
+      case 'finale': this._finale.update(dt); break;
     }
     this._updateWorld(dt);
     this.fx.update(dt, this.camera);
@@ -522,7 +532,7 @@ export class Game {
   // ================== 交互 ==================
   _updateHover() {
     if (this.ui.modalOpen || this.paused || this.cine || this.auto) { this._setHover(null); return; }
-    const chest = _v1.set(this.ctrl.pos.x, 1.1, this.ctrl.pos.z);
+    const chest = _v1.set(this.ctrl.pos.x, 1.1 + this.ctrl.pos.y, this.ctrl.pos.z);
     this.raycaster.setFromCamera(this.center, this.camera);
     const camD = this.camera.position.distanceTo(chest);
     this.raycaster.far = camD + 6;
@@ -629,14 +639,15 @@ export class Game {
   _handlers() {
     const H = this._handlersBase();
     // 鉴赏模式：门上没有锁，直接出门去下一关
-    if (this.S && this.S.view) H.door = { label: '宿舍门', verb: () => (this.chapter < 3 ? '去下一关' : '出门（结局）'), act: () => this.win() };
+    if (this.S && this.S.view) H.door = { label: this._doorName(), verb: () => (this.chapter < 4 ? '去下一关' : '出门（结局）'), act: () => this.win() };
     return H;
   }
+  _doorName() { return (this.CH && this.CH.doorName) || '宿舍门'; }
   // 鉴赏模式：开局就把门锁整个拿掉（连掉在地上的锁也不留）
   _removeDoorLock() {
-    const L = this.CH ? this.CH.lockParts(this) : this.refs.lock;
     this.collision.setEnabled('lockCable', false);
-    L.group.visible = false; L.dropped.visible = false;
+    if (this.CH) this.CH.removeLock(this);
+    else { const L = this.refs.lock; L.group.visible = false; L.dropped.visible = false; }
     this.S.f.doorUnlocked = true; this.S.f.unlocked = true;
   }
   // 鉴赏模式按 N：不走出门了，直接穿越
@@ -1320,7 +1331,7 @@ export class Game {
   _chapterDone() {
     const S = this.S;
     S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints });
-    if (this.chapter < 3) this.goChapter(this.chapter + 1);
+    if (this.chapter < 4) this.goChapter(this.chapter + 1);
     else this.finale();
   }
   _tweenP(dur, fn, opts = {}) { return new Promise((r) => this.tween(dur, fn, { ease: (t) => t, ...opts, done: r })); }
@@ -1383,8 +1394,9 @@ export class Game {
     this._monColor = null;
     this._fogHold = 0;
     this._mirrorN = 0;
-    // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来
+    // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来；失重只在太空舱里
     this.auto = null; this._afterReach = null; this.cine = null; this._cutPose = null;
+    this.ctrl.float = 0; this.ctrl.pos.y = 0;
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
@@ -1403,15 +1415,34 @@ export class Game {
     }
     this.ui.setChapterTag(CH.tag, CH.lockName);
   }
-  // 最后一章出门：白光 → "同学，醒醒！" → 结算
-  finale() {
+  // 最后一章出门：白光 → 门外是美军征兵站的新兵报到仪式 → 结算
+  async finale() {
     this.state = 'transition';
+    this._setHover(null);
+    this.ui.closeModal(true);
+    this.input.exitLock();
+    this.ui.showHUD(false); this.ui.showTouch(false); this.ui.letterbox(true);
     this.audio.stopAllLoops();
     this.audio.stopMusic();
-    this.audio.chime && this.audio.chime();
-    this.ui.fade(1, { dur: 1.4, white: true });
-    this.after(1.6, () => this.ui.fade(1, { dur: 0.6, white: false, card: '“同学……同学！醒醒！”<small>08:00 · 教学楼 A-304</small>' }));
-    this.after(5.2, () => { if (this.S.done.some((d) => d.n === 1)) this.S.ach.add('loop'); this.showEnd(); });
+    this.audio.chime();
+    const card = '门外是……<small>U.S. ARMY RECRUITING STATION · 新兵报到日</small>';
+    await this.ui.fade(1, { dur: 1.4, white: true, card });
+    await nextFrame(); await nextFrame();
+    const t0 = performance.now();
+    this._switchWorld('finale');
+    // 结局是写实画风：主角变回原来的样子
+    untoonify(this.ch.root);
+    this.ch.torch.visible = false;
+    this.ch.setExpression('shock');
+    this._finale = new FinaleDirector(this);
+    try {
+      if (this.gfx.renderer.compileAsync) await Promise.race([this.gfx.renderer.compileAsync(this.scene, this.camera), new Promise((r) => setTimeout(r, 3500))]);
+    } catch (e) { /* 忽略 */ }
+    const spent = (performance.now() - t0) / 1000;
+    await new Promise((r) => setTimeout(r, Math.max(300, (2.0 - spent) * 1000)));
+    this.state = 'finale';
+    this._finale.start();
+    this.ui.fade(0, { dur: 1.6, white: true, card });
   }
   // 结算：不限时，评分只看用了几次提示
   showEnd() {
@@ -1423,29 +1454,30 @@ export class Game {
     this.audio.success();
     this.audio.stopAllLoops();
     const reload = (mode) => { this.settings.chapter = 1; this.settings.mode = mode; this.saveSettings(); location.reload(); };
+    const fin = this.refs.theme === 'finale';
     let node;
     if (S.view) {
-      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>三个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>四个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button></div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      const chName = ['', '211 宿舍', '废弃的 211', '动物园 211'];
+      const chName = ['', '211 宿舍', '废弃的 211', '动物园 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
       if (hints === 0) S.ach.add('nohint');
       let rank, text;
-      if (hints <= 1) { rank = 'S'; text = '你猛地抬起头——监考老师刚刚拆开试卷袋。原来你在考场上睡着了……三个 211 都只是一场梦。深吸一口气，今天的高数，稳了。'; }
-      else if (hints <= 4) { rank = 'A'; text = '你在考场上惊醒，卷子刚发到你手里。旁边的室友小声说：“你刚才说梦话，一直在喊‘咯咯哒’……”'; }
-      else if (hints <= 8) { rank = 'B'; text = '你被监考老师敲醒，已经开考五分钟了。梦里的三个 211 还历历在目。'; }
-      else { rank = 'C'; text = '你惊醒时考试已经过去一半……下次考前，还是别再通宵了吧。'; }
+      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。四个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
+      else if (hints <= 4) { rank = 'A'; text = '你戴上军帽，回敬了一个标准的军礼，看台上的欢呼声响成一片。教官小声嘀咕：“这小子是从哪扇门里冒出来的？”'; }
+      else if (hints <= 8) { rank = 'B'; text = '军帽有点大，戴歪了。少校笑着帮你扶正：“欢迎入伍，新兵。”'; }
+      else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
       node = this.ui.panel(`
-        <h2>三个 211，全部逃脱！</h2>
-        <div style="color:var(--muted)">${S.name} 带着准考证，醒在了考场上</div>
+        <h2>四个 211，全部逃脱！</h2>
+        <div style="color:var(--muted)">${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>
         <div class="rank">${rank}</div>
         <p>${text}</p>
         <div class="stats">${chRows}</div>
@@ -1458,10 +1490,13 @@ export class Game {
     // 结算背景：主角在房间里欢呼
     this.auto = null;
     this.cine = null;
-    this.refs.door.pivot.rotation.y = this.refs.door.base + this.refs.door.openAngle;
-    this.ctrl.teleport(0.1, 1.2, 0);
-    this.ch.root.position.set(0.1, 0, 1.2);
-    this.ch.root.rotation.y = 0;
+    if (!fin) {
+      this.refs.door.pivot.rotation.y = this.refs.door.base + this.refs.door.openAngle;
+      this.ctrl.float = 0;
+      this.ctrl.teleport(0.1, 1.2, 0);
+      this.ch.root.position.set(0.1, 0, 1.2);
+      this.ch.root.rotation.y = 0;
+    }
     this.ch.setFirstPerson(false);
     this._endPose = { cheer: 1 };
     this.ch.setExpression('grin');
@@ -1472,8 +1507,15 @@ export class Game {
   _updateOutro(dt) {
     if (this.state === 'end') {
       const t = this.time;
-      this.camera.position.set(0.1 + Math.sin(t * 0.25) * 0.5, 1.35, 2.9);
-      this.camera.lookAt(0.1, 1.15, 1.2);
+      if (this.refs.theme === 'finale') {
+        // 结局广场：镜头绕着主角和少校慢慢转
+        const a = t * 0.12;
+        this.camera.position.set(Math.sin(a) * 3.6, 1.75, 0.6 + Math.cos(a) * 3.6);
+        this.camera.lookAt(0, 1.3, 0.6);
+      } else {
+        this.camera.position.set(0.1 + Math.sin(t * 0.25) * 0.5, 1.35, 2.9);
+        this.camera.lookAt(0.1, 1.15, 1.2);
+      }
       this.ch.update(dt, { ...(this._endPose || {}), lookPitch: 0.1 });
       return;
     }
@@ -1496,11 +1538,11 @@ export class Game {
         pos.addScaledVector(d.normalize(), step);
         this.ctrl.charYaw = dampAngle(this.ctrl.charYaw, Math.atan2(d.x, d.z), 10, dt);
       }
-      this.ch.root.position.set(pos.x, 0, pos.z);
+      this.ch.root.position.set(pos.x, pos.y + this.ctrl.float * Math.sin(this.time * 1.1) * 0.03, pos.z);
       this.ch.root.rotation.y = this.ctrl.charYaw;
-      this.ch.update(dt, { speed: this.auto ? speed : 0 });
+      this.ch.update(dt, { speed: this.auto ? speed : 0, float: this.ctrl.float });
     } else {
-      this.ch.update(dt, { speed: 0, ...(this._cutPose || {}) });
+      this.ch.update(dt, { speed: 0, float: this.ctrl.float, ...(this._cutPose || {}) });
     }
     if (this.cine && !this.cine.to) { this.ctrl._updateCamera(dt, 0); this._saveGameCam(); }
     this._updateCine(dt);
@@ -1560,7 +1602,9 @@ export class Game {
       normal: { n: 420, x: [-1.3, 1.3], y: [0.3, 2.7], z: [-3.4, -0.6], color: '#fff2d8', size: 0.014 },
       ruin: { n: 900, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#e8c89a', size: 0.012 },
       toon: { n: 160, x: [-1.6, 1.6], y: [0.3, 2.6], z: [-3.3, 4.2], color: '#fff0a8', size: 0.03 },
-    }[theme] || {};
+      space: { n: 260, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfefff', size: 0.02 },
+      finale: { n: 160, x: [-5, 5], y: [0.3, 4], z: [-3, 7], color: '#fff6d8', size: 0.025 },
+    }[theme] || { n: 1, x: [0, 0], y: [0, 0], z: [0, 0], color: '#ffffff', size: 0.01 };
     this._dustCfg = cfg;
     const n = cfg.n;
     const g = new THREE.BufferGeometry();
@@ -1604,6 +1648,7 @@ export class Game {
   _updateWorld(dt) {
     const S = this.S, R = this.refs;
     const t = this.time;
+    if (R.theme === 'finale') { for (const u of R.updaters) u(dt, t, this); this._updateDust(dt, 0.35); return; }
     if (this.CH) this.CH.world(this, dt, t);
     else this._updateWorld1(dt);
     for (const u of R.updaters) u(dt, t, this);

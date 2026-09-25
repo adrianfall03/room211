@@ -128,7 +128,7 @@ function buzzLine(aphi) {
   return line;
 }
 
-function paintSkinBase(meta) {
+function paintSkinBase(meta, O) {
   const { W, H, yTop, yBot } = meta;
   const c = TX.makeCanvas(W, H);
   const ctx = c.getContext('2d');
@@ -140,7 +140,7 @@ function paintSkinBase(meta) {
     for (let px = 0; px < W; px++) {
       const phi = (px / W - 0.5) * Math.PI * 2, aphi = Math.abs(phi);
       const n = fbm((px / W) * 16, (py / H) * 8, 3, 16, 8);
-      let r = 212 + (n - 0.5) * 14, g = 160 + (n - 0.5) * 12, b = 126 + (n - 0.5) * 10;
+      let r = O.skin[0] + (n - 0.5) * 14, g = O.skin[1] + (n - 0.5) * 12, b = O.skin[2] + (n - 0.5) * 10;
       // 面部边缘略暗，增加立体感
       const edgeDark = smoothstep(0.55, 1.35, aphi) * 10;
       r -= edgeDark; g -= edgeDark; b -= edgeDark * 0.6;
@@ -151,7 +151,7 @@ function paintSkinBase(meta) {
       const k = smoothstep(line - 0.004, line + 0.014, y);
       if (k > 0) {
         const st = noise(px * 0.9, py * 0.9, 921, 460);
-        const hr = 34 + st * 30, hg = 30 + st * 26, hb = 30 + st * 26;
+        const hr = O.hair[0] + st * 30, hg = O.hair[1] + st * 26, hb = O.hair[2] + st * 26;
         const blue = (1 - k) * k * 4;
         r = lerp(r, hr, k); g = lerp(g, hg, k); b = lerp(b, hb, k);
         r -= blue * 30; g -= blue * 24; b -= blue * 8;
@@ -179,7 +179,7 @@ function paintSkinBase(meta) {
   return c;
 }
 
-function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'normal' }) {
+function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'normal' }, O = { brow: '#1a1411' }) {
   const { W, H, X, Y } = meta;
   const c = TX.makeCanvas(W, H);
   const ctx = c.getContext('2d');
@@ -198,7 +198,7 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   const browLift = brows === 'raised' ? 0.008 : brows === 'relaxed' ? -0.002 : 0;
   for (const s of [-1, 1]) {
     const y0 = 0.029 + browLift;
-    ctx.fillStyle = '#1a1411';
+    ctx.fillStyle = O.brow;
     ctx.beginPath();
     ctx.moveTo(...P(s * 0.011, y0 - 0.002));
     ctx.quadraticCurveTo(...P(s * 0.03, y0 + 0.008), ...P(s * 0.05, y0 + 0.0015));
@@ -315,24 +315,58 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   return c;
 }
 
+// ---------------- 手臂两骨骼 IK（敬礼、递东西、戴帽子）----------------
+const IK_L1 = 0.285, IK_L2 = 0.31;
+const IK_DOWN = new THREE.Vector3(0, -1, 0), IK_POLE_R = new THREE.Vector3(-1, -0.2, -0.4).normalize(), IK_POLE_L = new THREE.Vector3(1, -0.2, -0.4).normalize();
+const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _ic = new THREE.Vector3(), _id = new THREE.Vector3(), _ie = new THREE.Vector3();
+const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new THREE.Quaternion(), _ieu = new THREE.Euler();
+function solveArmIK(sh, el, target, pole, w) {
+  const S = sh.position;
+  const d = _ia.subVectors(target, S);
+  const len = clamp(d.length(), 0.05, IK_L1 + IK_L2 - 0.002);
+  d.normalize();
+  const x = (IK_L1 * IK_L1 - IK_L2 * IK_L2 + len * len) / (2 * len);
+  const h = Math.sqrt(Math.max(0, IK_L1 * IK_L1 - x * x));
+  const p = _ib.copy(pole).addScaledVector(d, -pole.dot(d)).normalize();
+  const E = _ic.copy(S).addScaledVector(d, x).addScaledVector(p, h);
+  const u = _id.subVectors(E, S).normalize();
+  _iq.setFromUnitVectors(IK_DOWN, u);
+  const f = _ie.copy(S).addScaledVector(d, len).sub(E).normalize().applyQuaternion(_iq2.copy(_iq).invert());
+  _iq3.setFromUnitVectors(IK_DOWN, f);
+  sh.quaternion.slerp(_iq, w);
+  el.quaternion.slerp(_iq3, w);
+}
+
 // ---------------- 构建角色 ----------------
-export function createCharacter() {
+// opts：skin / hair（RGB）、skinColor / hairColor / brow、outfit：'denim' 主角的牛仔夹克 / 'agsu' 美军常服、mustache 小胡子、name 名牌
+export function createCharacter(opts = {}) {
+  const O = { skin: [212, 160, 126], skinColor: '#d09a7a', hair: [34, 30, 30], hairColor: '#16110f', brow: '#1a1411', outfit: 'denim', mustache: false, name: 'SMITH', ...opts };
+  const agsu = O.outfit === 'agsu';
   const root = new THREE.Group();
-  root.name = 'player';
+  root.name = opts.name ? `npc:${opts.name}` : 'player';
 
   // 材质
-  const denim = TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
-  const blackDenim = TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
-  const skinMat = new THREE.MeshStandardMaterial({ color: '#d09a7a', roughness: 0.55 });
-  const sleeveMat = new THREE.MeshStandardMaterial({ map: denim.map, normalMap: denim.normalMap, roughness: 0.82 });
-  sleeveMat.map.repeat.set(2, 2); sleeveMat.normalMap.repeat.set(2, 2);
-  const jeansMat = new THREE.MeshStandardMaterial({ map: blackDenim.map, normalMap: blackDenim.normalMap, roughness: 0.85 });
-  jeansMat.map.repeat.set(2, 3); jeansMat.normalMap.repeat.set(2, 3);
-  const hairMat = new THREE.MeshStandardMaterial({ color: '#16110f', roughness: 0.58 });
-  const shoeMat = new THREE.MeshStandardMaterial({ color: '#5a5e66', roughness: 0.75 });
-  const soleMat = new THREE.MeshStandardMaterial({ color: '#efefea', roughness: 0.7 });
-  const btnMat = new THREE.MeshStandardMaterial({ color: '#b07a3e', roughness: 0.35, metalness: 0.85 });
-  const shirtMat = new THREE.MeshStandardMaterial({ color: '#1c1c20', roughness: 0.9 });
+  const denim = agsu ? null : TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
+  const blackDenim = agsu ? null : TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
+  const skinMat = new THREE.MeshStandardMaterial({ color: O.skinColor, roughness: 0.55 });
+  let sleeveMat, jeansMat;
+  if (agsu) {
+    // 美军 AGSU 常服：深橄榄绿上衣（“粉绿配”里的绿）+ 偏粉的卡其色长裤
+    const wool = TX.genCloth({ base: '#4a4833', seed: 57, vertical: false, contrast: 0.35, slub: 0.4 }); wool.repeat.set(3, 3);
+    const pinks = TX.genCloth({ base: '#b39f8a', seed: 59, vertical: true, contrast: 0.3, slub: 0.4 }); pinks.repeat.set(2, 3);
+    sleeveMat = new THREE.MeshStandardMaterial({ map: wool, roughness: 0.9 });
+    jeansMat = new THREE.MeshStandardMaterial({ map: pinks, roughness: 0.85 });
+  } else {
+    sleeveMat = new THREE.MeshStandardMaterial({ map: denim.map, normalMap: denim.normalMap, roughness: 0.82 });
+    sleeveMat.map.repeat.set(2, 2); sleeveMat.normalMap.repeat.set(2, 2);
+    jeansMat = new THREE.MeshStandardMaterial({ map: blackDenim.map, normalMap: blackDenim.normalMap, roughness: 0.85 });
+    jeansMat.map.repeat.set(2, 3); jeansMat.normalMap.repeat.set(2, 3);
+  }
+  const hairMat = new THREE.MeshStandardMaterial({ color: O.hairColor, roughness: 0.58 });
+  const shoeMat = new THREE.MeshStandardMaterial({ color: agsu ? '#3a2214' : '#5a5e66', roughness: agsu ? 0.28 : 0.75 });
+  const soleMat = new THREE.MeshStandardMaterial({ color: agsu ? '#1a120c' : '#efefea', roughness: 0.7 });
+  const btnMat = new THREE.MeshStandardMaterial({ color: agsu ? '#c9a23a' : '#b07a3e', roughness: 0.3, metalness: 0.9 });
+  const shirtMat = new THREE.MeshStandardMaterial({ color: agsu ? '#c8b089' : '#1c1c20', roughness: 0.9 });
   const mats = { skinMat, sleeveMat, jeansMat, hairMat, shoeMat, soleMat };
 
   const J = {};
@@ -370,8 +404,8 @@ export function createCharacter() {
     for (let i = 0; i < prof.length - 1; i++) if (h >= prof[i][0] && h <= prof[i + 1][0]) { const t = (h - prof[i][0]) / (prof[i + 1][0] - prof[i][0]); return lerp(prof[i][1], prof[i + 1][1], t); }
     return 0.05;
   };
-  const jacketTex = TX.genJacket(denim.canvas, vAt);
-  const jacketMat = new THREE.MeshStandardMaterial({ map: jacketTex, normalMap: denim.normalMap, roughness: 0.82 });
+  const jacketTex = agsu ? TX.genServiceCoat(vAt, { name: O.name }) : TX.genJacket(denim.canvas, vAt);
+  const jacketMat = agsu ? new THREE.MeshStandardMaterial({ map: jacketTex, roughness: 0.9 }) : new THREE.MeshStandardMaterial({ map: jacketTex, normalMap: denim.normalMap, roughness: 0.82 });
   mats.jacketMat = jacketMat;
   const DZ = 0.6;
   addMesh(new THREE.LatheGeometry(pts, 40, Math.PI, Math.PI * 2), jacketMat, torso, 0, 0, 0, 0, 0, 0, 1, 1, DZ);
@@ -389,6 +423,20 @@ export function createCharacter() {
   addMesh(new THREE.TorusGeometry(0.066, 0.017, 8, 28, Math.PI * 1.35), sleeveMat, torso, 0, 0.548, -0.004, Math.PI / 2, 0, Math.PI * 0.825, 1, 0.82, 1);
   for (const s of [-1, 1]) addMesh(new RoundedBoxGeometry(0.055, 0.075, 0.012, 2, 0.005), sleeveMat, torso, s * 0.04, 0.5, 0.083, -0.35, s * 0.55, s * 0.5);
   addMesh(new THREE.CylinderGeometry(0.058, 0.06, 0.03, 16), shirtMat, torso, 0, 0.545, 0.004);
+  if (agsu) {
+    // 常服领口露出的卡其衬衫 + 棕色领带、肩章（少校的金色橡树叶）、领口的“U.S.”铜徽
+    const vs = new THREE.Shape(); vs.moveTo(-0.045, 0); vs.lineTo(0.045, 0); vs.lineTo(0, -0.12); vs.closePath();
+    addMesh(new THREE.ShapeGeometry(vs), shirtMat, torso, 0, 0.545, rAt(0.5) * DZ + 0.006, -0.2);
+    const tieMat = new THREE.MeshStandardMaterial({ color: '#4a3020', roughness: 0.6 });
+    addMesh(new THREE.BoxGeometry(0.022, 0.11, 0.006), tieMat, torso, 0, 0.49, rAt(0.49) * DZ + 0.012, -0.25);
+    addMesh(new THREE.BoxGeometry(0.026, 0.02, 0.012), tieMat, torso, 0, 0.535, rAt(0.53) * DZ + 0.004, -0.2);
+    const gold = new THREE.MeshStandardMaterial({ color: '#d8b04a', roughness: 0.3, metalness: 0.9 });
+    for (const s of [-1, 1]) {
+      addMesh(new RoundedBoxGeometry(0.05, 0.012, 0.11, 2, 0.004), sleeveMat, torso, s * 0.14, 0.535, -0.01, 0, 0, s * -0.25);
+      addMesh(new THREE.SphereGeometry(1, 10, 8), gold, torso, s * 0.15, 0.545, 0.02, 0, 0, 0, 0.016, 0.006, 0.022);
+      addMesh(new THREE.CylinderGeometry(0.009, 0.009, 0.003, 12), gold, torso, s * 0.055, 0.49, rAt(0.49) * DZ + 0.004, Math.PI / 2 - 0.3, s * 0.4, 0);
+    }
+  }
 
   // 脖子 + 头
   const neck = grp('neck', torso, 0, 0.545, 0.005);
@@ -397,11 +445,11 @@ export function createCharacter() {
   head.scale.setScalar(1.12);
   const { geo: headGeo, yTop, yBot } = buildHeadGeometry();
   const meta = faceMeta(yTop, yBot);
-  const skinBase = paintSkinBase(meta);
+  const skinBase = paintSkinBase(meta, O);
   const faceCache = new Map();
   const faceTex = (key, spec) => {
     if (!faceCache.has(key)) {
-      const t = TX.toTex(paintFeatures(skinBase, meta, spec), { wrap: false });
+      const t = TX.toTex(paintFeatures(skinBase, meta, spec, O), { wrap: false });
       t.anisotropy = 4;
       faceCache.set(key, t);
     }
@@ -430,6 +478,10 @@ export function createCharacter() {
   const hair = buildHairGeometry();
   addMesh(hair.cap, hairMat, head);
   addMesh(hair.tufts, hairMat, head);
+  if (O.mustache) {
+    const mm = new THREE.MeshStandardMaterial({ color: O.hairColor, roughness: 0.7 });
+    for (const s2 of [-1, 1]) addMesh(new THREE.SphereGeometry(1, 12, 8), mm, head, s2 * 0.013, -0.046, 0.083, 0, s2 * 0.25, s2 * -0.18, 0.017, 0.0065, 0.009);
+  }
 
   // 手臂
   const buildArm = (side) => {
@@ -531,7 +583,7 @@ export function createCharacter() {
     const speed = prm.speed || 0;
     W.walk = lerp(W.walk, clamp(speed / 1.5, 0, 1), k);
     W.run = lerp(W.run, clamp((speed - 1.8) / 1.2, 0, 1), k);
-    for (const key of ['crouch', 'sit', 'sleep', 'reach', 'cheer', 'stretch', 'hold']) W[key] = lerp(W[key], prm[key] || 0, 1 - Math.exp(-dt * (key === 'sleep' ? 3 : 8)));
+    for (const key of ['crouch', 'sit', 'sleep', 'reach', 'cheer', 'stretch', 'hold', 'float', 'attention']) W[key] = lerp(W[key] || 0, prm[key] || 0, 1 - Math.exp(-dt * (key === 'sleep' ? 3 : key === 'float' ? 2 : 8)));
     let events = null;
     const stride = lerp(1.35, 1.9, W.run) * (1 - W.crouch * 0.35);
     const prevPhase = st.phase;
@@ -552,7 +604,7 @@ export function createCharacter() {
     addp('shL', 0.02 * Math.sin(t * 1.7 + 0.5)); addp('shR', 0.02 * Math.sin(t * 1.7 + 0.5));
     // --- 走/跑 ---
     const ph = st.phase, s = Math.sin(ph), c = Math.cos(ph);
-    const wk = W.walk;
+    const wk = W.walk * (1 - W.float);
     if (wk > 0.001) {
       const amp = lerp(0.42, 0.72, W.run) * wk * (1 - W.crouch * 0.4);
       addp('hipL', -amp * s); addp('hipR', amp * s);
@@ -570,6 +622,31 @@ export function createCharacter() {
       addp('neck', -lerp(0.03, 0.12, W.run) * wk);
       hipsY -= lerp(0.022, 0.05, W.run) * wk * Math.abs(s);
       hipsY += lerp(0.0, 0.03, W.run) * wk * Math.abs(c);
+    }
+    // --- 失重漂浮：手臂自然浮起、膝盖微屈，移动时像游泳一样划水 ---
+    if (W.float > 0.001) {
+      const w = W.float, sw = clamp(speed / 1.2, 0, 1);
+      const a = Math.sin(t * 0.9), b = Math.sin(t * 0.7 + 1);
+      const stroke = Math.sin(t * 4.2) * sw;
+      tgt('hipL', -0.45 + a * 0.08 + stroke * 0.35, 0, 0.12, w); tgt('hipR', -0.3 - a * 0.08 - stroke * 0.35, 0, -0.1, w);
+      tgt('knL', 0.75 + b * 0.1 + Math.max(0, stroke) * 0.4, 0, 0, w); tgt('knR', 0.6 - b * 0.1 + Math.max(0, -stroke) * 0.4, 0, 0, w);
+      tgt('anL', 0.35, 0, 0, w); tgt('anR', 0.35, 0, 0, w);
+      // 手臂：放松地浮在身前，手肘弯着（宇航员在舱里睡觉 / 漂浮的样子）
+      tgt('shL', -0.95 + b * 0.1 - stroke * 0.9, 0.12, 0.34 + a * 0.08 + sw * 0.45, w); tgt('shR', -0.95 - b * 0.1 + stroke * 0.9, -0.12, -0.34 - a * 0.08 - sw * 0.45, w);
+      tgt('elL', -1.05 + sw * 0.35 + a * 0.08, 0, 0, w); tgt('elR', -1.05 + sw * 0.35 - a * 0.08, 0, 0, w);
+      tgt('fingL', 0.4, 0, 0, w); tgt('fingR', 0.4, 0, 0, w);
+      tgt('torso', -0.06 + sw * 0.35 + a * 0.03, 0, b * 0.04, w);
+      tgt('neck', -0.08 - sw * 0.2, 0, 0, w);
+      hipsY = lerp(hipsY, HIPS_Y + 0.02, w);
+    }
+    // --- 立正 ---
+    if (W.attention > 0.001) {
+      const w = W.attention;
+      tgt('shL', 0, 0, 0.03, w); tgt('shR', 0, 0, -0.03, w);
+      tgt('elL', -0.05, 0, 0, w); tgt('elR', -0.05, 0, 0, w);
+      tgt('fingL', 0.1, 0, 0, w); tgt('fingR', 0.1, 0, 0, w);
+      tgt('hipL', 0, 0, 0, w); tgt('hipR', 0, 0, 0, w); tgt('knL', 0, 0, 0, w); tgt('knR', 0, 0, 0, w);
+      tgt('torso', -0.02, 0, 0, w);
     }
     // --- 下蹲 ---
     if (W.crouch > 0.001) {
@@ -654,6 +731,16 @@ export function createCharacter() {
       if (!obj) continue;
       if (j === 'fingL' || j === 'fingR') obj.rotation.set(-p.x, p.y, p.z);
       else obj.rotation.set(p.x, p.y, p.z);
+    }
+    // 手臂 IK：prm.ikR / prm.ikL = { p: 躯干坐标系里的手心位置, pole, w }
+    for (const [side, key] of [['R', 'ikR'], ['L', 'ikL']]) {
+      const ik = prm[key];
+      if (ik && ik.w > 0.001) {
+        solveArmIK(J[`sh${side}`], J[`el${side}`], ik.p, ik.pole || (side === 'R' ? IK_POLE_R : IK_POLE_L), ik.w);
+        // 手腕：敬礼时手掌摆平
+        if (ik.wr) J[`wr${side}`].quaternion.slerp(_iq.setFromEuler(_ieu.set(ik.wr[0], ik.wr[1], ik.wr[2])), ik.w);
+        if (ik.fing !== undefined) J[`fing${side}`].rotation.x = lerp(J[`fing${side}`].rotation.x, ik.fing, ik.w);
+      }
     }
     // 眨眼
     st.blinkT -= dt;

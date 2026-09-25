@@ -368,7 +368,8 @@ export const CH3 = {
     });
     g.openModal(box);
   },
-  lockParts: (g) => g.refs.heartLock,
+  // 鉴赏模式：开局就把锁整个拿掉
+  removeLock(g) { const H = g.refs.heartLock; H.group.visible = false; H.dropped.visible = false; },
   unlockVisual(g) {
     const H = g.refs.heartLock;
     g.collision.setEnabled('lockCable', false);
