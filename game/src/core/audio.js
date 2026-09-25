@@ -293,6 +293,48 @@ export class Audio {
     this.tone({ f: 784, dur: 0.7, type: 'sine', gain: 0.1, delay: 0.45 });
   }
 
+  // ----- 第四章：太空舱 -----
+  hiss() { this.noise({ dur: 1.1, gain: 0.3, type: 'highpass', freq: 2500, curve: [[0.05, 1], [0.6, 0.6], [1, 0]] }); this.tone({ f: 80, f2: 50, dur: 0.4, type: 'sine', gain: 0.12 }); }
+  robotBeep(n = 2, base = 900) {
+    for (let i = 0; i < n; i++) this.tone({ f: base * (1 + ((i * 7) % 5) * 0.18), dur: 0.07, type: 'square', gain: 0.035, delay: i * 0.09, rev: false });
+  }
+  snore() {
+    this.noise({ dur: 1.2, gain: 0.18, type: 'lowpass', freq: 380, brown: true, curve: [[0.4, 1], [1, 0]] });
+    this.tone({ f: 90, f2: 70, dur: 1.0, type: 'sawtooth', gain: 0.025 });
+    this.tone({ f: 1400, f2: 2200, dur: 0.35, type: 'sine', gain: 0.03, delay: 1.3 });
+  }
+  slurp() { this.noise({ dur: 0.45, gain: 0.25, type: 'bandpass', freq: 700, freq2: 1600, Q: 3, curve: [[0.2, 1], [1, 0]] }); this.tone({ f: 300, f2: 700, dur: 0.2, type: 'sine', gain: 0.06, delay: 0.3 }); }
+  pop() { this.tone({ f: 500, f2: 1400, dur: 0.08, type: 'sine', gain: 0.18 }); this.noise({ dur: 0.25, gain: 0.2, type: 'highpass', freq: 3000, delay: 0.02 }); }
+  vacuum() { this.noise({ dur: 1.2, gain: 0.25, type: 'bandpass', freq: 1800, freq2: 500, Q: 0.7, curve: [[0.1, 1], [1, 0]] }); }
+  alarm(sec = 3) {
+    for (let t = 0; t < sec; t += 0.5) { this.tone({ f: 880, f2: 660, dur: 0.24, type: 'square', gain: 0.045, delay: t, rev: false }); this.tone({ f: 660, dur: 0.2, type: 'square', gain: 0.03, delay: t + 0.25, rev: false }); }
+  }
+
+  // ----- 结局：征兵报到 -----
+  bugle() { // 号角：简单的五声进行
+    const n = [[392, 0.3], [523, 0.3], [659, 0.3], [784, 0.7], [659, 0.3], [784, 1.1]];
+    let t = 0;
+    for (const [f, d] of n) {
+      this.tone({ f, dur: d + 0.1, type: 'sawtooth', gain: 0.05, delay: t, attack: 0.03 });
+      this.tone({ f: f * 2, dur: d, type: 'sine', gain: 0.02, delay: t, attack: 0.03 });
+      t += d;
+    }
+  }
+  drumRoll(sec = 1.6) { for (let t = 0; t < sec; t += 0.045) this.noise({ dur: 0.05, gain: 0.08 + (t / sec) * 0.12, type: 'bandpass', freq: 1800, Q: 0.8, delay: t, rev: false }); this.noise({ dur: 0.4, gain: 0.4, type: 'lowpass', freq: 200, delay: sec, brown: true }); }
+  cheer(sec = 3) {
+    this.noise({ dur: sec, gain: 0.22, type: 'bandpass', freq: 1500, Q: 0.4, curve: [[0.1, 1], [0.6, 0.8], [1, 0]] });
+    for (let i = 0; i < 14; i++) this.noise({ dur: 0.05, gain: 0.25, type: 'bandpass', freq: 2500 + Math.random() * 1500, Q: 2, delay: Math.random() * sec * 0.8, rev: false }); // 掌声
+    for (let i = 0; i < 4; i++) this.tone({ f: 1200 + Math.random() * 600, f2: 1800 + Math.random() * 400, dur: 0.35, type: 'sine', gain: 0.02, delay: Math.random() * sec * 0.6 }); // 口哨
+  }
+  snap() { this.noise({ dur: 0.06, gain: 0.35, type: 'bandpass', freq: 1200, Q: 1.5, rev: false }); this.tone({ f: 140, f2: 80, dur: 0.1, type: 'sine', gain: 0.1 }); }
+  fanfare() {
+    const seq = [[523, 0, 0.18], [523, 0.2, 0.18], [523, 0.4, 0.18], [659, 0.6, 0.5], [523, 1.15, 0.2], [659, 1.35, 0.2], [784, 1.55, 0.9]];
+    for (const [f, d, len] of seq) {
+      for (const m of [1, 1.26, 1.5]) this.tone({ f: f * m, dur: len + 0.15, type: 'sawtooth', gain: 0.025, delay: d, attack: 0.02 });
+    }
+    this.noise({ dur: 0.5, gain: 0.3, type: 'highpass', freq: 5000, delay: 1.55 }); // 镲
+  }
+
   // ----- 循环环境音 -----
   startLoop(name, { type = 'noise', freq = 300, Q = 0.7, gain = 0.05, brown = true, osc = null } = {}) {
     if (!this.ctx || this.loops[name]) return;
@@ -328,6 +370,8 @@ export class Audio {
     if (!this.ctx || this._musicTimer) return;
     if (theme === 'ruin') return this._musicRuin();
     if (theme === 'toon') return this._musicToon();
+    if (theme === 'space') return this._musicSpace();
+    if (theme === 'finale') return this._musicFinale();
     const chords = [[220, 261.6, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 233.1, 293.7]];
     let i = 0;
     const play = () => {
@@ -395,6 +439,46 @@ export class Audio {
     };
     play();
     this._musicTimer = setInterval(play, 2000);
+  }
+  // 太空：空灵的合成器长音 + 慢慢的琶音（动画里宇宙场景的配乐）
+  _musicSpace() {
+    const prog = [[196, 247, 294, 370], [165, 208, 247, 330], [175, 220, 262, 330], [147, 185, 220, 294]];
+    let i = 0;
+    const play = () => {
+      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t;
+      ch.forEach((f, k) => {
+        const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+        o.type = 'triangle'; o.frequency.value = f; o.detune.value = (k - 1.5) * 4;
+        fl.type = 'lowpass'; fl.frequency.value = 900 + this.tension * 1200;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.022, t0 + 1.6); g.gain.linearRampToValueAtTime(0.0001, t0 + 6.2);
+        o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+        o.start(t0); o.stop(t0 + 6.4);
+      });
+      for (let n = 0; n < 12; n++) this.tone({ f: ch[(n * 3) % 4] * (n % 3 === 2 ? 4 : 2), dur: 0.9, type: 'sine', gain: 0.012 + this.tension * 0.01, delay: n * 0.5, dest: this.mus });
+      if (this.tension > 0.5) for (let n = 0; n < 12; n++) this.tone({ f: 110, dur: 0.12, type: 'square', gain: 0.012 * this.tension, delay: n * 0.5, dest: this.mus });
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 6000);
+  }
+  // 结局：军乐队进行曲（小军鼓 + 铜管）
+  _musicFinale() {
+    const mel = [392, 392, 523, 523, 659, 659, 587, 523, 494, 523, 587, 392, 440, 494, 523, 523];
+    const bass = [131, 196, 131, 196, 175, 262, 175, 262, 196, 294, 196, 294, 131, 196, 131, 196];
+    let i = 0;
+    const play = () => {
+      for (let k = 0; k < 16; k++) {
+        const d = k * 0.25;
+        this.tone({ f: mel[k], dur: 0.22, type: 'sawtooth', gain: 0.02, delay: d, attack: 0.01, dest: this.mus });
+        this.tone({ f: mel[k] * 1.5, dur: 0.2, type: 'triangle', gain: 0.012, delay: d, dest: this.mus });
+        if (k % 2 === 0) this.tone({ f: bass[k], dur: 0.24, type: 'triangle', gain: 0.05, delay: d, dest: this.mus });
+        this.noise({ dur: 0.05, gain: k % 4 === 0 ? 0.08 : 0.035, type: 'bandpass', freq: 2200, Q: 0.9, delay: d, rev: false });
+        if (k % 4 === 3) this.noise({ dur: 0.05, gain: 0.03, type: 'bandpass', freq: 2200, Q: 0.9, delay: d + 0.125, rev: false });
+      }
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 4000);
   }
   stopMusic() {
     if (this._musicTimer) clearInterval(this._musicTimer);

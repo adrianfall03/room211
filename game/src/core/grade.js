@@ -19,6 +19,8 @@ const GradeShader = {
     warp: { value: 0 },
     flash: { value: 0 },
     flashColor: { value: new THREE.Color(1, 1, 1) },
+    speed: { value: 0 },
+    speedColor: { value: new THREE.Color(1, 1, 1) },
     aspect: { value: 1 },
   },
   vertexShader: /* glsl */ `
@@ -26,8 +28,8 @@ const GradeShader = {
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
-    uniform float time, saturation, contrast, brightness, sepia, vignette, grain, scratch, aberration, warp, flash, aspect;
-    uniform vec3 tint, flashColor;
+    uniform float time, saturation, contrast, brightness, sepia, vignette, grain, scratch, aberration, warp, flash, aspect, speed;
+    uniform vec3 tint, flashColor, speedColor;
     varying vec2 vUv;
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     vec3 sampleAb(vec2 uv, vec2 dir, float ab) {
@@ -84,6 +86,17 @@ const GradeShader = {
         float d = hash(floor(vUv * vec2(320.0, 180.0)) + fr);
         col = mix(col, vec3(0.08, 0.06, 0.05), step(0.9993, d) * scratch);
       }
+      // 动画的"集中线"：从画面四周往中心射的细线，每秒换十几次
+      if (speed > 0.001) {
+        float a = atan(c.y, c.x) / 6.2831853 + 0.5;
+        float fr = floor(time * 14.0);
+        float cell = floor(a * 180.0);
+        float h1 = hash(vec2(cell, fr));
+        float w = abs(fract(a * 180.0) - 0.5) * 2.0;
+        float inner = 0.3 + hash(vec2(cell, fr + 7.0)) * 0.28;
+        float line = step(0.55, h1) * (1.0 - smoothstep(0.0, 0.35 + h1 * 0.4, w)) * smoothstep(inner, inner + 0.3, r);
+        col = mix(col, speedColor, clamp(line * speed, 0.0, 1.0) * 0.85);
+      }
       // 颗粒
       if (grain > 0.001) col += grain * (hash(vUv * vec2(1733.0, 977.0) + fract(time * 7.13)) - 0.5);
       col = mix(col, flashColor, clamp(flash, 0.0, 1.0));
@@ -96,6 +109,10 @@ export const GRADES = {
   normal: { saturation: 1, contrast: 1, brightness: 0, tint: [1, 1, 1], sepia: 0, vignette: 0, grain: 0, scratch: 0, aberration: 0 },
   ruin: { saturation: 0.72, contrast: 1.08, brightness: -0.015, tint: [1.04, 0.97, 0.86], sepia: 0.32, vignette: 0.55, grain: 0.07, scratch: 1, aberration: 0.0025 },
   toon: { saturation: 1.22, contrast: 1.04, brightness: 0.01, tint: [1.03, 1.0, 1.02], sepia: 0, vignette: 0.28, grain: 0, scratch: 0, aberration: 0 },
+  // 太空舱：干净通透的动画色调，略偏青
+  space: { saturation: 1.16, contrast: 1.07, brightness: 0.012, tint: [0.97, 1.0, 1.05], sepia: 0, vignette: 0.24, grain: 0, scratch: 0, aberration: 0.0009 },
+  // 结局：阳光明媚的征兵报到现场
+  finale: { saturation: 1.1, contrast: 1.05, brightness: 0.0, tint: [1.04, 1.0, 0.95], sepia: 0, vignette: 0.3, grain: 0.012, scratch: 0, aberration: 0 },
 };
 
 // 低画质不走后处理，用 CSS 滤镜凑个近似的色调
@@ -103,6 +120,8 @@ export const CSS_GRADES = {
   normal: '',
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
   toon: 'saturate(1.25) contrast(1.03)',
+  space: 'saturate(1.18) contrast(1.06)',
+  finale: 'saturate(1.1) contrast(1.05)',
 };
 
 export class GradePass extends ShaderPass {
@@ -121,6 +140,8 @@ export class GradePass extends ShaderPass {
   set warp(v) { this.uniforms.warp.value = v; }
   get flash() { return this.uniforms.flash.value; }
   set flash(v) { this.uniforms.flash.value = v; }
+  get speed() { return this.uniforms.speed.value; }
+  set speed(v) { this.uniforms.speed.value = v; }
   update(dt, t, aspect) {
     const k = 1 - Math.exp(-dt * 2.5);
     const U = this.uniforms, c = this.cur, g = this.target;
@@ -134,7 +155,7 @@ export class GradePass extends ShaderPass {
     U.aspect.value = aspect;
     // 全部参数都是中性时整个 pass 跳过，不浪费一次全屏绘制
     const neutral = Math.abs(c.saturation - 1) < 0.005 && Math.abs(c.contrast - 1) < 0.005 && Math.abs(c.brightness) < 0.002 && c.sepia < 0.005 && c.vignette < 0.005
-      && c.grain < 0.002 && c.scratch < 0.01 && c.aberration < 0.0002 && U.warp.value < 0.001 && U.flash.value < 0.001
+      && c.grain < 0.002 && c.scratch < 0.01 && c.aberration < 0.0002 && U.warp.value < 0.001 && U.flash.value < 0.001 && U.speed.value < 0.001
       && Math.abs(c.tint[0] - 1) + Math.abs(c.tint[1] - 1) + Math.abs(c.tint[2] - 1) < 0.01;
     this.enabled = !neutral;
   }
