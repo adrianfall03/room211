@@ -334,3 +334,17 @@ body.theme-finale { --accent: #e8b830; }
 #admire-bar { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 8px 8px 8px 16px; border-radius: 14px; background: rgba(8,10,14,0.62); border: 1px solid var(--line); color: #e6eaf1; font-size: 13px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: fadeIn 0.4s; }
 #admire-bar .btn { padding: 8px 14px; font-size: 13px; white-space: nowrap; }
 @media (max-width: 600px) { #admire-bar { flex-direction: column; gap: 8px; padding: 10px 12px; text-align: center; } }
+
+/* 第四章彩蛋：书架背后——大喊 / 推书 */
+#tess { position: fixed; left: 50%; bottom: calc(9vh + 18px); transform: translateX(-50%); z-index: 56; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; animation: fadeIn 0.6s; }
+#tess .tess-hint { width: 100%; text-align: center; color: rgba(255,236,200,0.85); font-size: 14px; letter-spacing: 0.2em; text-shadow: 0 0 12px rgba(255,190,110,0.6); }
+#tess button { padding: 12px 22px; border-radius: 14px; border: 1px solid rgba(255,210,140,0.55); background: rgba(40,24,8,0.6); color: #ffe8c0; font-size: 17px; cursor: pointer; backdrop-filter: blur(4px); box-shadow: 0 0 24px rgba(255,180,90,0.25); }
+#tess button:hover { background: rgba(80,48,16,0.75); }
+#tess kbd { font-size: 12px; opacity: 0.7; margin-left: 4px; }
+
+/* 结局：眼皮（醒来时眨两下才睁开） */
+#lids { position: fixed; inset: 0; z-index: 54; pointer-events: none; overflow: hidden; }
+#lids .lid { position: absolute; left: -10%; right: -10%; height: 56%; background: #000; }
+#lids .lid.t { top: -6%; border-radius: 0 0 50% 50% / 0 0 30% 30%; }
+#lids .lid.b { bottom: -6%; border-radius: 50% 50% 0 0 / 30% 30% 0 0; }
+#lids .lid-blur { position: absolute; inset: 0; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 1; }

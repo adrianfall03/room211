@@ -21,6 +21,12 @@ const WR = { x0: -1.8, x1: 1.8, z0: SZ + TW, z1: 6.3, h: 2.7 }; // 洗手间（�
 const WW = { x0: -0.45, x1: 0.45, y0: 1.0, y1: 2.42 }; // 洗手间后墙上的窗
 const CUB = { x: -0.6, dz0: 4.74, dz1: 5.44 }; // 厕所隔间：隔墙位置 + 隔间门的范围
 export const LAYOUT = { ROOM, SZ, TW, DOOR, WC, WR, WW, CUB };
+// 书架前地上那三本书的位置 / 姿态（x, y, z, rx, ry, rz, 颜色）：第一章就躺在那儿；第四章彩蛋里，它们正是从书架上被推下来的
+export const FALLEN_BOOKS = [
+  [-1.18, 0.03, -1.2, 0, 0.5, 0, '#1d3f8a', 0.06],
+  [-1.02, 0.028, -0.9, 0, -0.9, 0, '#8a2020', 0.055],
+  [-1.32, 0.075, -0.98, 0, 1.9, 0.3, '#2a6a40', 0.065],
+];
 
 const UV_VERT = /* glsl */ `
 varying vec2 vUv; varying vec3 vWorld;
@@ -59,6 +65,11 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const camBox = (x0, x1, y0, y1, z0, z1) => { const b = new THREE.Box3(new THREE.Vector3(x0, y0, z0), new THREE.Vector3(x1, y1, z1)); refs.camBoxes.push(b); return b; };
   const block = (x0, x1, z0, z1, id = '', h = 0) => { collision.add(x0, x1, z0, z1, id); if (h) camBox(x0, x1, 0, h, z0, z1); };
   const place = (o, x, y, z, ry = 0, p = root) => { o.position.set(x, y, z); o.rotation.y = ry; p.add(o); return o; };
+  // 分区记录：某一段代码往 root / 洗手间里加了哪些东西（太空舱要把床、书桌、杂物整片换掉）
+  const secs = [], wcSecs = [];
+  const section = (name) => secs.push([name, root.children.length]);
+  const wcSection = (name) => wcSecs.push([name, refs.wcRoom.children.length]);
+  const slices = (list, parent) => { const out = {}; list.forEach(([n, i], k) => { out[n] = parent.children.slice(i, k + 1 < list.length ? list[k + 1][1] : parent.children.length); }); return out; };
   // 把平面的 UV 映射到 [u0,u1]×[v0,v1]（贴图按米平铺时用，拼接处的砖缝能对齐）
   const uvRect = (geo, u0, u1, v0, v1) => { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), v0 + uv.getY(i) * (v1 - v0)); return geo; };
 
@@ -91,8 +102,8 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
     add(m); occl(m);
     return m;
   };
-  // 西墙：最里头留出宿舍门洞，再往南接着洗手间那一段
-  wall(-1.8 - TW, -1.8, 0, 3, -3.6 - TW, DOOR.z0);
+  // 西墙：最里头留出宿舍门洞，再往南接着洗手间那一段（北边这一大段就在书架背后，第四章的彩蛋要"透"过它）
+  refs.westWall = wall(-1.8 - TW, -1.8, 0, 3, -3.6 - TW, DOOR.z0);
   wall(-1.8 - TW, -1.8, DOOR.h, 3, DOOR.z0, DOOR.z1);
   wall(-1.8 - TW, -1.8, 0, 3, DOOR.z1, WR.z1 + TW);
   // 东墙
@@ -402,6 +413,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('wcWindow', wcWin);
   refs.wcWin = wcWin;
 
+  wcSection('sink');
   // ---- 洗漱台（后墙东半边）：瓷砖台面、两个白瓷盆、龙头、镜子、牙杯 ----
   const sx0 = 0.55, sx1 = WR.x1 - 0.02, sxc = (sx0 + sx1) / 2, sz = WR.z1 - 0.26, sTop = 0.82;
   const ceramic = lit({ color: '#f5f5f2', roughness: 0.12 }, 0.08);
@@ -459,6 +471,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   sv.fillStyle = '#1f7a4d'; sv.fillRect(0, 0, 256, 96); sv.fillStyle = '#fff'; sv.font = 'bold 46px "PingFang SC",sans-serif'; sv.textAlign = 'center'; sv.fillText('节约用水', 128, 64);
   wcRoom.add(K.mesh(new THREE.PlaneGeometry(0.28, 0.105), new THREE.MeshBasicMaterial({ map: TX.toTex(saveC, { wrap: false }) }), { x: sxc, y: 1.94, z: WR.z1 - 0.006, ry: Math.PI, cast: false, recv: false }));
 
+  wcSection('cubicle');
   // ---- 厕所隔间（西边）：隔墙 + 往里开的隔间门 + 蹲坑、水箱、花洒、纸巾、涂鸦 ----
   const cubM = lit({ color: '#c3ced6', roughness: 0.45 }, 0.08);
   const cubWalls = K.group();
@@ -484,6 +497,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   collision.setEnabled('cubOpen', false);
   const cubCam = camBox(CUB.x - 0.03, CUB.x + 0.03, 0, 1.95, CUB.dz0, CUB.dz1);
   refs.cubDoor = { pivot: cubDoor, open: false, base: -Math.PI / 2, openAngle: -1.45, camBox: cubCam, closedBox: cubCam.clone() };
+  wcSection('toilet');
   // 蹲坑
   const pan = K.group({ x: -1.2, z: 5.72 });
   pan.add(K.mesh(K.rbox(0.44, 0.03, 0.64, 0.014, 3), ceramic, { y: 0.012, cast: false }));
@@ -514,6 +528,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const graf = K.mesh(new THREE.PlaneGeometry(0.62, 0.62), new THREE.MeshStandardMaterial({ map: TX.genGraffiti(), transparent: true, roughness: 0.8, depthWrite: false }), { x: CUB.x - 0.022, y: 1.38, z: 5.88, ry: -Math.PI / 2, cast: false });
   wcRoom.add(graf);
   mark('graffiti', graf);
+  wcSection('wcMisc');
   // 靠门这边：晾毛巾的绳子、水桶拖把、蓝色脸盆、地漏
   wcRoom.add(K.mesh(K.cyl(0.004, 0.004, 1.3, 6), K.std('#dddddd', 0.6), { x: 1.12, y: 2.3, z: 4.95, rz: Math.PI / 2, cast: false }));
   const towels = K.group();
@@ -646,6 +661,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   refs.switchRocker = rocker;
   refs.sw = sw;
 
+  section('sw');
   // ================= 西南角：门边折叠桌（靠西墙，紧挨着宿舍门框）+ 黑色杂物桌 =================
   const fold = K.blackTable({ w: 0.75, d: 0.45, h: 0.72 });
   place(fold, -1.565, 0, 3.19, -Math.PI / 2);
@@ -713,6 +729,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('stoolH', stoolH);
   refs.stoolH = stoolH;
 
+  section('west');
   // ================= 西侧：上下铺 W1（室友A）/ 书架 / W2（室友B）=================
   const W1 = K.bunkBed({ aisle: 1, ladderEnd: 1, lower: 'floral', upperNet: true, seed: 1 });
   place(W1, -1.325, 0, 0.21);
@@ -729,6 +746,13 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('shelf', shelf);
   refs.shelf = shelf;
   block(-1.8, -1.44, -1.3, -0.85, '', 1.7);
+  // 书架前的地上掉了三本书——昨晚打游戏时"自己"从书架上掉下来的（第四章的隐藏结局会揭晓是谁推的）
+  refs.fallenBooks = FALLEN_BOOKS.map(([x, y, z, rx, ry, rz, c, th]) => {
+    const b = K.book(0.2, th, 0.24, c);
+    b.position.set(x, y, z); b.rotation.set(rx, ry, rz);
+    return mark('fallenBooks', place(b, x, y, z, ry));
+  });
+  refs.fallenBooks.forEach((b, i) => b.rotation.set(FALLEN_BOOKS[i][3], FALLEN_BOOKS[i][4], FALLEN_BOOKS[i][5]));
   // 挂着的蓝色塑料袋、浅蓝毛巾
   const hang = (mat, w, h, x, y, z, ry = Math.PI / 2) => {
     const geo = new THREE.PlaneGeometry(w, h, 8, 8);
@@ -747,6 +771,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   place(K.cardboardBox(0.4, 0.22, 0.3), -1.45, 0, -0.2, 0.1);
   place(K.bottle({ h: 0.3, r: 0.04, label: 'water' }), -1.0, 0, 0.3);
 
+  section('eastS');
   // ================= 东侧：鞋架 / 收纳 / E1（你的床）=================
   const rack = K.shoeRack({ tiers: 7 });
   place(rack, 1.63, 0, SZ - 0.34, -Math.PI / 2);
@@ -825,6 +850,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('uvLight', uvl);
   refs.uvItem = uvl;
 
+  section('desks');
   // ================= 东侧：书桌 D1（你的）/ D2（室友C）=================
   const D1 = K.oldDesk({ w: 1.0, d: 0.55, h: 0.76, drawer: true });
   place(D1, 1.515, 0, 0.25, -Math.PI / 2);
@@ -940,6 +966,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   block(0.85, 1.15, -1.0, -0.7);
   place(K.clothPile({ mat: M.grayCloth, sx: 0.16, sy: 0.08, sz: 0.14, seed: 51 }), 1.0, 0.46, -0.85);
 
+  section('eastN');
   // ================= 东侧：E2（室友C，粉色床帘）=================
   const E2 = K.bunkBed({ aisle: -1, ladderEnd: 1, lower: 'white', upperNet: true, lowerCurtain: 'pink', seed: 4 });
   place(E2, 1.325, 0, -2.34);
@@ -957,6 +984,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   refs.basket = basket;
   block(0.36, 0.8, -2.42, -1.98, '', 0.4);
 
+  section('far');
   // ================= 北侧：窗前书桌 =================
   const od = K.oldDesk({ w: 0.86, d: 0.5, h: 0.74, drawer: false, mat: M.woodOrange });
   place(od, -0.43, 0, -3.17, Math.PI);
@@ -989,6 +1017,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const blackChair = K.stool(); blackChair.traverse((o) => { if (o.isMesh) o.material = K.std('#1b1b1d', 0.5); }); place(blackChair, -0.45, 0, -2.75, 0.3);
   refs.blackChair = blackChair;
 
+  section('floor');
   // ================= 地上散落的杂物（视频里的“名场面”）=================
   place(K.flipFlopPair('#e8742a', 0.4), -0.15, 0, 0.75);
   place(K.flipFlopPair('#ef7d2e', -0.8), 0.35, 0, -1.45);
@@ -1026,6 +1055,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   place(K.plasticBag('#e0e8f0', 0.1, 92), 0.5, 0, 2.1);
   const wrappers = [[0.1, 0.4], [-0.4, -1.5], [0.3, 1.9], [-0.1, 2.6]];
   for (const [x, z] of wrappers) { const s = K.snackBag(rnd() < 0.5 ? 'chips' : 'latiao', 0.1, 0.14); s.rotation.set(-Math.PI / 2, 0, rnd() * 6); s.scale.z = 0.4; place(s, x, 0.01, z); }
+  section('misc');
   // 门口 AC 纸条（初始隐藏，空调打开后飘落）
   const acNote = K.mesh(new THREE.PlaneGeometry(0.11, 0.075), new THREE.MeshStandardMaterial({ map: T.foldedNote1, roughness: 0.9, side: THREE.DoubleSide }), { cast: true });
   acNote.visible = false;
@@ -1042,6 +1072,8 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
 
   // 碰撞：房间边界
   refs.bounds = { minX: ROOM.minX, maxX: ROOM.maxX, minZ: ROOM.minZ, maxZ: WR.z1 };
+  refs.sections = slices(secs, root);
+  refs.wcSections = slices(wcSecs, refs.wcRoom);
 
   // 主题：替换材质、增减道具
   if (decorate) {

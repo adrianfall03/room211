@@ -68,8 +68,11 @@ const OUTLINE_VERT = /* glsl */ `
   uniform vec2 resolution; uniform float thickness;
   #include <common>
   #include <fog_pars_vertex>
+  #include <clipping_planes_pars_vertex>
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    vec4 mvPosition = mv;
+    #include <clipping_planes_vertex>
     vec4 clip = projectionMatrix * mv;
     vec3 n = normalize(normalMatrix * normal);
     vec2 dir = (projectionMatrix * vec4(n, 0.0)).xy;
@@ -82,7 +85,11 @@ const OUTLINE_VERT = /* glsl */ `
   }`;
 const OUTLINE_FRAG = /* glsl */ `
   uniform vec3 color;
-  void main() { gl_FragColor = vec4(color, 1.0); }`;
+  #include <clipping_planes_pars_fragment>
+  void main() {
+    #include <clipping_planes_fragment>
+    gl_FragColor = vec4(color, 1.0);
+  }`;
 const omats = new Map();
 export function outlineMat(color = '#3a2438', thickness = 2.2) {
   const key = `${color}|${thickness}`;
@@ -90,6 +97,7 @@ export function outlineMat(color = '#3a2438', thickness = 2.2) {
     omats.set(key, new THREE.ShaderMaterial({
       uniforms: { resolution: outlineUniforms.resolution, thickness: { value: thickness }, color: { value: new THREE.Color(color) } },
       vertexShader: OUTLINE_VERT, fragmentShader: OUTLINE_FRAG, side: THREE.BackSide,
+      clipping: true, // 第四章的时空坍缩用全局裁剪面"切掉"整间舱，描边也要跟着被切掉
     }));
   }
   return omats.get(key);

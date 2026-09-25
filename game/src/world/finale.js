@@ -1,7 +1,7 @@
 // 结局场景：美军征兵站门前的新兵报到仪式（写实画风，阳光明媚的上午）
 //   红毯尽头站着一位穿 AGSU 常服（"粉绿配"）、戴大檐帽的少校，旁边是戴"护林熊"宽檐帽的教官；
 //   身后是红砖征兵站、"WELCOME, NEW RECRUITS" 横幅、星条旗和陆军旗；两边看台上的家人们挥着小旗子。
-//   主角从一扇孤零零立在广场上的 211 宿舍门里走出来。
+//   主角在红毯另一头的新兵候场区里坐着睡着了——四个 211 全是一场梦，被教官一嗓子喊醒。
 import * as THREE from 'three';
 import * as TX from '../core/textures.js';
 import { mulberry32, clamp, lerp } from '../core/util.js';
@@ -240,7 +240,7 @@ export function buildFinale(scene) {
   const plazaTex = genPlaza(); plazaTex.repeat.set(14, 14);
   add(mesh(new THREE.PlaneGeometry(28, 28), std('#ffffff', { map: plazaTex, roughness: 0.85 }), { rx: -Math.PI / 2, cast: false }));
   add(mesh(new THREE.PlaneGeometry(70, 70), std('#6f9a4a', { roughness: 1 }), { rx: -Math.PI / 2, y: -0.01, cast: false }));
-  // 红毯：从 211 的门一直铺到长官脚下
+  // 红毯：从新兵候场区一直铺到长官脚下
   const carpetTex = genCarpet(); carpetTex.repeat.set(1, 4);
   add(mesh(new THREE.PlaneGeometry(1.5, 9), std('#ffffff', { map: carpetTex, roughness: 0.95 }), { rx: -Math.PI / 2, y: 0.008, z: 2.6, cast: false }));
 
@@ -346,25 +346,32 @@ export function buildFinale(scene) {
     add(m);
   }
 
-  // 那扇 211 的门：孤零零立在广场上，门里透着白光
-  const door = new THREE.Group(); door.position.set(0, 0, 6.6); add(door);
-  const wood = std('#5a2e1c', { roughness: 0.55 });
-  door.add(mesh(new THREE.BoxGeometry(0.12, 2.2, 0.2), wood, { x: -0.52, y: 1.1 }));
-  door.add(mesh(new THREE.BoxGeometry(0.12, 2.2, 0.2), wood, { x: 0.52, y: 1.1 }));
-  door.add(mesh(new THREE.BoxGeometry(1.16, 0.12, 0.2), wood, { y: 2.16 }));
-  const leafPivot = new THREE.Group(); leafPivot.position.set(0.46, 0, 0.1); door.add(leafPivot);
-  const leafM = mesh(new THREE.BoxGeometry(0.9, 2.05, 0.045), std('#6a3622', { roughness: 0.5 }), { x: -0.45, y: 1.03 });
-  leafPivot.add(leafM);
-  const numC = TX.makeCanvas(128, 64), nc = numC.getContext('2d');
-  nc.fillStyle = '#f4f1e6'; nc.fillRect(0, 0, 128, 64); nc.fillStyle = '#b3261e'; nc.font = 'bold 44px Arial'; nc.textAlign = 'center'; nc.fillText('211', 64, 48);
-  leafM.add(mesh(new THREE.PlaneGeometry(0.2, 0.1), new THREE.MeshBasicMaterial({ map: TX.toTex(numC, { wrap: false }) }), { y: 0.7, z: -0.024, ry: Math.PI, cast: false }));
-  leafPivot.rotation.y = -1.9;
-  const glowC = TX.makeCanvas(64, 128), gx = glowC.getContext('2d');
-  const gg = gx.createRadialGradient(32, 64, 4, 32, 64, 64); gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(1, 'rgba(210,235,255,0.75)');
-  gx.fillStyle = gg; gx.fillRect(0, 0, 64, 128);
-  const portal = mesh(new THREE.PlaneGeometry(0.92, 2.1), new THREE.MeshBasicMaterial({ map: TX.toTex(glowC, { wrap: false }), transparent: true, toneMapped: false }), { y: 1.05, z: -0.02, ry: Math.PI, cast: false });
-  door.add(portal);
-  refs.door211 = { group: door, leaf: leafPivot, portal };
+  // 新兵候场区：红毯另一头一排折叠椅——主角就坐在正中间那把上打瞌睡（梦见了四个 211）
+  const chairs = new THREE.Group(); add(chairs);
+  const metal = std('#3a3f48', { roughness: 0.4, metalness: 0.6 }), seatM = std('#243452', { roughness: 0.7 });
+  const chair = (x) => {
+    const c = new THREE.Group(); c.position.set(x, 0, 6.5); chairs.add(c);
+    c.add(mesh(new THREE.BoxGeometry(0.44, 0.04, 0.42), seatM, { y: 0.46 }));
+    c.add(mesh(new THREE.BoxGeometry(0.44, 0.3, 0.03), seatM, { y: 0.8, z: 0.2, rx: 0.08 }));
+    for (const sx of [-0.2, 0.2]) {
+      c.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.95, 8), metal, { x: sx, y: 0.47, z: 0.18, rx: 0.1 }));
+      c.add(mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 8), metal, { x: sx, y: 0.23, z: -0.17, rx: -0.2 }));
+    }
+    return c;
+  };
+  for (const x of [-2.4, -1.2, 0, 1.2, 2.4]) chair(x);
+  // 别的椅子上放着新兵的资料袋（他们已经报到去了）
+  const folderM = std('#c9a86a', { roughness: 0.8 });
+  for (const x of [-2.4, -1.2, 2.4]) chairs.add(mesh(new THREE.BoxGeometry(0.24, 0.02, 0.32), folderM, { x, y: 0.49, z: 6.48, ry: (x * 7) % 0.6 }));
+  const waitC = TX.makeCanvas(512, 160), wx = waitC.getContext('2d');
+  wx.fillStyle = '#f4f1e6'; wx.fillRect(0, 0, 512, 160); wx.fillStyle = '#3c3b6e'; wx.fillRect(0, 0, 512, 36);
+  wx.fillStyle = '#ffffff'; wx.font = 'bold 26px Arial'; wx.textAlign = 'center'; wx.fillText('WAITING AREA', 256, 27);
+  wx.fillStyle = '#b22234'; wx.font = `bold 52px "PingFang SC","Microsoft YaHei",sans-serif`; wx.fillText('新兵候场区', 256, 112);
+  const waitSign = new THREE.Group(); waitSign.position.set(-3.4, 0, 6.2); waitSign.rotation.y = 0.5; add(waitSign);
+  waitSign.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.5, 8), metal, { y: 0.75 }));
+  waitSign.add(mesh(new THREE.PlaneGeometry(0.9, 0.28), new THREE.MeshStandardMaterial({ map: TX.toTex(waitC, { wrap: false }), roughness: 0.7, side: THREE.DoubleSide }), { y: 1.55, cast: false }));
+  refs.chairs = chairs;
+  refs.seat = V(0, 0, 6.4); // 主角坐的位置（面朝 -z，红毯那头）
 
   // 灯光：上午的太阳 + 天光
   const hemi = new THREE.HemisphereLight('#d6e8ff', '#8a7a5a', 0.9); add(hemi);
@@ -401,7 +408,6 @@ export function buildFinale(scene) {
     for (const f of flags) f.U.time.value = t;
     for (const c of clouds) { c.a += dt * c.sp0; c.sp.position.x = Math.cos(c.a) * c.r; c.sp.position.z = Math.sin(c.a) * c.r; }
     crowd.update(t, refs.excite);
-    refs.door211.portal.material.opacity = 0.85 + Math.sin(t * 3) * 0.1;
   });
   root.updateMatrixWorld(true);
   return refs;

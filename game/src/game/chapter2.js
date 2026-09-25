@@ -37,43 +37,49 @@ export const CH2 = {
     this._flick = 0; this._eventT = 12; this._crtT = 0;
   },
 
-  // ---------- 进门过场：门在身后"砰"地关上 ----------
+  // ---------- 进门过场：从门口的光里走进来，门在身后"砰"地关上，铁链自己又缠了回去 ----------
+  portal: 'vortex',
+  lockView: { cam: new THREE.Vector3(-0.9, 1.1, 3.25), look: new THREE.Vector3(-1.62, 0.66, 3.68) },
+  relockLine: '……铁链自己缠回去了？！又锁上了！',
   intro(g, { prepare }) {
-    const R = g.refs, D = R.door;
-    if (prepare) {
-      g.ctrl.setMode(g.ctrl.mode);
-      g.ctrl.teleport(-1.62, 4.0, Math.PI / 2);
-      g.ctrl.yaw = Math.PI / 2 + Math.PI; g.ctrl.pitch = -0.08;
-      g.ch.root.position.set(-1.62, 0, 4.0); g.ch.root.rotation.y = Math.PI / 2;
-      g.ch.setExpression('focus');
-      D.pivot.rotation.y = D.base + D.openAngle;
-      g._cineSet(new THREE.Vector3(-0.2, 1.5, 2.3), new THREE.Vector3(-1.5, 1.2, 3.95));
-      return;
-    }
-    g.auto = { path: [new THREE.Vector3(-1.05, 0, 3.9)], speed: 1.1, i: 0 };
-    g._afterReach = null;
-    g.after(0.9, () => {
-      g.audio.doorSlam(); g._shake(0.3);
-      g.tween(0.22, (k) => (D.pivot.rotation.y = D.base + D.openAngle * (1 - k)), { ease: (t) => t * t });
-      g.fx.emit('dust', new THREE.Vector3(-1.7, 0.6, 4.0), { count: 26, speed: 0.6, spread: 1.2, up: 0.4, gravity: -0.05, drag: 1.5, life: 2.4, size: 0.3, colors: ['#8a7a60', '#6a5a48'], spin: 0.5, grow: 1.2 });
-      g.ch.setExpression('shock');
-      g._cutPose = { lookYaw: 0.9 };
-    });
-    g.after(1.6, () => g.ui.subtitle('……？我不是刚冲出门了吗？', 2.4, g.S.name));
-    g.after(2.4, () => { g._cutPose = { lookYaw: -0.5, lookPitch: 0.2 }; g._cineTo(new THREE.Vector3(-1.1, 1.75, 4.1), new THREE.Vector3(0.6, 1.1, -2.2), 2.2); g.audio.caw(0.8); });
-    g.after(4.2, () => g.ui.subtitle('这是……211？怎么破成这个样子了？', 2.6, g.S.name));
-    g.after(6.0, () => { g._cutPose = { lookYaw: 0.4, lookPitch: 0.35 }; g._cineTo(new THREE.Vector3(0.2, 1.7, 2.6), new THREE.Vector3(1.22, 2.25, 4.5), 1.6); });
-    g.after(6.8, () => { g.ui.subtitle('墙上的钟……停在了 7:59。', 2.4, g.S.name); g.audio.creak(); });
-    g.after(8.6, () => { g._cutPose = null; g.ch.setExpression('neutral'); g._cineTo(null, null, 1.2); });
-    g.after(9.8, () => g.beginPlay());
+    if (prepare) { g.enterRoom({ prepare: true }); return; }
+    const T = g.enterRoom({ prepare: false });
+    g.after(T, () => g.ui.subtitle('……？我不是刚冲出门了吗？', 2.4, g.S.name));
+    g.after(T + 0.8, () => { g._cutPose = { lookYaw: -0.5, lookPitch: 0.2 }; g._cineTo(new THREE.Vector3(-1.1, 1.75, 4.1), new THREE.Vector3(0.6, 1.1, -2.2), 2.2); g.audio.caw(0.8); });
+    g.after(T + 2.6, () => g.ui.subtitle('这是……211？怎么破成这个样子了？', 2.6, g.S.name));
+    g.after(T + 4.4, () => { g._cutPose = { lookYaw: 0.4, lookPitch: 0.35 }; g._cineTo(new THREE.Vector3(0.2, 1.7, 2.6), new THREE.Vector3(1.22, 2.25, 4.5), 1.6); });
+    g.after(T + 5.2, () => { g.ui.subtitle('墙上的钟……停在了 7:59。', 2.4, g.S.name); g.audio.creak(); });
+    g.after(T + 7.0, () => { g._cutPose = null; g.ch.setExpression('neutral'); g._cineTo(null, null, 1.2); });
+    g.after(T + 8.2, () => g.beginPlay());
+  },
+  onSlam(g) {
+    g.fx.emit('dust', new THREE.Vector3(-1.75, 1.4, 4.0), { count: 20, speed: 0.5, spread: 1.0, up: 0.2, gravity: -0.05, drag: 1.5, life: 2.0, size: 0.18, colors: ['#8a7a60', '#6a5a48'], spin: 0.5, grow: 1.0 });
+  },
+  // 门锁：'hide' 先藏起来 / 'anim' 铁链"哗啦"一下缠回门把手、挂锁从上面落下来"咔"地扣上 / 'show' 直接锁好
+  relock(g, mode) {
+    const C = g.refs.chain, pl = C.padlock;
+    if (!pl.userData.home) pl.userData.home = pl.position.clone();
+    const home = pl.userData.home;
+    C.dropped.visible = false;
+    if (mode === 'hide') { C.group.visible = false; g.collision.setEnabled('lockCable', false); return; }
+    C.group.visible = true; g.collision.setEnabled('lockCable', true);
+    pl.position.copy(home); pl.rotation.z = 0;
+    if (mode !== 'anim') return;
+    g.audio.chainDrop();
+    // 铁链闪两下现身（像被看不见的手缠上去一样），挂锁从半空落下、弹一下
+    let n = 0;
+    const blink = () => { C.group.visible = !C.group.visible || n >= 4; if (++n <= 4) g.after(0.06, blink); };
+    blink();
+    g.tween(0.45, (k) => { pl.position.y = home.y + 0.4 * (1 - k) * (1 - k) - Math.sin(k * Math.PI) * 0.02; pl.rotation.z = (1 - k) * 0.9; }, { ease: (t) => t, done: () => { g.audio.clunk(); g._shake(0.1); } }).cut = true;
+    g.fx.emit('dust', home.clone(), { count: 8, speed: 0.3, spread: 1, up: 0.3, gravity: -0.1, drag: 1.5, life: 1.2, size: 0.05, colors: ['#8a7a60'], grow: 0.5 });
   },
   onPlay(g) {
     g.ui.toast('第二章 · 趁着天还没黑，逃出废弃的 211', '', '🌆');
     g.after(1.2, () => g.ui.subtitle('书桌上那本发黄的本子……好像是日记？', 3.6, g.S.name));
   },
   exitLine: () => '走！离开这个鬼地方！',
-  // 出门时颜色一点点回来：老胶片滤镜褪掉，门口是一个紫色的时空漩涡
-  onDoorOpen(g) { addPortal(g); g.gfx.grade.set('normal'); },
+  // 出门时颜色一点点回来：老胶片滤镜褪掉，门口是一个紫色的时空漩涡（portal: 'vortex'）
+  onDoorOpen(g) { g.gfx.grade.set('normal'); },
 
   // ---------- 目标 / 提示 ----------
   objectives(g) {
@@ -159,6 +165,7 @@ export const CH2 = {
       poster: ['旧海报', '“峡谷之巅 · 2026 全国总决赛”，海报撕了一个角。那一年……我好像就是为了看这个通宵的。'],
       newspaper: ['旧报纸', '《校园晚报》2056 年 6 月 18 日：“老宿舍楼 211 即将拆除……该宿舍频繁出现‘有人在屋里找了三十年门锁密码’的传闻。”'],
       towelsTaken: ['毛巾', '剩下的毛巾都烂成布条了。'],
+      fallenBooks: ['地上的书', '书架前的地上躺着三本书，《高等数学（下）》烂得只剩封皮……三十年了，谁也没把它们捡起来。'],
     };
     for (const [id, [l, t]] of Object.entries(F)) H[id] = flav(l, t);
     H.calendar = { label: '台历', verb: '查看', act: () => {
@@ -480,32 +487,4 @@ function drawPhoto(c, S) {
     img.data[i] = l * 1.1 + 20; img.data[i + 1] = l * 0.95 + 10; img.data[i + 2] = l * 0.72;
   }
   ctx.putImageData(img, 0, 0);
-}
-
-// 出门时门口是一个旋转的时空漩涡
-const PORTAL_FRAG = /* glsl */ `
-  uniform float time; varying vec2 vUv;
-  void main() {
-    vec2 c = vUv - 0.5; c.x *= 0.5;
-    float r = length(c) * 2.0, a = atan(c.y, c.x);
-    float sw = sin(a * 5.0 + r * 14.0 - time * 5.0) * 0.5 + 0.5;
-    vec3 col = mix(vec3(0.35, 0.2, 1.0), vec3(0.3, 1.0, 0.95), sw);
-    col = mix(col, vec3(1.0), smoothstep(0.35, 0.0, r));
-    float alpha = smoothstep(1.0, 0.55, r) * (0.75 + 0.25 * sw);
-    gl_FragColor = vec4(col * alpha * 1.6, alpha);
-  }`;
-export function addPortal(g, tint = null) {
-  const R = g.refs, D = R.door;
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { time: { value: 0 } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: tint || PORTAL_FRAG, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false,
-  });
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 2.1), mat);
-  m.position.set(-1.9, 1.03, D.z); m.rotation.y = Math.PI / 2;
-  m.userData.noRay = true; m.raycast = () => {};
-  R.root.add(m);
-  // 借用走廊那盏灯来照亮门口（临时加灯会让所有材质重新编译，卡一下）
-  R.lights.corridor.color.set(tint ? '#fff4e0' : '#9a7aff');
-  R.updaters.push((dt, t) => { mat.uniforms.time.value = t; });
 }
