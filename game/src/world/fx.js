@@ -115,6 +115,13 @@ function tex(kind) {
   return t;
 }
 
+// 不受全局裁剪面影响的材质（第四章彩蛋：飞船被一刀一刀"切掉"时，火花、碎片要能飞进外面的虚空里）
+export function noClip(m) {
+  m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', ''); };
+  m.customProgramCacheKey = () => 'noclip';
+  return m;
+}
+
 // ---------- 粒子：每种贴图一个 InstancedMesh，面向镜头、会转、会落 ----------
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _qz = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 const _z = new THREE.Vector3(0, 0, 1), _c = new THREE.Color();
@@ -122,7 +129,7 @@ class Pool {
   constructor(kind, cap, additive) {
     this.cap = cap;
     this.items = [];
-    const m = new THREE.MeshBasicMaterial({ map: tex(kind), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: !additive });
+    const m = noClip(new THREE.MeshBasicMaterial({ map: tex(kind), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: !additive }));
     this.mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), m, cap);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.setColorAt(0, _c.set(1, 1, 1));

@@ -1478,6 +1478,9 @@ export class Game {
     const old = this.refs;
     // 第四章彩蛋里另搭的"那天晚上的 211"也一起释放
     if (this.CH && this.CH.secret && this.CH.secret.past) { this.CH.secret.past.dispose(); this.CH.secret.past = null; this.CH.secret.needPast = false; }
+    if (this.CH && this.CH.secret) this.CH.secret.dispose();
+    this.gfx.viewScene = null;
+    if (this.camera.fov !== 62) { this.camera.fov = 62; this.camera.updateProjectionMatrix(); }
     if (old.helmet && old.helmet.parent && old.helmet.parent !== old.root) old.helmet.parent.remove(old.helmet);
     this.scene.remove(old.root);
     disposeTree(old.root);
@@ -1531,7 +1534,7 @@ export class Game {
     this.audio.stopAllLoops();
     this.audio.stopMusic();
     this.audio.chime();
-    const card = '……醒醒……<small>好像有人在喊我的名字</small>';
+    const card = '…hey… wake up…<small>Someone is calling my name</small>'; // 结局在美国的征兵站：过场里的字全用英文
     await this.ui.fade(1, { dur: 1.4, white: true, card });
     await nextFrame(); await nextFrame();
     const t0 = performance.now();
@@ -1573,9 +1576,9 @@ export class Game {
       const [A] = S.mates;
       node = this.ui.panel(`
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
-        <p style="line-height:1.9">那天晚上，211 的书架上掉下来三本书。${A}说宿舍闹鬼，谁也没当回事。<br>第二天早上 7:28，你在电脑前醒来——门被锁上了，考试就要开始了。<br><b>原来那个"幽灵"，一直都是你自己。</b></p>
+        <p style="line-height:1.9">那天晚上，211 的书架上掉下来三本书。${A}说宿舍闹鬼，谁也没当回事。<br>只有电脑前的那个你，回头望了书架一眼，笑了一下。<br><b>而书架另一边、被白光吞没的那个你——去了哪里呢？</b></p>
         <div class="stats">${chRows}</div>
-        <div class="stats totals"><div><b>${hints}</b><span>提示次数</span></div><div><b>${this.CH && this.CH.secret ? this.CH.secret.tries + 1 : 1}</b><span>闯进五维空间的次数</span></div></div>
+        <div class="stats totals"><div><b>${formatMMSS(runs.reduce((a, r) => a + r.elapsed, 0))}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div></div>
         <div class="ach">${achHtml}</div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button><button class="btn" data-a="admire">📚 再看一会儿</button></div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload(S.view ? 'view' : 'game'));
@@ -1704,7 +1707,7 @@ export class Game {
     dir.normalize();
     const rc = this._camRay || (this._camRay = new THREE.Raycaster());
     rc.set(tgt, dir); rc.near = 0; rc.far = len; rc.camera = cam;
-    const skip = [R.officer.root, R.sarge.root, R.giftCap];
+    const skip = [R.officer.root, R.sarge.root, R.giftCap, ...(R.guards || []).map((g) => g.root)];
     const hit = rc.intersectObject(R.root, true).find((h) => {
       if (h.object.isSprite || h.object.isPoints) return false;
       for (let p = h.object; p; p = p.parent) if (!p.visible || skip.includes(p)) return false;

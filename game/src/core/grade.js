@@ -116,8 +116,10 @@ export const GRADES = {
   jungle: { saturation: 0.86, contrast: 1.12, brightness: -0.01, tint: [1, 1, 1], sepia: 0, vignette: 0.58, grain: 0.055, scratch: 0, aberration: 0.0012, lowTint: [0.88, 1.03, 1.0], highTint: [1.08, 1.0, 0.86] },
   // 太空舱：写实电影感——暗部偏青、亮部偏暖，压一点饱和，胶片颗粒 + 暗角 + 一丝镜头色散
   space: { saturation: 0.88, contrast: 1.1, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.52, grain: 0.05, scratch: 0, aberration: 0.0014, lowTint: [0.9, 1.02, 1.05], highTint: [1.06, 1.0, 0.9] },
-  // 结局：阳光明媚的征兵报到现场
-  finale: { saturation: 1.1, contrast: 1.05, brightness: 0.0, tint: [1.04, 1.0, 0.95], sepia: 0, vignette: 0.3, grain: 0.012, scratch: 0, aberration: 0 },
+  // 书架背后"那天晚上的 211"：深夜里只有屏幕和台灯——暗部偏冷蓝、亮部偏暖，胶片颗粒，和太空舱那边是一套调子
+  past: { saturation: 0.9, contrast: 1.1, brightness: -0.008, tint: [1, 1, 1], sepia: 0, vignette: 0.56, grain: 0.05, scratch: 0, aberration: 0.0012, lowTint: [0.88, 0.97, 1.08], highTint: [1.08, 1.0, 0.88] },
+  // 结局：征兵站门前的上午——写实电影感：压一点饱和，暗部偏青、亮部偏暖，胶片颗粒 + 暗角
+  finale: { saturation: 0.92, contrast: 1.08, brightness: -0.005, tint: [1.02, 1.0, 0.97], sepia: 0, vignette: 0.42, grain: 0.04, scratch: 0, aberration: 0.001, lowTint: [0.92, 1.0, 1.05], highTint: [1.06, 1.0, 0.92] },
 };
 const NEUTRAL3 = [1, 1, 1];
 
@@ -127,7 +129,8 @@ export const CSS_GRADES = {
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
   jungle: 'saturate(0.86) contrast(1.12) brightness(0.96)',
   space: 'saturate(0.88) contrast(1.1) brightness(0.97)',
-  finale: 'saturate(1.1) contrast(1.05)',
+  past: 'saturate(0.9) contrast(1.1) brightness(0.97)',
+  finale: 'saturate(0.92) contrast(1.08)',
 };
 
 export class GradePass extends ShaderPass {

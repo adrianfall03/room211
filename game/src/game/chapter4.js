@@ -29,7 +29,7 @@ export const CH4 = {
 
   // 氧气随故事钟慢慢往下掉，最低停在 20%，不会耗尽
   o2: (g) => Math.ceil(100 - 80 * g.storyP()),
-  clockText(g) { return this.secret && this.secret.collapsing ? this.secret.clockText() : `O₂ ${this.o2(g)}%`; },
+  clockText(g) { return `O₂ ${this.o2(g)}%`; },
   // 任务钟：从 03:00:00 开始走
   clockHands(g) {
     const e = g.S ? g.S.elapsed : 0;
@@ -163,7 +163,6 @@ export const CH4 = {
   onEnd() {},
 
   objectives(g) {
-    if (this.secret && this.secret.collapsing) return this.secret.objectives();
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
     if (!f.readNote && !f.triedDoor) return [{ text: '看看自己那台开着的休眠舱', done: false }];
     return [
@@ -509,7 +508,6 @@ export const CH4 = {
 
   onDoor(g) {
     const S = g.S;
-    if (this.secret && this.secret.collapsing) { g.audio.lockedRattle(); g.say('舱门被扭曲的时空卡死了，打不开！', 2.4); return; }
     if (S.f.unlocked) { g.win(); return; }
     if (!S.f.triedDoor) {
       S.f.triedDoor = true;
