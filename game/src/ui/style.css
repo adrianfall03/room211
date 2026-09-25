@@ -224,6 +224,22 @@ button { font-family: var(--font); }
 .tbtn.big { background: rgba(95,240,212,0.3); border-color: var(--accent); }
 .tbtns-top { position: absolute; right: 16px; top: 150px; display: flex; flex-direction: column; gap: 10px; pointer-events: auto; }
 .tbtns-top .tbtn { width: 48px; height: 48px; font-size: 13px; }
+/* 失重：上浮 / 下沉是按住的按钮，"蹲"藏起来；键位提示也一样 */
+.float-only { display: none; }
+body.zero-g .float-only { display: inline-block; }
+body.zero-g .walk-only { display: none; }
+.tbtn small { display: block; font-size: 11px; font-weight: 600; opacity: 0.85; margin-top: -2px; }
+.tbtn.float-only { font-size: 18px; line-height: 1.05; }
+.tbtn.on { background: rgba(255,255,255,0.28); transform: scale(0.94); }
+/* 失重时：▲ 在 ▼ 上面（竖着排，按起来和方向一致），手电挪到右边 */
+body.zero-g .tbtns .tbtn[data-hold="Space"] { grid-column: 1; grid-row: 1; }
+body.zero-g .tbtns .tbtn[data-hold="KeyC"] { grid-column: 1; grid-row: 2; }
+body.zero-g .tbtns .tbtn[data-k="KeyF"] { grid-column: 2; grid-row: 1; }
+/* 触屏：字幕别压在右下角那一堆按钮上 */
+body.touch-ui #subtitle { left: 12px; right: 176px; transform: none; max-width: none; text-align: left; }
+@media (orientation: landscape) and (max-height: 520px) {
+  body.touch-ui #subtitle { left: 190px; right: 190px; bottom: 14px; text-align: center; }
+}
 
 @media (max-width: 900px) {
   #title .t-left { width: 100%; max-width: 560px; margin: 0 auto; background: linear-gradient(180deg, rgba(6,8,12,0) 0%, rgba(6,8,12,0.78) 34%, rgba(6,8,12,0.95) 60%); justify-content: flex-end; padding-top: 38vh; }
@@ -266,21 +282,23 @@ body:not(.mode-view) .view-only { display: none; }
 .lockbox.rusty { background: linear-gradient(160deg, #3a2a20, #1a120c); border-color: rgba(200,140,80,0.3); }
 .lockbox.rusty .wheels { background: linear-gradient(180deg, #1a100a, #3a2618 50%, #1a100a); }
 .lockbox.rusty .wheel .face { background: linear-gradient(180deg, #4a2e1a 0%, #b8864a 30%, #d8a868 50%, #b8864a 70%, #4a2e1a 100%); }
-.lockbox.candy { background: linear-gradient(160deg, #ffd0e2, #ffe9b8); border-color: #fff; color: #5a3350; }
-.lockbox.candy .hint { color: #8a5a7a; }
-.lockbox.candy .wheels { background: linear-gradient(180deg, #ff8fb1, #ffc2d8 50%, #ff8fb1); box-shadow: inset 0 4px 14px rgba(160,40,90,0.4); }
-.lockbox.candy .wheel button { background: rgba(255,255,255,0.55); color: #a0406a; }
-.lockbox.candy .wheel .face { background: linear-gradient(180deg, #ffb0cc 0%, #fff 30%, #fff 50%, #fff 70%, #ffb0cc 100%); }
-.lockbox.candy .btn.primary { background: #ff6a9a; color: #fff; }
-
-/* 第二章：HUD 泛黄；第三章：HUD 圆润糖果色 */
+/* 第三章：雨林 —— 写实电影感：深色磨砂、暖琥珀色的字（和第四章一个路子，色调偏青绿） */
+body.theme-jungle { --accent: #d9a45a; --panel: rgba(10,14,12,0.7); --line: rgba(210,214,190,0.14); --warn: #e8a050; }
+body.theme-jungle #hud-tl, body.theme-jungle #hud-tr, body.theme-jungle .slot { border-radius: 4px; box-shadow: none; }
+body.theme-jungle #hud-tr .ct { color: #eedbb4; text-shadow: 0 0 10px rgba(230,170,90,0.25); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+body.theme-jungle #subtitle { border-radius: 3px; background: rgba(6,9,8,0.66); border: 1px solid rgba(210,214,190,0.12); box-shadow: none; }
+body.theme-jungle #crosshair.active { border-color: #d9a45a; box-shadow: 0 0 8px rgba(217,164,90,0.45); }
+/* 门上那把老铜锁：黄铜转轮，发绿的铜锈 */
+.lockbox.brass { background: linear-gradient(165deg, #2a2a22, #131511); border: 1px solid rgba(220,200,150,0.14); color: #e2d6b8; border-radius: 10px; box-shadow: inset 0 1px 0 rgba(255,240,200,0.06), 0 30px 80px rgba(0,0,0,0.75); }
+.lockbox.brass .hint { color: #a8a088; }
+.lockbox.brass .wheels { background: linear-gradient(180deg, #1c170c, #3a2e16 50%, #1c170c); box-shadow: inset 0 4px 14px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(90,130,100,0.25); }
+.lockbox.brass .wheel button { background: #3a3424; color: #e2d0a0; border-radius: 4px; box-shadow: inset 0 1px 0 rgba(255,240,200,0.08), 0 2px 0 #0e0c08; }
+.lockbox.brass .wheel .face { background: linear-gradient(180deg, #3a2a10 0%, #9a7a3a 28%, #c8a45a 50%, #9a7a3a 72%, #3a2a10 100%); }
+.lockbox.brass .wheel .strip div { color: #2a1e0c; text-shadow: 0 1px 0 rgba(255,230,170,0.35); }
+.lockbox.brass .btn.primary { background: #a07a34; color: #141008; }
+/* 第二章：HUD 泛黄 */
 body.theme-ruin { --accent: #f0b86a; --panel: rgba(30,22,14,0.75); --line: rgba(240,200,140,0.18); }
 body.theme-ruin #hud-tr .ct { color: #f4d9a8; text-shadow: 0 0 12px rgba(240,160,80,0.35); }
-body.theme-toon { --accent: #ff8fc0; --panel: rgba(60,30,80,0.62); --line: rgba(255,200,230,0.3); --warn: #ffd36e; }
-body.theme-toon #hud-tl, body.theme-toon #hud-tr, body.theme-toon .slot { border-radius: 22px; border-width: 2px; }
-body.theme-toon #hud-tr .ct { color: #fff3c4; text-shadow: 0 2px 0 #b0508a; }
-body.theme-toon #subtitle { border-radius: 22px; background: rgba(70,30,80,0.72); border: 2px solid rgba(255,200,230,0.4); }
-body.theme-toon #crosshair.active { border-color: #ff8fc0; box-shadow: 0 0 12px rgba(255,143,192,0.7); }
 /* 矮屏幕：标题压成一行，按钮不被挤到屏幕外 */
 @media (max-height: 860px) and (min-width: 901px) {
   #title .t-logo { font-size: clamp(40px, 7.5vh, 72px); }

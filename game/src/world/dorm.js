@@ -44,8 +44,8 @@ void main(){
   gl_FragColor = vec4(c.rgb * 3.2 * a, a);
 }`;
 
-// theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'toon' 卡通动物 211 / 'space' 失重太空舱 211。
-//   三个版本共用同一套布局；decorate(ctx) 在布局搭好之后替换材质、增减道具（见 ruin.js / toon.js）
+// theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'jungle' 暴雨夜里长在树洞底下的雨林 211 / 'space' 失重太空舱 211。
+//   三个版本共用同一套布局；decorate(ctx) 在布局搭好之后替换材质、增减道具（见 ruin.js / jungle.js / space.js）
 export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null, outside: outsideFn = null } = {}) {
   RectAreaLightUniformsLib.init();
   const K = new Kit(T);
@@ -498,10 +498,10 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   wcRoom.add(cubDoor);
   mark('cubDoor', cubDoor);
   collision.add(CUB.x - 0.03, CUB.x + 0.03, CUB.dz0, CUB.dz1, 'cubShut');
-  collision.add(CUB.x - cdw - 0.02, CUB.x, CUB.dz0 - 0.03, CUB.dz0 + 0.1, 'cubOpen');
+  collision.add(CUB.x - cdw - 0.02, CUB.x, CUB.dz0 - 0.03, CUB.dz0 + 0.05, 'cubOpen'); // 开着的门几乎贴在隔间北墙上，门口别再窄一截
   collision.setEnabled('cubOpen', false);
   const cubCam = camBox(CUB.x - 0.03, CUB.x + 0.03, 0, 1.95, CUB.dz0, CUB.dz1);
-  refs.cubDoor = { pivot: cubDoor, open: false, base: -Math.PI / 2, openAngle: -1.45, camBox: cubCam, closedBox: cubCam.clone() };
+  refs.cubDoor = { pivot: cubDoor, open: false, base: -Math.PI / 2, openAngle: -1.54, camBox: cubCam, closedBox: cubCam.clone() };
   wcSection('toilet');
   // 蹲坑
   const pan = K.group({ x: -1.2, z: 5.72 });

@@ -76,13 +76,17 @@ export class Controller {
       const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
       wishX = fx * ax.y + rx * ax.x;
       wishZ = fz * ax.y + rz * ax.x;
-      wantRun = inp.down('ShiftLeft') || inp.down('ShiftRight');
+      // 触屏没有 Shift：摇杆推到底就算跑（失重时就是飞得更快）
+      wantRun = inp.down('ShiftLeft') || inp.down('ShiftRight') || (inp.touch.active && Math.hypot(inp.touch.moveX, inp.touch.moveY) > 0.92);
       if (this.float > 0.5) {
-        // 失重：按住空格往上飘、按住 C 往下沉；触屏点一下“蹲”在高低两档之间切换
-        if (inp.down('Space')) this.floatTarget += dt * 1.1;
-        if (inp.down('KeyC') || inp.down('ControlLeft')) this.floatTarget -= dt * 1.1;
-        else if (inp.hit('KeyC')) this.floatTarget = this.floatTarget > 0.7 ? 0.3 : 1.15;
+        // 失重：按住空格（触屏"▲上浮"）往上飘、按住 C（触屏"▼下沉"）往下沉；只点一下就直接飘到最高 / 沉到最低
+        const upK = inp.down('Space'), dnK = inp.down('KeyC') || inp.down('ControlLeft');
+        if (upK) this.floatTarget += dt * 1.5;
+        else if (inp.hit('Space')) this.floatTarget = 1.15;
+        if (dnK) this.floatTarget -= dt * 1.5;
+        else if (inp.hit('KeyC')) this.floatTarget = 0.12;
         this.floatTarget = clamp(this.floatTarget, 0.12, 1.15);
+        this.vHold = upK || dnK;
         this.crouch = false;
       } else if (inp.hit('KeyC')) this.crouch = !this.crouch;
     }
@@ -97,14 +101,23 @@ export class Controller {
     this.vel.x = damp(this.vel.x, tx, accel, dt);
     this.vel.z = damp(this.vel.z, tz, accel, dt);
     if (!this.sitting) {
+      // 失重时身子是缩着飘的，碰撞圆小一点：储藏室那种窄门也好钻过去
+      const r = floating ? 0.17 : this.radius;
+      const px = this.pos.x, pz = this.pos.z;
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
-      this.collision.resolve(this.pos, this.radius);
+      this.collision.resolve(this.pos, r);
       const b = this.bounds;
-      this.pos.x = clamp(this.pos.x, b.minX + this.radius, b.maxX - this.radius);
-      this.pos.z = clamp(this.pos.z, b.minZ + this.radius, b.maxZ - this.radius);
+      this.pos.x = clamp(this.pos.x, b.minX + r, b.maxX - r);
+      this.pos.z = clamp(this.pos.z, b.minZ + r, b.maxZ - r);
+      // 撞到东西：失重时的惯性速度也跟着被挡掉，不然会一直顶在门框上"卡住"
+      if (floating && dt > 0) {
+        const ax = (this.pos.x - px) / dt, az = (this.pos.z - pz) / dt;
+        if (Math.abs(ax) < Math.abs(this.vel.x) - 0.05) this.vel.x = ax;
+        if (Math.abs(az) < Math.abs(this.vel.z) - 0.05) this.vel.z = az;
+      }
     }
-    this.pos.y = this.float > 0 ? damp(this.pos.y, this.floatTarget * this.float, 2.2, dt) : 0;
+    this.pos.y = this.float > 0 ? damp(this.pos.y, this.floatTarget * this.float, this.vHold ? 5 : 2.6, dt) : 0;
     const speed = Math.hypot(this.vel.x, this.vel.z);
     // 朝向
     if (this.mode === 'first') {

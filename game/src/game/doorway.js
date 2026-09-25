@@ -1,6 +1,6 @@
 // 门口的"光门"：出门时门外不再是走廊，而是一整片光——人走进光里，下一间 211 的门口也亮着同一片光，
 // 人从光里走出来，门在身后自己关上、又锁上了。
-//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'light' 第三章（粉白的光）/ 'space' 第四章（淡蓝色光门）
+//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'light' 第三章（暖白色的一片雾光）/ 'space' 第四章（淡蓝色光门）
 import * as THREE from 'three';
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
@@ -31,8 +31,8 @@ const FRAG = {
     void main() {
       vec2 c = vUv - 0.5; c.x *= 0.5;
       float r = length(c) * 2.0, a = atan(c.y, c.x);
-      float rays = pow(abs(sin(a * 8.0 + time * 1.5)), 6.0) * 0.4;
-      vec3 col = mix(vec3(1.0, 0.85, 0.95), vec3(1.0), smoothstep(0.8, 0.0, r));
+      float rays = pow(abs(sin(a * 8.0 + time * 0.6)), 6.0) * 0.15;
+      vec3 col = mix(vec3(1.0, 0.86, 0.66), vec3(1.0, 0.97, 0.9), smoothstep(0.8, 0.0, r));
       float alpha = smoothstep(1.05, 0.3, r) + rays * smoothstep(1.2, 0.4, r);
       gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
     }`,
@@ -49,7 +49,7 @@ const FRAG = {
 };
 // 光门后面那层不透明的底色（挡住门外的走廊），和照进屋里的灯光颜色
 const TINT = {
-  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], light: ['#fff0f6', '#ffe0ee'], space: ['#e2f4ff', '#cfe8ff'],
+  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], light: ['#fff2dc', '#ffe2b8'], space: ['#e2f4ff', '#cfe8ff'],
 };
 // 贴着门洞往屋里撒的一片光（墙上的光晕、地上的光斑）
 const HALO_FRAG = /* glsl */ `

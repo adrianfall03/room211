@@ -166,6 +166,7 @@ export class Game {
     this.rayTargets = list;
   }
   _visible(o) { while (o) { if (!o.visible) return false; o = o.parent; } return true; }
+  _isSoft(o) { while (o) { if (o.userData.soft) return true; o = o.parent; } return false; }
   _rootOf(o) {
     const id = o.userData.iid;
     while (o.parent && o.parent.userData && o.parent.userData.iid === id) o = o.parent;
@@ -424,6 +425,9 @@ export class Game {
     }
     this._updateWorld(dt);
     this.fx.update(dt, this.camera);
+    // 失重的时候，触屏按钮 / 键位提示换成上浮、下沉
+    const zg = this.ctrl.float > 0.5;
+    if (zg !== this._zeroG) { this._zeroG = zg; this.ui.setZeroG(zg); }
     this.input.endFrame();
   }
 
@@ -551,7 +555,7 @@ export class Game {
     this.raycaster.far = camD + 6;
     this.raycaster.near = 0.05;
     const hits = this.raycaster.intersectObjects(this.rayTargets, false);
-    let found = null;
+    let found = null, soft = null;
     this.aim.copy(this.raycaster.ray.origin).addScaledVector(this.raycaster.ray.direction, 5);
     for (const h of hits) {
       const o = h.object;
@@ -559,8 +563,13 @@ export class Game {
       if (h.point.z > this._clipZ) continue; // 已经被时空坍缩"切掉"的地方
       // 第三人称：镜头和人之间的东西（比如身后开着的门）不算互动目标
       if (this.ctrl.mode === 'third' && h.distance < Math.max(camD * 0.6, camD - 0.3)) continue;
-      this.aim.copy(h.point);
       const iid = o.userData.iid;
+      // "软"目标（跟在身边飘的机器人）：挡在门、按钮前面时让后面的东西优先，后面没东西才轮到它
+      if (iid && this._isSoft(o)) {
+        if (!soft && h.point.distanceTo(chest) <= 2.05 && this.handlers[iid]) soft = { iid, obj: this._rootOf(o), point: h.point.clone() };
+        continue;
+      }
+      this.aim.copy(h.point);
       if (!iid) break;
       if (h.point.distanceTo(chest) > 2.05) break;
       const hd = this.handlers[iid];
@@ -568,7 +577,7 @@ export class Game {
       found = { iid, obj: this._rootOf(o), point: h.point.clone() };
       break;
     }
-    this._setHover(found);
+    this._setHover(found || soft);
   }
   _setHover(hv) {
     const prev = this.hover ? this.hover.iid : null;
@@ -1801,13 +1810,13 @@ export class Game {
     this.uvLight.castShadow = false;
     this.scene.add(this.uvLight, this.uvLight.target);
   }
-  // 空气里飘的东西：第一章是窗边阳光里的灰尘，废墟里满屋都是灰，卡通章是金色的小亮点
+  // 空气里飘的东西：第一章是窗边阳光里的灰尘，废墟里满屋都是灰，雨林里是潮湿空气里的细小水汽和飞虫
   _buildDust(theme = 'normal') {
     if (this.dust) { this.scene.remove(this.dust); this.dust.geometry.dispose(); }
     const cfg = {
       normal: { n: 420, x: [-1.3, 1.3], y: [0.3, 2.7], z: [-3.4, -0.6], color: '#fff2d8', size: 0.014 },
       ruin: { n: 900, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#e8c89a', size: 0.012 },
-      toon: { n: 160, x: [-1.6, 1.6], y: [0.3, 2.6], z: [-3.3, 4.2], color: '#fff0a8', size: 0.03 },
+      jungle: { n: 320, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#d6dccb', size: 0.011 },
       space: { n: 260, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfefff', size: 0.02 },
       finale: { n: 160, x: [-5, 5], y: [0.3, 4], z: [-3, 7], color: '#fff6d8', size: 0.025 },
     }[theme] || { n: 1, x: [0, 0], y: [0, 0], z: [0, 0], color: '#ffffff', size: 0.01 };
