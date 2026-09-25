@@ -24,18 +24,18 @@ export class UI {
       <div id="letterbox" class="off"></div>
       <div id="hud" class="hidden">
         <div id="hud-tl"><div class="h">当前目标</div><ul id="objectives"></ul></div>
-        <div id="hud-tr"><div class="ct">07:30</div><div class="cr">距离开考 30:00</div>
+        <div id="hud-tr"><div class="ct">07:30</div><div class="cr">用时 00:00</div>
           <div class="codes"><span>门锁</span><b>?</b><b>?</b><b>?</b><b>?</b></div><div class="chap"></div></div>
         <div id="crosshair"></div>
         <div id="prompt" class="hidden"><kbd>E</kbd><span class="verb"></span><span class="obj"></span></div>
         <div id="subtitle" style="opacity:0"></div>
         <div id="toasts"></div>
         <div id="hud-inventory"></div>
-        <div id="keyhints"><span><kbd>WASD</kbd> 移动</span><span><kbd>Shift</kbd> 跑</span><span><kbd>C</kbd> 蹲</span><span><kbd>E</kbd> 互动</span><span><kbd>F</kbd> 手电</span><span><kbd>V</kbd> 视角</span><span><kbd>H</kbd> 提示</span><span><kbd>J</kbd> 线索</span><span><kbd>Esc</kbd> 菜单</span></div>
+        <div id="keyhints"><span><kbd>WASD</kbd> 移动</span><span><kbd>Shift</kbd> 跑</span><span><kbd>C</kbd> 蹲</span><span><kbd>E</kbd> 互动</span><span><kbd>F</kbd> 手电</span><span><kbd>V</kbd> 视角</span><span class="game-only"><kbd>H</kbd> 提示</span><span class="game-only"><kbd>J</kbd> 线索</span><span class="view-only"><kbd>N</kbd> 下一关</span><span><kbd>Esc</kbd> 菜单</span></div>
         <div id="clickToPlay" class="hidden">点击画面继续</div>
       </div>
       <div id="touch" class="hidden"><div id="stick"><i></i></div>
-        <div class="tbtns-top"><button class="tbtn" data-k="Escape">☰</button><button class="tbtn" data-k="KeyH">提示</button><button class="tbtn" data-k="KeyJ">线索</button><button class="tbtn" data-k="KeyV">视角</button></div>
+        <div class="tbtns-top"><button class="tbtn" data-k="Escape">☰</button><button class="tbtn game-only" data-k="KeyH">提示</button><button class="tbtn game-only" data-k="KeyJ">线索</button><button class="tbtn view-only" data-k="KeyN">下一关</button><button class="tbtn" data-k="KeyV">视角</button></div>
         <div class="tbtns"><button class="tbtn" data-k="KeyF">手电</button><button class="tbtn" data-k="KeyC">蹲</button><button class="tbtn big" data-k="KeyE" style="grid-column: span 2; width: 100%; border-radius: 32px;">互动</button></div>
       </div>
       <div id="modal" class="hidden"></div>
@@ -44,9 +44,9 @@ export class UI {
     document.body.appendChild(root);
     this.root = root;
     this.el = {
-      loading: $('#loading'), hud: $('#hud'), obj: $('#objectives'), tr: $('#hud-tr'), ct: $('#hud-tr .ct'), cr: $('#hud-tr .cr'),
+      loading: $('#loading'), hud: $('#hud'), obj: $('#objectives'), ct: $('#hud-tr .ct'), cr: $('#hud-tr .cr'),
       codes: [...document.querySelectorAll('#hud-tr .codes b')], codeBox: $('#hud-tr .codes'), chap: $('#hud-tr .chap'), cross: $('#crosshair'), prompt: $('#prompt'), sub: $('#subtitle'),
-      toasts: $('#toasts'), inv: $('#hud-inventory'), modal: $('#modal'), fade: $('#fade'), vignette: $('#vignette'),
+      toasts: $('#toasts'), inv: $('#hud-inventory'), modal: $('#modal'), fade: $('#fade'),
       letterbox: $('#letterbox'), click: $('#clickToPlay'), touch: $('#touch'),
     };
     this._subTimer = null;
@@ -65,7 +65,8 @@ export class UI {
   }
 
   // ---------- 标题 ----------
-  showTitle({ onStart, defaultName = '', defaultDiff = 'normal', quality = 'high', onQuality, unlocked = 1, defaultChapter = 1 }) {
+  // mode：'game' 游戏模式（解谜开锁，通关一章解锁一章）/ 'view' 鉴赏模式（没有任务和门锁，章节随便选）
+  showTitle({ onStart, defaultName = '', defaultMode = 'game', quality = 'high', onQuality, unlocked = 1, defaultChapter = 1 }) {
     const t = h('div');
     t.id = 'title';
     t.innerHTML = `
@@ -74,32 +75,28 @@ export class UI {
         <div class="t-logo"><span>逃离</span><span class="num">211</span><span>宿舍</span></div>
         <div class="t-sub">期末考试当天早上，你通宵打完排位后在电脑前睡着了……醒来发现<b>门被自己的车锁锁上了</b>，准考证也不见了。<b>8:00</b> 高数开考，快逃！<br><span class="t-more">逃出这间 211 之后……门外还有<b>两个</b> 211。</span></div>
         <div><label>主角名字</label><input type="text" id="t-name" maxlength="8" placeholder="给自己起个名字（选填）" value="${esc(defaultName)}"></div>
-        <div><label>难度（开考前剩余时间）</label>
-          <div class="seg" id="t-diff">
-            <button data-v="easy">轻松<small>30 分钟</small></button>
-            <button data-v="normal">标准<small>20 分钟</small></button>
-            <button data-v="hard">地狱<small>12 分钟</small></button>
+        <div><label>模式（都不限时）</label>
+          <div class="seg mode" id="t-mode">
+            <button data-v="game">🎮 游戏模式<small>找线索、解谜题、开门锁</small></button>
+            <button data-v="view">🎬 鉴赏模式<small>没有任务和门锁，自由穿行</small></button>
           </div></div>
-        <div><label>章节（通关解锁 · 预览模式随便选）</label>
+        <div><label id="t-ch-label"></label>
           <div class="seg" id="t-ch">
-            <button data-v="1">第一章<small>211 宿舍</small></button>
-            <button data-v="2" class="${unlocked < 2 ? 'locked' : ''}">第二章<small>${unlocked < 2 ? '🔒 可预览' : '废弃的 211'}</small></button>
-            <button data-v="3" class="${unlocked < 3 ? 'locked' : ''}">第三章<small>${unlocked < 3 ? '🔒 可预览' : '动物园 211'}</small></button>
+            <button data-v="1">第一章<small></small></button>
+            <button data-v="2">第二章<small></small></button>
+            <button data-v="3">第三章<small></small></button>
           </div></div>
         <div><label>画质</label>
           <div class="seg" id="t-q">
             <button data-v="low">流畅</button><button data-v="medium">均衡</button><button data-v="high">精美</button>
           </div></div>
-        <div class="t-actions">
-          <button class="btn-main" id="t-start">开 始 逃 脱</button>
-          <button class="btn-preview" id="t-preview">🎬 动画预览<small>无门锁 · 不限时<br>走到门口直接下一关</small></button>
-        </div>
-        <div class="t-help">鼠标控制视角 · WASD 移动 · E 互动 · F 手电 · V 第一/第三人称 · H 提示 · 预览模式按 N 跳关<br>建议使用电脑浏览器游玩，戴上耳机体验更佳 🎧</div>
+        <button class="btn-main" id="t-start">开 始 逃 脱</button>
+        <div class="t-help">鼠标控制视角 · WASD 移动 · E 互动 · F 手电 · V 第一/第三人称 · H 提示 · 鉴赏模式按 N 跳关<br>建议使用电脑浏览器游玩，戴上耳机体验更佳 🎧</div>
       </div>
       <div class="t-hero"><div class="nm">主角 · 211 峡谷之神</div><div class="tg">通宵 <span>高数</span><span>夜猫子</span><span>牛仔夹克</span></div></div>`;
     document.body.appendChild(t);
     this.titleEl = t;
-    let diff = defaultDiff, q = quality, chapter = String(defaultChapter);
+    let mode = defaultMode === 'view' ? 'view' : 'game', q = quality, chapter = defaultChapter;
     const seg = (id, val, cb) => {
       const el = $(id, t);
       const btns = [...el.querySelectorAll('button')];
@@ -107,19 +104,31 @@ export class UI {
       btns.forEach((b) => b.addEventListener('click', () => { val = b.dataset.v; sync(); this.audio.click(); cb(val); }));
       sync();
     };
-    seg('#t-diff', diff, (v) => (diff = v));
     seg('#t-q', q, (v) => { q = v; onQuality && onQuality(v); });
+    // 章节：游戏模式里没通关的章节锁着；鉴赏模式三章随便选
+    const chNames = ['211 宿舍', '废弃的 211', '动物园 211'];
+    const chBtns = [...$('#t-ch', t).querySelectorAll('button')];
     const startBtn = $('#t-start', t);
-    const syncStart = () => { startBtn.textContent = Number(chapter) > unlocked ? '🎬 预 览 本 章' : '开 始 逃 脱'; };
-    seg('#t-ch', chapter, (v) => { chapter = v; syncStart(); });
-    syncStart();
+    const syncCh = () => {
+      if (mode === 'game') chapter = Math.min(chapter, unlocked);
+      chBtns.forEach((b, i) => {
+        const locked = mode === 'game' && i + 1 > unlocked;
+        b.classList.toggle('on', i + 1 === chapter);
+        b.classList.toggle('locked', locked);
+        $('small', b).textContent = locked ? '🔒 通关上一章解锁' : chNames[i];
+      });
+      $('#t-ch-label', t).textContent = mode === 'game' ? '章节（通关一章解锁一章）' : '章节（鉴赏模式随便选）';
+      startBtn.textContent = mode === 'game' ? '开 始 逃 脱' : '开 始 鉴 赏';
+    };
+    seg('#t-mode', mode, (v) => { mode = v; syncCh(); });
+    chBtns.forEach((b) => b.addEventListener('click', () => {
+      if (b.classList.contains('locked')) { this.audio.error(); return; }
+      chapter = Number(b.dataset.v); this.audio.click(); syncCh();
+    }));
+    syncCh();
     startBtn.addEventListener('click', () => {
       const name = $('#t-name', t).value.trim();
-      onStart({ name, diff, quality: q, chapter: Number(chapter), preview: Number(chapter) > unlocked });
-    });
-    $('#t-preview', t).addEventListener('click', () => {
-      const name = $('#t-name', t).value.trim();
-      onStart({ name, diff, quality: q, chapter: Number(chapter), preview: true });
+      onStart({ name, mode, quality: q, chapter });
     });
   }
   hideTitle() {
@@ -140,11 +149,12 @@ export class UI {
       b.addEventListener('click', () => input.press(b.dataset.k));
     });
   }
-  setClock(time, remain, urgent, label = '距离开考') {
+  setClock(time, sub) {
     this.el.ct.textContent = time;
-    this.el.cr.textContent = `${label} ${remain}`;
-    this.el.tr.classList.toggle('urgent', !!urgent);
+    this.el.cr.textContent = sub;
   }
+  // 鉴赏模式：藏起任务、密码格、提示 / 线索按钮，露出"下一关"
+  setViewMode(v) { document.body.classList.toggle('mode-view', !!v); }
   setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
@@ -207,7 +217,6 @@ export class UI {
       inv.appendChild(s);
     });
   }
-  setVignette(danger) { this.el.vignette.classList.toggle('danger', !!danger); }
   setClickToPlay(v) { this.el.click.classList.toggle('hidden', !v); }
   letterbox(v) { this.el.letterbox.classList.toggle('off', !v); }
 

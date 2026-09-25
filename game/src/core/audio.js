@@ -185,23 +185,10 @@ export class Audio {
   bootChime() { [392, 523, 659, 784].forEach((f, i) => this.tone({ f, dur: 0.6, type: 'sine', gain: 0.1, delay: i * 0.12 })); }
   typeKey() { this.noise({ dur: 0.03, gain: 0.15, type: 'bandpass', freq: 3000 + Math.random() * 1500, Q: 2, rev: false }); }
   uvOn() { this.tone({ f: 5200, dur: 0.05, type: 'square', gain: 0.03, rev: false }); this.tone({ f: 120, dur: 0.3, type: 'sawtooth', gain: 0.02, rev: false }); }
-  bell() {
-    [0, 0.5, 1.0, 1.5].forEach((d) => {
-      this.tone({ f: 880, dur: 0.45, type: 'triangle', gain: 0.18, delay: d });
-      this.tone({ f: 1760, dur: 0.3, type: 'sine', gain: 0.06, delay: d });
-    });
-  }
   success() {
     const notes = [523, 659, 784, 1047, 784, 1047, 1319];
     notes.forEach((f, i) => this.tone({ f, dur: 0.5, type: 'triangle', gain: 0.14, delay: i * 0.11 }));
     this.tone({ f: 262, dur: 1.4, type: 'sawtooth', gain: 0.05, delay: 0.3 });
-  }
-  fail() {
-    [392, 370, 349, 262].forEach((f, i) => this.tone({ f, dur: 0.7, type: 'sawtooth', gain: 0.08, delay: i * 0.35 }));
-  }
-  heartbeat() {
-    this.tone({ f: 60, f2: 40, dur: 0.15, type: 'sine', gain: 0.35, rev: false });
-    this.tone({ f: 55, f2: 38, dur: 0.15, type: 'sine', gain: 0.25, delay: 0.22, rev: false });
   }
   whoosh() { this.noise({ dur: 0.5, gain: 0.2, type: 'bandpass', freq: 400, freq2: 2400, Q: 0.8, curve: [[0.3, 1], [1, 0]] }); }
   // 洗手间
@@ -271,7 +258,6 @@ export class Audio {
   clunk() { this.noise({ dur: 0.18, gain: 0.5, type: 'lowpass', freq: 600, brown: true }); this.tone({ f: 90, f2: 50, dur: 0.2, type: 'square', gain: 0.1 }); }
   chainDrop() { for (let i = 0; i < 9; i++) this.noise({ dur: 0.05, gain: 0.3, type: 'bandpass', freq: 2600 + Math.random() * 1500, Q: 6, delay: i * 0.06 + Math.random() * 0.03 }); this.noise({ dur: 0.3, gain: 0.3, type: 'lowpass', freq: 500, delay: 0.5 }); }
   wipe() { for (let i = 0; i < 6; i++) this.noise({ dur: 0.18, gain: 0.12, type: 'bandpass', freq: 1800 + (i % 2) * 600, Q: 1.2, delay: i * 0.22 }); }
-  bulbPop() { this.noise({ dur: 0.08, gain: 0.6, type: 'highpass', freq: 2000 }); this.noise({ dur: 0.6, gain: 0.15, type: 'highpass', freq: 5000, delay: 0.06 }); }
   // 破收音机：隔着沙沙的杂音放一段老歌
   radio(dur = 6) {
     this.noise({ dur, gain: 0.05, type: 'bandpass', freq: 3000, Q: 0.5, curve: [[0.05, 1], [0.9, 1], [1, 0]] });

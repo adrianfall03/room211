@@ -5,7 +5,11 @@ import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS,
 import { FX } from '../world/fx.js';
 import { CHAPTERS } from './chapters.js';
 
-const DIFF = { easy: 30 * 60, normal: 20 * 60, hard: 12 * 60 };
+// 不限时：故事里的钟从开局时间往后走，越走越慢，永远差一点才到点（8:00 开考 / 18:00 天黑 / 23:00 熄灯）
+// 走到一半所需的时间 ≈ TAU × 0.7；第二、三章用 CH.tau
+const TAU1 = 10 * 60;
+// ⚡ 闪电侠的速通线：第一章 10 分钟，第二、三章用 CH.par
+const PAR1 = 10 * 60;
 
 // 室友名字池：每局随机抽 3 个
 const MATE_NAMES = [
@@ -65,7 +69,7 @@ const FLAVOR = {
 };
 
 const ACH = [
-  ['fast', '⚡ 闪电侠', '剩余一半以上时间逃脱'],
+  ['fast', '⚡ 闪电侠', '每一章都在速通线内逃脱（第一章 10 分钟，之后每章 5 分钟）'],
   ['nohint', '🧠 学霸', '不用任何提示'],
   ['helmet', '🪖 头盔侠', '戴上了红白头盔'],
   ['foodie', '🍎 吃货', '吃掉苹果和辣条'],
@@ -174,7 +178,8 @@ export class Game {
   }
 
   // ================== 新的一局 ==================
-  newRun({ name, diff, chapter = 1, preview = false }) {
+  // view：鉴赏模式——没有任务、没有门锁，走到门口就去下一关
+  newRun({ name, chapter = 1, view = false }) {
     const rnd = mulberry32((Date.now() ^ 0x5f3759df) >>> 0);
     this.rnd = rnd;
     const r = (n) => Math.floor(rnd() * n);
@@ -185,11 +190,13 @@ export class Game {
     const pool = MATE_NAMES.filter((m) => m !== name);
     const mates = [0, 1, 2].map(() => pool.splice(r(pool.length), 1)[0]);
     this.S = {
-      name: name || '我', mates, diff, limit: DIFF[diff] || DIFF.normal, elapsed: 0, hints: 0, freeHints: 0,
+      name: name || '我', mates, elapsed: 0, hints: 0, freeHints: 0,
       digits, found: [false, false, false, false], month, day, suitCode: `${month}${day}`, pcPass: words[r(words.length)],
       f: {}, inv: [], clues: new Map(), ach: new Set(), phoneCharge: 0, msgSent: {}, newItem: null, helmetOn: false,
-      lastClockText: '', lastRemainSec: -1, chapter, done: [], preview: !!preview,
+      lastSec: -1, chapter, done: [], view: !!view,
     };
+    this.handlers = this._handlers();
+    this.ui.setViewMode(this.S.view);
     const R = this.refs;
     TX.drawCalendar(R.calendar.canvas, { month, day });
     R.calendar.tex.needsUpdate = true;
@@ -272,6 +279,7 @@ export class Game {
       this.goChapter(opts.chapter, { fromTitle: true });
       return;
     }
+    if (this.S.view) this._removeDoorLock();
     this.state = 'intro';
     this.ui.hideTitle();
     this.camera.clearViewOffset();
@@ -368,7 +376,8 @@ export class Game {
     this.auto = null;
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
-    if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
+    if (this.S.view) this.ui.toast(`鉴赏模式：随便逛，走到宿舍门口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < 3 ? '去下一关' : '看结局'}`, '', '🎬');
+    else if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
     else {
       this.ui.toast('WASD 移动 · 鼠标转视角 · E 互动 · H 提示', '', '🎮');
       this.after(1.2, () => this.ui.subtitle('冷静……先看看显示器上那张便利贴。', 4, this.S.name));
@@ -404,13 +413,13 @@ export class Game {
       if (inp.hit('KeyF')) this.toggleUV();
       if (inp.hit('KeyV')) { this.ctrl.toggleMode(); this.ui.toast(this.ctrl.mode === 'first' ? '第一人称视角' : '第三人称视角', '', '🎥'); }
       if (inp.hit('KeyH')) this.hint();
-      if (inp.hit('KeyJ')) this.openJournal();
+      if (inp.hit('KeyJ') && !S.view) this.openJournal();
       if (inp.hit('KeyP') && S.inv.includes('phone')) this.openPhone();
-      if (inp.hit('KeyN') && S.preview) this.previewSkip();
+      if (inp.hit('KeyN') && S.view) this.viewSkip();
       if (inp.hit('Escape') && this.input.isTouch) this.openPause();
       for (let i = 1; i <= 8; i++) if (inp.hit(`Digit${i}`) && S.inv[i - 1]) this.useItem(S.inv[i - 1]);
     }
-    if (!this.paused && !S.preview) S.elapsed += dt;
+    if (!this.paused) S.elapsed += dt;
     if (this.reachT > 0) this.reachT = Math.max(0, this.reachT - dt);
     const reachW = this.reachT > 0 ? Math.sin((1 - this.reachT / 0.7) * Math.PI) : 0;
     this.ctrl.update(dt, { allowMove: canAct, extra: { hold: S.uvOn ? 1 : 0, reach: reachW, reachPitch: this._reachPitch || 0 } });
@@ -418,11 +427,8 @@ export class Game {
     if (this.cine) this._updateCine(dt);
     this._updateHover();
     this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine);
-    // 时间
-    const remain = S.limit - S.elapsed;
-    if (remain <= 0 && !S.preview) { this.fail(); return; }
     this._refreshHUD();
-    this._timedEvents(remain);
+    this._storyEvents();
     if (this.CH && this.CH.update && !this.paused) this.CH.update(this, dt);
     // 手机充电
     if (!this.CH && S.f.stripOn && S.phoneCharge < 1 && !this.paused) {
@@ -438,18 +444,17 @@ export class Game {
 
   _refreshHUD(force = false) {
     const S = this.S;
-    const remain = Math.max(0, S.limit - S.elapsed);
-    const sec = Math.ceil(remain);
-    if (sec !== S.lastRemainSec || force) {
-      S.lastRemainSec = sec;
+    const sec = Math.floor(S.elapsed);
+    if (sec !== S.lastSec || force) {
+      S.lastSec = sec;
       const clockText = this._clockText();
-      if (S.preview) this.ui.setClock(clockText, '不限时', false, '🎬 预览模式');
-      else this.ui.setClock(clockText, formatMMSS(remain), remain < 90, this.CH ? this.CH.label : '距离开考');
-      this.ui.setVignette(remain < 60 && !S.preview);
+      this.ui.setClock(clockText, S.view ? '🎬 鉴赏模式' : `用时 ${formatMMSS(S.elapsed)}`);
       this.clockText = clockText;
     }
-    this.ui.setCodes(S.digits, S.found, this.CH ? this.CH.codeIcons : null);
-    this.ui.setObjectives(this._objectives());
+    if (!S.view) {
+      this.ui.setCodes(S.digits, S.found, this.CH ? this.CH.codeIcons : null);
+      this.ui.setObjectives(this._objectives());
+    }
     if (force || this._invDirty) {
       this._invDirty = false;
       const IT = this._items();
@@ -459,25 +464,24 @@ export class Game {
     }
   }
 
-  // 各章的"现在几点"：开局时间往后走 30 分钟（第二章的钟停了）
-  _clockText() {
+  // 故事进度 0 → 1（永远到不了 1）：驱动挂钟、天色和室友的催促。鉴赏模式里时间停在开局那一刻
+  storyP() {
     const S = this.S;
+    if (!S || S.view) return 0;
+    return 1 - Math.exp(-S.elapsed / (this.CH ? this.CH.tau : TAU1));
+  }
+  // 故事里过去了几分钟：0–29，永远差一点才到点
+  storyMinutes() { return Math.floor(29.99 * this.storyP()); }
+  // 各章的"现在几点"：开局时间往后走，最多走到 x:59（第二章的挂钟停了，但 HUD 上的时间照走）
+  _clockText() {
     if (this.CH && this.CH.clockText) return this.CH.clockText(this);
     const [h0, m0] = this.CH ? this.CH.clock : [7, 30];
-    const gm = 30 * clamp(S.elapsed / S.limit, 0, 1);
-    let mm = m0 + Math.floor(gm), hh = h0 + Math.floor(mm / 60);
-    mm %= 60;
-    if (!this.CH) mm = Math.min(59, mm);
-    return `${String(hh % 24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    const mm = m0 + this.storyMinutes(), hh = h0 + Math.floor(mm / 60);
+    return `${String(hh % 24).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
   }
   _items() { return this.CH && this.CH.items ? { ...ITEMS, ...this.CH.items } : ITEMS; }
 
   _objectives() {
-    if (this.S.preview) return [
-      { text: '🎬 预览模式：没有谜题，随便逛', done: false },
-      { text: this.chapter < 3 ? '走到宿舍门口按 E，直接去下一关' : '走到宿舍门口按 E，看结局', done: false },
-      { text: '或者按 N 立刻穿越', done: false },
-    ];
     if (this.CH) return this.CH.objectives(this);
     const S = this.S, f = S.f;
     const n = S.found.filter(Boolean).length;
@@ -492,13 +496,13 @@ export class Game {
     return list;
   }
 
-  _timedEvents(remain) {
-    const S = this.S, frac = remain / S.limit;
-    this.audio.tension = clamp(1 - frac, 0, 1);
-    if (remain < 60) {
-      if (this._hbT === undefined || this.time - this._hbT > 0.9) { this._hbT = this.time; this.audio.heartbeat(); }
-    }
-    if (this.CH) { if (this.CH.timed) this.CH.timed(this, remain, frac); return; }
+  // 故事钟走到某些时刻：室友催促、天色变化、宿管广播——只是气氛，不会失败
+  _storyEvents() {
+    const S = this.S, p = this.storyP();
+    // 音乐随解谜进度越来越紧张
+    this.audio.tension = S.view ? 0 : (0.6 * S.found.filter(Boolean).length) / S.found.length;
+    if (S.view) return;
+    if (this.CH) { if (this.CH.story) this.CH.story(this, p); return; }
     const push = (key, msg) => {
       if (S.msgSent[key]) return;
       S.msgSent[key] = true;
@@ -510,9 +514,9 @@ export class Game {
       }
     };
     const [A, B, C] = S.mates;
-    if (frac < 0.5) push('half', { time: this.clockText, who: A, text: `人呢？？还有${Math.ceil(remain / 60)}分钟就开考了！` });
-    if (frac < 0.25) push('quarter', { time: this.clockText, who: B, text: '监考老师已经进教室了！！！快点！' });
-    if (remain < 60) push('last', { time: this.clockText, who: C, text: '完了完了，老师开始发卷子了……兄弟挺住！' });
+    if (p > 0.4) push('half', { time: this.clockText, who: A, text: `人呢？？都${this.clockText}了，快开考了！` });
+    if (p > 0.65) push('quarter', { time: this.clockText, who: B, text: '监考老师已经进教室了！！！快点！' });
+    if (p > 0.85) push('last', { time: this.clockText, who: C, text: '完了完了，老师开始发卷子了……兄弟挺住！' });
   }
 
   // ================== 交互 ==================
@@ -586,7 +590,9 @@ export class Game {
     this._invDirty = true;
   }
   hideObj(o) { if (o) o.visible = false; }
+  // 鉴赏模式没有线索本、没有门锁：谜题道具照样能玩，只是不再弹线索和密码
   clue(key, html) {
+    if (this.S.view) return;
     if (!this.S.clues.has(key)) this.ui.toast('线索已记录到线索本 <kbd>J</kbd>', 'clue', '📒');
     this.S.clues.set(key, html);
   }
@@ -594,6 +600,7 @@ export class Game {
     const S = this.S;
     if (S.found[i]) return;
     S.found[i] = true;
+    if (S.view) return;
     this.audio.clue();
     const marks = this.CH && this.CH.codeIcons ? this.CH.codeIcons : ['①', '②', '③', '④'];
     const lockName = this.CH ? this.CH.lockName : '门锁';
@@ -621,20 +628,19 @@ export class Game {
   // ---------- 各物件的交互 ----------
   _handlers() {
     const H = this._handlersBase();
-    // 预览模式：门没有锁，直接出门去下一关
-    if (this.S && this.S.preview) H.door = { label: '宿舍门', verb: () => (this.chapter < 3 ? '直接去下一关' : '出门（结局）'), act: () => this.previewExit() };
+    // 鉴赏模式：门上没有锁，直接出门去下一关
+    if (this.S && this.S.view) H.door = { label: '宿舍门', verb: () => (this.chapter < 3 ? '去下一关' : '出门（结局）'), act: () => this.win() };
     return H;
   }
-  // 预览模式：把锁"变没"，走出门去
-  previewExit() {
-    if (this.state !== 'play') return;
-    if (this.CH) this.CH.unlockVisual(this);
-    else { const L = this.refs.lock; this.collision.setEnabled('lockCable', false); L.group.visible = false; L.dropped.visible = true; }
+  // 鉴赏模式：开局就把门锁整个拿掉（连掉在地上的锁也不留）
+  _removeDoorLock() {
+    const L = this.CH ? this.CH.lockParts(this) : this.refs.lock;
+    this.collision.setEnabled('lockCable', false);
+    L.group.visible = false; L.dropped.visible = false;
     this.S.f.doorUnlocked = true; this.S.f.unlocked = true;
-    this.win();
   }
-  // 预览模式按 N：不走出门了，直接穿越
-  previewSkip() {
+  // 鉴赏模式按 N：不走出门了，直接穿越
+  viewSkip() {
     if (this.state !== 'play') return;
     this.state = 'outro';
     this.ui.closeModal(true);
@@ -766,7 +772,7 @@ export class Game {
     H.wcMirror = { ...H.mirror, label: '镜子' };
     H.roster = { label: '值日表', verb: '查看', act: () => this.showRoster() };
     H.switch = { label: '电灯开关', verb: () => (this.S.f.lightsOn ? '关灯' : '开灯'), act: () => this.toggleLights() };
-    H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => this.say(`现在 ${this.clockText}，离开考只剩 ${formatMMSS(this.S.limit - this.S.elapsed)}！`) };
+    H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => this.say(`现在 ${this.clockText}，离 8 点开考还有 ${30 - this.storyMinutes()} 分钟！`) };
     H.monitor2 = flavor('monitor2');
     return H;
   }
@@ -1218,21 +1224,14 @@ export class Game {
     if (!f.doorUnlocked) return `密码凑齐了！去门口按①②③④的顺序输入：${S.digits.join('')}`;
     return '快出门！冲向考场！';
   }
+  // 提示不扣时间，但会计入结算评分（吃东西、洗脸换来的免费提示不算）
   hint() {
     const S = this.S;
-    if (S.preview) { this.ui.toast('💡 预览模式没有谜题：走到门口按 E，或者直接按 N 去下一关', 'clue'); return; }
-    if (this.CH) return this._hintWith(this.CH.hint(this));
-    let cost = '';
+    if (S.view) { this.ui.toast('💡 鉴赏模式没有谜题：走到门口按 E，或者直接按 N 去下一关', 'clue'); return; }
+    const text = this.CH ? this.CH.hint(this) : this.hintText();
+    let cost;
     if (S.freeHints > 0) { S.freeHints--; cost = '（免费）'; }
-    else { S.elapsed += 30; S.hints++; cost = '（-30秒）'; }
-    this.audio.notify();
-    this.ui.toast(`💡 ${this.hintText()} <span style="opacity:.6">${cost}</span>`, 'clue');
-  }
-  _hintWith(text) {
-    const S = this.S;
-    let cost = '';
-    if (S.freeHints > 0) { S.freeHints--; cost = '（免费）'; }
-    else { S.elapsed += 30; S.hints++; cost = '（-30秒）'; }
+    else { S.hints++; cost = `（第 ${S.hints} 次提示）`; }
     this.audio.notify();
     this.ui.toast(`💡 ${text} <span style="opacity:.6">${cost}</span>`, 'clue');
   }
@@ -1255,7 +1254,7 @@ export class Game {
       <div class="row"><span>画质</span><select data-s="q"><option value="low">流畅</option><option value="medium">均衡</option><option value="high">精美</option></select></div>
       <div class="row"><span>视角</span><select data-s="cam"><option value="third">第三人称</option><option value="first">第一人称</option></select></div>
       <div class="row"><span>反转 Y 轴</span><input type="checkbox" data-s="inv" ${st.invertY ? 'checked' : ''}></div>
-      <div class="ctrls"><kbd>WASD</kbd><span>移动（Shift 跑，C 蹲）</span><kbd>E / 左键</kbd><span>互动</span><kbd>F</kbd><span>紫光手电</span><kbd>V</kbd><span>第一/第三人称</span><kbd>H</kbd><span>提示（-30秒）</span><kbd>J</kbd><span>线索本</span><kbd>P</kbd><span>手机</span><kbd>1-8</kbd><span>使用物品</span></div>
+      <div class="ctrls"><kbd>WASD</kbd><span>移动（Shift 跑，C 蹲）</span><kbd>E / 左键</kbd><span>互动</span><kbd>F</kbd><span>紫光手电</span><kbd>V</kbd><span>第一/第三人称</span><kbd>H</kbd><span>提示（计入评分）</span><kbd>J</kbd><span>线索本</span><kbd>P</kbd><span>手机</span><kbd>1-8</kbd><span>使用物品</span></div>
       <button class="btn" data-a="restart">重新开始</button>
     </div>`);
     node.querySelector('[data-s=q]').value = st.quality;
@@ -1300,7 +1299,7 @@ export class Game {
     const door = D.pivot;
     // 宿舍门在西墙最里头，往屋里开（贴向南墙）；先走到门的斜前方等门打开
     this.auto = { path: [new THREE.Vector3(-0.3, 0, clamp(p0.z, 1.3, 3.2)), new THREE.Vector3(-0.85, 0, 3.25)], speed: 1.7, i: 0 };
-    this.after(0.3, () => this.say(this.CH ? this.CH.exitLine(this) : '准考证 ✓　学生证 ✓　冲！！！', 2.4));
+    this.after(0.3, () => this.say(this.CH ? this.CH.exitLine(this) : S.view ? '冲！！！' : '准考证 ✓　学生证 ✓　冲！！！', 2.4));
     const openDoorAt = () => {
       this.audio.doorOpen();
       this.refs.lights.corridor.intensity = 0;
@@ -1320,7 +1319,7 @@ export class Game {
   // ================== 章节 ==================
   _chapterDone() {
     const S = this.S;
-    S.done.push({ n: this.chapter, elapsed: S.elapsed, limit: S.limit, hints: S.hints });
+    S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints });
     if (this.chapter < 3) this.goChapter(this.chapter + 1);
     else this.finale();
   }
@@ -1389,15 +1388,15 @@ export class Game {
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
-    Object.assign(S, { elapsed: 0, hints: 0, freeHints: 0, f: {}, inv: [], clues: new Map(), newItem: null, helmetOn: false, uvOn: false, phoneCharge: 0, msgSent: {}, lastRemainSec: -1 });
-    S.limit = CH.limit[S.diff] || CH.limit.normal;
+    Object.assign(S, { elapsed: 0, hints: 0, freeHints: 0, f: {}, inv: [], clues: new Map(), newItem: null, helmetOn: false, uvOn: false, phoneCharge: 0, msgSent: {}, lastSec: -1 });
     S.digits = Array.from({ length: CH.codeLen }, (_, i) => (i === 0 ? 1 + Math.floor(this.rnd() * 9) : Math.floor(this.rnd() * 10)));
     S.found = S.digits.map(() => false);
     this.ch.torch.visible = false;
     CH.init(this);
     this.handlers = this._handlers();
     this._invDirty = true;
-    if (!S.preview) {
+    if (S.view) this._removeDoorLock();
+    else {
       this.settings.unlocked = Math.max(this.settings.unlocked || 1, CH.n);
       this.settings.chapter = CH.n;
       this.saveSettings();
@@ -1412,88 +1411,62 @@ export class Game {
     this.audio.chime && this.audio.chime();
     this.ui.fade(1, { dur: 1.4, white: true });
     this.after(1.6, () => this.ui.fade(1, { dur: 0.6, white: false, card: '“同学……同学！醒醒！”<small>08:00 · 教学楼 A-304</small>' }));
-    this.after(5.2, () => { if (this.S.done.some((d) => d.n === 1)) this.S.ach.add('loop'); this.showEnd(true); });
+    this.after(5.2, () => { if (this.S.done.some((d) => d.n === 1)) this.S.ach.add('loop'); this.showEnd(); });
   }
-  fail() {
-    if (this.state !== 'play') return;
-    this.state = 'outro';
-    this.ui.closeModal(true);
-    this.input.exitLock();
-    this.ui.showHUD(false);
-    this.ui.showTouch(false);
-    this.audio.stopMusic();
-    this.audio.bell();
-    this.ch.setExpression('shock');
-    this._shake(0.4);
-    if (this.CH && this.CH.onFail) this.CH.onFail(this);
-    this.ui.fade(1, { dur: 2.2, card: this.CH ? this.CH.failCard : `08:00<small>考试铃声响起……你还被困在 211</small>` });
-    this.after(3.8, () => this.showEnd(false));
-  }
-  showEnd(success) {
+  // 结算：不限时，评分只看用了几次提示
+  showEnd() {
     const S = this.S;
     this.state = 'end';
     this.ui.fade(0, { dur: 0.8 });
     this.ui.letterbox(false);
     this.ui.showHUD(false);
-    const chName = ['', '211 宿舍', '废弃的 211', '动物园 211'];
-    let rank = 'F', text = '';
-    const runs = S.done;
-    if (success) {
-      const fr = runs.reduce((a, r) => a + Math.max(0, r.limit - r.elapsed) / r.limit, 0) / Math.max(1, runs.length);
-      const hints = runs.reduce((a, r) => a + r.hints, 0);
-      if (fr >= 0.5) S.ach.add('fast');
-      if (hints === 0) S.ach.add('nohint');
-      if (fr >= 0.5 && hints <= 2) { rank = 'S'; text = '你猛地抬起头——监考老师刚刚拆开试卷袋。原来你在考场上睡着了……三个 211 都只是一场梦。深吸一口气，今天的高数，稳了。'; }
-      else if (fr >= 0.3 && hints <= 5) { rank = 'A'; text = '你在考场上惊醒，卷子刚发到你手里。旁边的室友小声说：“你刚才说梦话，一直在喊‘咯咯哒’……”'; }
-      else if (fr >= 0.12) { rank = 'B'; text = '你被监考老师敲醒，已经开考五分钟了。梦里的三个 211 还历历在目。'; }
-      else { rank = 'C'; text = '你惊醒时考试已经过去一半……下次考前，还是别再通宵了吧。'; }
-      this.audio.success();
-      this.audio.stopAllLoops();
+    this.audio.success();
+    this.audio.stopAllLoops();
+    const reload = (mode) => { this.settings.chapter = 1; this.settings.mode = mode; this.saveSettings(); location.reload(); };
+    let node;
+    if (S.view) {
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>三个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button></div>`, 'end');
+      node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
+      node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      text = this.CH ? this.CH.failText : '08:00，考试铃声响起。你还被困在 211……恭喜解锁结局：『重修』。';
-      this.audio.fail();
+      const chName = ['', '211 宿舍', '废弃的 211', '动物园 211'];
+      const runs = S.done;
+      const hints = runs.reduce((a, r) => a + r.hints, 0);
+      if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
+      if (hints === 0) S.ach.add('nohint');
+      let rank, text;
+      if (hints <= 1) { rank = 'S'; text = '你猛地抬起头——监考老师刚刚拆开试卷袋。原来你在考场上睡着了……三个 211 都只是一场梦。深吸一口气，今天的高数，稳了。'; }
+      else if (hints <= 4) { rank = 'A'; text = '你在考场上惊醒，卷子刚发到你手里。旁边的室友小声说：“你刚才说梦话，一直在喊‘咯咯哒’……”'; }
+      else if (hints <= 8) { rank = 'B'; text = '你被监考老师敲醒，已经开考五分钟了。梦里的三个 211 还历历在目。'; }
+      else { rank = 'C'; text = '你惊醒时考试已经过去一半……下次考前，还是别再通宵了吧。'; }
+      const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
+      const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      node = this.ui.panel(`
+        <h2>三个 211，全部逃脱！</h2>
+        <div style="color:var(--muted)">${S.name} 带着准考证，醒在了考场上</div>
+        <div class="rank">${rank}</div>
+        <p>${text}</p>
+        <div class="stats">${chRows}</div>
+        <div class="stats totals"><div><b>${formatMMSS(totalT)}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div></div>
+        <div class="ach">${achHtml}</div>
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button></div>`, 'end');
+      node.querySelector('[data-a=again]').addEventListener('click', () => reload('game'));
     }
-    if (S.preview) {
-      const node = this.ui.panel(`<h2>🎬 预览结束</h2><p>三个 211 都逛完啦！<br>正式游戏里每个房间都有一把锁、一串谜题和倒计时。</p>
-        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始正式游戏</button><button class="btn" data-a="again">再看一遍</button></div>`, 'end');
-      node.querySelector('[data-a=play]').addEventListener('click', () => { this.settings.chapter = 1; this.saveSettings(); location.reload(); });
-      node.querySelector('[data-a=again]').addEventListener('click', () => { this.settings.chapter = 1; this.settings.preview = true; this.saveSettings(); location.reload(); });
-      this.ui.openModal(node, { closable: false });
-      this.auto = null; this.cine = null;
-      this.ctrl.teleport(0.1, 1.2, 0); this.ch.root.position.set(0.1, 0, 1.2); this.ch.root.rotation.y = 0; this.ch.setFirstPerson(false);
-      this._endPose = { cheer: 1 }; this.ch.setExpression('grin'); this.lightMode = 'end';
-      if (this.CH && this.CH.onEnd) this.CH.onEnd(this, true);
-      return;
-    }
-    const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
-    const totalT = runs.reduce((a, r) => a + r.elapsed, 0) + (success ? 0 : S.elapsed);
-    const totalH = runs.reduce((a, r) => a + r.hints, 0) + (success ? 0 : S.hints);
-    const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
-    const failInfo = success ? '' : `<div style="color:var(--muted)">${this.CH ? `${this.CH.lockName}密码：${S.digits.join('')}` : '门锁密码：' + S.digits.join('')}</div>`;
-    const node = this.ui.panel(`
-      <h2>${success ? '三个 211，全部逃脱！' : this.CH ? this.CH.failTitle : '考试开始了……'}</h2>
-      ${success ? `<div style="color:var(--muted)">${S.name} 带着准考证，醒在了考场上</div>` : failInfo}
-      <div class="rank">${rank}</div>
-      <p>${text}</p>
-      <div class="stats">${success ? chRows : `<div><b>${formatMMSS(Math.min(S.elapsed, S.limit))}</b><span>用时</span></div><div><b>${formatMMSS(Math.max(0, S.limit - S.elapsed))}</b><span>剩余时间</span></div>`}<div><b>${success ? formatMMSS(totalT) : totalH}</b><span>${success ? '总用时' : '提示次数'}</span></div></div>
-      <div class="ach">${achHtml}</div>
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">${!success && this.chapter > 1 ? '<button class="btn primary" data-a="retry">重来本章</button>' : ''}<button class="btn ${!success && this.chapter > 1 ? '' : 'primary'}" data-a="again">${success ? '再来一局' : '从头再来'}</button></div>`, `end ${success ? '' : 'fail'}`);
-    node.querySelector('[data-a=again]').addEventListener('click', () => { this.settings.chapter = 1; this.saveSettings(); location.reload(); });
-    const retry = node.querySelector('[data-a=retry]');
-    if (retry) retry.addEventListener('click', () => { this.settings.chapter = this.chapter; this.saveSettings(); location.reload(); });
     this.ui.openModal(node, { closable: false });
-    // 结算背景：主角在房间里欢呼/沮丧
+    // 结算背景：主角在房间里欢呼
     this.auto = null;
     this.cine = null;
-    this.refs.door.pivot.rotation.y = this.refs.door.base + (success ? this.refs.door.openAngle : 0);
+    this.refs.door.pivot.rotation.y = this.refs.door.base + this.refs.door.openAngle;
     this.ctrl.teleport(0.1, 1.2, 0);
     this.ch.root.position.set(0.1, 0, 1.2);
     this.ch.root.rotation.y = 0;
     this.ch.setFirstPerson(false);
-    this._endPose = success ? { cheer: 1 } : { crouch: 1 };
-    this.ch.setExpression(success ? 'grin' : 'shock');
+    this._endPose = { cheer: 1 };
+    this.ch.setExpression('grin');
     this.lightMode = 'end';
-    if (this.CH && this.CH.onEnd) this.CH.onEnd(this, success);
+    if (this.CH && this.CH.onEnd) this.CH.onEnd(this);
   }
 
   _updateOutro(dt) {
@@ -1642,7 +1615,7 @@ export class Game {
     let ck = this.CH && this.CH.clockHands ? this.CH.clockHands(this) : null;
     if (!ck) {
       const [h0, m0] = this.CH ? this.CH.clock : [7, 30];
-      const gm = S ? 30 * clamp(S.elapsed / S.limit, 0, 1) : 29;
+      const gm = S ? 29.99 * this.storyP() : 29;
       ck = { h: h0, m: m0 + gm, s: (gm % 1) * 60 };
     }
     const cl = R.clock.userData;
