@@ -125,10 +125,12 @@ export class Game {
     this.input.onLockChange = (locked) => this._onLockChange(locked);
     window.addEventListener('keydown', (e) => {
       if (e.code === 'Escape' && this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked) this.openPause();
+      if (e.code === 'Escape' && this._admiring) this.showResults();
     });
     this.gfx.canvas.addEventListener('click', () => {
       if (this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked) this.input.requestLock();
     });
+    this._bindAdmireControls();
   }
 
   // ================== 基础设施 ==================
@@ -1455,10 +1457,11 @@ export class Game {
     this.audio.stopAllLoops();
     const reload = (mode) => { this.settings.chapter = 1; this.settings.mode = mode; this.saveSettings(); location.reload(); };
     const fin = this.refs.theme === 'finale';
+    const admireBtn = fin ? '<button class="btn" data-a="admire">🎖️ 留下来欣赏</button>' : '';
     let node;
     if (S.view) {
       node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>四个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
-        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button></div>`, 'end');
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
@@ -1483,9 +1486,14 @@ export class Game {
         <div class="stats">${chRows}</div>
         <div class="stats totals"><div><b>${formatMMSS(totalT)}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div></div>
         <div class="ach">${achHtml}</div>
-        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button></div>`, 'end');
+        <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('game'));
     }
+    const adm = node.querySelector('[data-a=admire]');
+    if (adm) adm.addEventListener('click', () => this.admire());
+    this._endNode = node;
+    this._orbit = { yaw: 0, pitch: 0.12, dist: 3.6, idle: 99 };
+    this._celebT = 6;
     this.ui.openModal(node, { closable: false });
     // 结算背景：主角在房间里欢呼
     this.auto = null;
@@ -1504,15 +1512,101 @@ export class Game {
     if (this.CH && this.CH.onEnd) this.CH.onEnd(this);
   }
 
+  // ---------- 结局广场：可以一直留下来欣赏 ----------
+  // 收起结算面板，留在广场上慢慢看；随时点按钮（或按 Esc）回到结算
+  admire() {
+    if (this.state !== 'end' || this._admiring) return;
+    this._admiring = true;
+    this.ui.closeModal(true);
+    this._orbit.idle = 0;
+    this._admireBar = this.ui.admireBar({ touch: this.input.isTouch, onResults: () => this.showResults() });
+  }
+  showResults() {
+    if (!this._admiring) return;
+    this._admiring = false;
+    if (this._admireBar) { this._admireBar.remove(); this._admireBar = null; }
+    this.ui.openModal(this._endNode, { closable: false });
+  }
+  // 欣赏时：拖动转视角，滚轮 / 双指缩放
+  _bindAdmireControls() {
+    const cv = this.gfx.canvas, pts = new Map();
+    let pinch = 0;
+    const O = () => this._orbit;
+    cv.addEventListener('pointerdown', (e) => {
+      if (!this._admiring) return;
+      pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      cv.setPointerCapture(e.pointerId);
+      if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+    });
+    cv.addEventListener('pointermove', (e) => {
+      const p = pts.get(e.pointerId);
+      if (!p || !this._admiring) return;
+      const o = O();
+      if (pts.size === 1) {
+        o.yaw -= (e.clientX - p.x) * 0.006;
+        o.pitch = clamp(o.pitch + (e.clientY - p.y) * 0.004, -0.1, 1.2);
+      }
+      p.x = e.clientX; p.y = e.clientY;
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinch > 0) o.dist = clamp(o.dist * (pinch / d), 1.6, 14);
+        pinch = d;
+      }
+      o.idle = 0;
+    });
+    const up = (e) => { pts.delete(e.pointerId); pinch = 0; };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+    cv.addEventListener('wheel', (e) => {
+      if (!this._admiring) return;
+      e.preventDefault();
+      const o = O();
+      o.dist = clamp(o.dist * Math.exp(e.deltaY * 0.001), 1.6, 14);
+      o.idle = 0;
+    }, { passive: false });
+  }
+  _updateFinaleView(dt) {
+    const o = this._orbit, cam = this.camera;
+    if (this._admiring) {
+      const k = (c) => this.input.keys.has(c);
+      const rot = (k('KeyA') || k('ArrowLeft') ? 1 : 0) - (k('KeyD') || k('ArrowRight') ? 1 : 0);
+      const zoom = (k('KeyS') || k('ArrowDown') ? 1 : 0) - (k('KeyW') || k('ArrowUp') ? 1 : 0);
+      if (rot || zoom) { o.yaw += rot * dt * 1.2; o.dist = clamp(o.dist * (1 + zoom * dt * 1.2), 1.6, 14); o.idle = 0; }
+    }
+    // 没人动镜头时，自己绕着仪式慢慢转
+    o.idle += dt;
+    if (o.idle > 4) o.yaw += dt * 0.12;
+    const cp = Math.cos(o.pitch);
+    cam.position.set(Math.sin(o.yaw) * o.dist * cp, 1.3 + Math.sin(o.pitch) * o.dist, 0.6 + Math.cos(o.yaw) * o.dist * cp);
+    cam.position.y = Math.max(0.3, cam.position.y);
+    // 别让镜头钻进看台、楼和旗杆里：从看的中心往镜头打一条射线，被挡住就拉近（少校、教官不算）
+    const R = this.refs, tgt = _v1.set(0, 1.3, 0.6), dir = _v2.copy(cam.position).sub(tgt), len = dir.length();
+    dir.normalize();
+    const rc = this._camRay || (this._camRay = new THREE.Raycaster());
+    rc.set(tgt, dir); rc.near = 0; rc.far = len; rc.camera = cam;
+    const skip = [R.officer.root, R.sarge.root, R.giftCap];
+    const hit = rc.intersectObject(R.root, true).find((h) => {
+      if (h.object.isSprite || h.object.isPoints) return false;
+      for (let p = h.object; p; p = p.parent) if (!p.visible || skip.includes(p)) return false;
+      return true;
+    });
+    if (hit) cam.position.copy(tgt).addScaledVector(dir, Math.max(0.5, hit.distance - 0.3));
+    cam.lookAt(tgt);
+    // 庆祝不停：隔一会儿就撒一次彩带、看台上闪一片闪光灯、欢呼一阵
+    this._celebT -= dt;
+    if (this._celebT <= 0 && this._finale) {
+      this._celebT = 9 + Math.random() * 6;
+      this._finale.confetti(5);
+      this._finale.flashes(8);
+      this.audio.cheer(2.5);
+    }
+  }
+
   _updateOutro(dt) {
     if (this.state === 'end') {
       const t = this.time;
-      if (this.refs.theme === 'finale') {
-        // 结局广场：镜头绕着主角和少校慢慢转
-        const a = t * 0.12;
-        this.camera.position.set(Math.sin(a) * 3.6, 1.75, 0.6 + Math.cos(a) * 3.6);
-        this.camera.lookAt(0, 1.3, 0.6);
-      } else {
+      if (this.refs.theme === 'finale') this._updateFinaleView(dt);
+      else {
         this.camera.position.set(0.1 + Math.sin(t * 0.25) * 0.5, 1.35, 2.9);
         this.camera.lookAt(0.1, 1.15, 1.2);
       }

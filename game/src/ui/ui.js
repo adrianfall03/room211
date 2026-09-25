@@ -379,4 +379,14 @@ export class UI {
   }
 
   panel(html, cls = '') { return h('div', `panel ${cls}`, html); }
+
+  // 结局广场"留下来欣赏"时，屏幕下方的操作提示和"查看结算"按钮
+  admireBar({ touch = false, onResults }) {
+    const tip = touch ? '单指拖动转视角 · 双指缩放' : '拖动鼠标转视角 · 滚轮缩放（WASD / 方向键也行）· Esc 回到结算';
+    const b = h('div', '', `<span>🎖️ ${tip}</span><button class="btn primary" data-a="results">📋 查看结算</button>`);
+    b.id = 'admire-bar';
+    $('[data-a=results]', b).addEventListener('click', () => { this.audio.click(); onResults(); });
+    document.body.appendChild(b);
+    return b;
+  }
 }
