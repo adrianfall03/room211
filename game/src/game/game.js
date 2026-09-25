@@ -1473,6 +1473,7 @@ export class Game {
     this.scene.remove(old.root);
     disposeTree(old.root);
     if (old.helmet) disposeTree(old.helmet);
+    this.uvLight.visible = true; // 第四章会把它藏起来
     this.refs = this.buildWorld(theme);
     this.ctrl.camBoxes = this.refs.camBoxes;
     this.ctrl.bounds = this.refs.bounds;
