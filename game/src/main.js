@@ -63,6 +63,28 @@ class HalfResGTAOPass extends GTAOPass {
     this.needsSwap = false;
   }
   setSize(w, h) { super.setSize(Math.max(1, Math.round(w / 2)), Math.max(1, Math.round(h / 2))); }
+  // 画法线 / 深度之前要藏起来的东西。GTAO 用覆盖材质把整个场景重画一遍，覆盖材质是写深度的，
+  // 原本不写深度的透明物体（窗口的体积光柱切片、玻璃、雾……）也会被当成实心面画进去：
+  // 光柱从窗口斜着伸进屋里四米多，等于半空里立起一排看不见的墙，墙两边被算成"墙角"一块块压黑，
+  // 真正的地板和家具反而被挡住、没有 AO——站在窗边往屋里回头看，光柱穿过的那一片屋子就发黑（第二章黄昏、第四章阳光照进舱里时最明显）。
+  // 这里只留"主画面里会写深度的表面"：GTAOPass 原本就去掉的点、线，再加上所有不写深度的材质。
+  // 用图层掩码只屏蔽物体自己（visible = false 会连它的子物体一起藏掉）
+  _overrideVisibility() {
+    const cache = this._maskCache || (this._maskCache = []);
+    const noDepth = (m) => (Array.isArray(m) ? m.every((x) => !x || !x.depthWrite) : !m || !m.depthWrite);
+    const visit = (o) => {
+      if (!o.visible) return;
+      if (o.isPoints || o.isLine || o.isLine2 || ((o.isMesh || o.isSprite) && noDepth(o.material))) { cache.push(o, o.layers.mask); o.layers.mask = 0; }
+      const c = o.children;
+      for (let i = 0; i < c.length; i++) visit(c[i]);
+    };
+    visit(this.scene);
+  }
+  _restoreVisibility() {
+    const cache = this._maskCache;
+    for (let i = 0; i < cache.length; i += 2) cache[i].layers.mask = cache[i + 1];
+    cache.length = 0;
+  }
   render(renderer, writeBuffer, readBuffer, dt, mask) {
     super.render(renderer, writeBuffer, readBuffer, dt, mask);
     this.blendMaterial.uniforms.intensity.value = this.blendIntensity;
