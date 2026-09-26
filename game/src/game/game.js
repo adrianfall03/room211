@@ -4,6 +4,7 @@ import * as TX from '../core/textures.js';
 import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
 import { FX } from '../world/fx.js';
 import { CHAPTERS, LAST_CHAPTER } from './chapters.js';
+import { chapterLabel } from './chapternames.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight } from './doorway.js';
@@ -1587,11 +1588,10 @@ export class Game {
     const admireBtn = fin ? '<button class="btn" data-a="admire">🎖️ 留下来欣赏</button>' : '';
     let node;
     if (secret) {
-      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>${chapterLabel(r.n)}</span></div>`).join('');
       const [A] = S.mates;
       node = this.ui.panel(`
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
@@ -1607,7 +1607,6 @@ export class Game {
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
@@ -1619,7 +1618,7 @@ export class Game {
       else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>${chapterLabel(r.n)}</span></div>`).join('');
       node = this.ui.panel(`
         <h2>七个 211，全部逃脱！</h2>
         <div style="color:var(--muted)">一场梦醒来，${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>

@@ -495,7 +495,7 @@ export function decorateMetro(ctx) {
   for (let k = 0; k < 3; k++) emerg.add(mesh(new THREE.TorusGeometry(0.065, 0.004, 4, 14, Math.PI), steelM, { x: 0.05, rx: (k / 3) * Math.PI, ry: Math.PI / 2, cast: false }));
   compact(emerg);
   P(emerg);
-  const redLight = new THREE.PointLight('#ff3018', 0.9, 4.5, 1.6); redLight.position.set(-1.55, 2.3, (DOOR.z0 + DOOR.z1) / 2); P(redLight);
+  const redLight = new THREE.PointLight('#ff3018', 1.25, 5.5, 1.6); redLight.position.set(-1.55, 2.3, (DOOR.z0 + DOOR.z1) / 2); P(redLight);
 
   // ===== 6. 弹药箱：五只，刷着编号；其中一只"热"（里面是一小块会发光的东西）=====
   const crates = CRATES.map(([x, z, ry], i) => {
@@ -619,7 +619,7 @@ export function decorateMetro(ctx) {
   }
   const photo = mesh(new THREE.PlaneGeometry(0.16, 0.12), keep(new THREE.MeshStandardMaterial({ color: '#8a8070', roughness: 0.8 })), { x: -1.76, y: T0 + 0.2, z: 1.68, ry: Math.PI / 2, rx: 0, cast: false });
   P(photo);
-  const shrineLight = new THREE.PointLight('#ffa050', 1.0, 3.2, 1.6); shrineLight.position.set(-1.45, 1.05, 1.68); P(shrineLight);
+  const shrineLight = new THREE.PointLight('#ffa050', 1.6, 4.6, 1.5); shrineLight.position.set(-1.45, 1.05, 1.68); P(shrineLight);
   mark('shrine', photo); for (const f of candles) mark('shrine', f);
   const kettle = new THREE.Group(); kettle.position.set(-1.5, T0, 2.3);
   kettle.add(mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.05, 16), keep(std('#2a2a28', 0.5, 0.6)), { y: 0.025 }));
@@ -672,7 +672,7 @@ export function decorateMetro(ctx) {
   // "太阳"：站台上的钠灯从窗户照进来（发电机摇起来才亮）——从北边高处打下来，窗框、木板的影子落在书桌和地上
   L.sun.color.set('#ffa048'); L.sun.position.set(0.6, 7.5, -10.5); L.sun.target.position.set(0, 0, -1.6); L.sun.intensity = 0;
   L.winLight.color.set('#c89060'); L.winLight.intensity = 0; L.winLight.position.z = -3.63;
-  L.monLight.color.set('#ffae50'); L.monLight.distance = 3.2; L.monLight.position.set(1.55, 1.05, 0.05); L.monLight.intensity = 1.0;
+  L.monLight.color.set('#ffae50'); L.monLight.distance = 4.4; L.monLight.position.set(1.55, 1.05, 0.05); L.monLight.intensity = 1.0;
   L.wc.color.set('#9ab86a');
   // 舱顶：两盏带铁罩的灯泡（开关控制，电压不稳，一闪一闪）
   const bulbM = keep(new THREE.MeshStandardMaterial({ color: '#f4e8d0', emissive: new THREE.Color('#ffc890'), emissiveIntensity: 0, roughness: 0.2 }));
