@@ -362,19 +362,15 @@ async function boot() {
   ui.loading(1, '准备就绪');
   await nextFrame();
   ui.hideLoading();
+  // 名字、画质不放在标题上了：名字沿用以前存下的（没有就叫"我"），画质在暂停菜单里改
   ui.showTitle({
-    defaultName: settings.name,
-    defaultMode: settings.mode,
-    quality: settings.quality,
-    onQuality: (q) => { settings.quality = q; gfx.setQuality(q); saveSettings(); },
-    unlocked: settings.unlocked || 1,
-    defaultChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
-    onStart: ({ name, mode, quality, chapter }) => {
+    lastChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
+    onStart: ({ mode, chapter }) => {
       audio.init();
-      settings.name = name; settings.mode = mode; settings.quality = quality;
+      settings.mode = mode;
       if (mode === 'game') settings.chapter = chapter;
       saveSettings();
-      game.startIntro({ name, chapter, view: mode === 'view' });
+      game.startIntro({ name: settings.name || '', chapter, view: mode === 'view' });
     },
   });
 
