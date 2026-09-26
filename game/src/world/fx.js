@@ -107,6 +107,18 @@ function tex(kind) {
       ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
     }, 64),
     confetti: () => spriteTex((ctx, S) => { ctx.fillStyle = '#ffffff'; ctx.fillRect(S * 0.3, S * 0.15, S * 0.4, S * 0.7); }, 32),
+    // 蒸汽 / 呼出来的白气：很淡的一团，边上散开，带几缕不规则的絮
+    steam: () => spriteTex((ctx, S) => {
+      const g = ctx.createRadialGradient(S / 2, S / 2, 0, S / 2, S / 2, S / 2);
+      g.addColorStop(0, 'rgba(255,255,255,0.32)'); g.addColorStop(0.45, 'rgba(255,255,255,0.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+      for (let k = 0; k < 9; k++) {
+        const a = k * 2.4, r = S * (0.12 + (k % 3) * 0.06), x = S / 2 + Math.cos(a) * r, y = S / 2 + Math.sin(a) * r * 0.8;
+        const g2 = ctx.createRadialGradient(x, y, 0, x, y, S * 0.18);
+        g2.addColorStop(0, 'rgba(255,255,255,0.1)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = g2; ctx.fillRect(0, 0, S, S);
+      }
+    }, 64),
     drop: () => spriteTex((ctx, S) => {
       ctx.fillStyle = 'rgba(200,230,255,0.9)'; ctx.beginPath(); ctx.moveTo(S / 2, S * 0.1); ctx.quadraticCurveTo(S * 0.8, S * 0.6, S / 2, S * 0.85); ctx.quadraticCurveTo(S * 0.2, S * 0.6, S / 2, S * 0.1); ctx.fill();
     }, 64),
@@ -115,7 +127,7 @@ function tex(kind) {
   return t;
 }
 
-// 不受全局裁剪面影响的材质（第四章彩蛋：飞船被一刀一刀"切掉"时，火花、碎片要能飞进外面的虚空里）
+// 不受全局裁剪面影响的材质（第五章彩蛋：飞船被一刀一刀"切掉"时，火花、碎片要能飞进外面的虚空里）
 export function noClip(m) {
   m.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', ''); };
   m.customProgramCacheKey = () => 'noclip';
@@ -146,7 +158,7 @@ export class FX {
     this.group.name = 'fx';
     scene.add(this.group);
     this.pools = {};
-    const def = { feather: [160, false], spark: [120, true], heart: [60, false], star: [80, false], note: [40, false], confetti: [200, false], drop: [40, false], dust: [60, false] };
+    const def = { feather: [160, false], spark: [120, true], heart: [60, false], star: [80, false], note: [40, false], confetti: [200, false], drop: [40, false], dust: [60, false], steam: [140, false] };
     for (const [k, [cap, add]] of Object.entries(def)) { const p = new Pool(k, cap, add); this.pools[k] = p; this.group.add(p.mesh); }
   }
   // 发射一团粒子

@@ -34,7 +34,7 @@ export class Controller {
     this.fpBlend = 0;
     this.sensitivity = 1;
     this.invertY = false;
-    // 失重（第四章）：float 0..1；floatY 离地高度，空格往上飘、C 往下沉
+    // 失重（第五章）：float 0..1；floatY 离地高度，空格往上飘、C 往下沉
     this.float = 0;
     this.floatTarget = 0.3;
     this.t = 0;

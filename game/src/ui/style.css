@@ -265,6 +265,8 @@ body.touch-ui #subtitle { left: 12px; right: 176px; transform: none; max-width: 
 .seg.mode button[data-v=view].on { border-color: #ff5fa2; background: rgba(255,95,162,0.14); }
 .seg button.locked { opacity: 0.55; cursor: not-allowed; }
 .seg button.locked small { color: #ff9ac4; }
+#t-ch button { min-width: 58px; padding: 8px 3px; }
+#t-ch button small { font-size: 10.5px; }
 /* 鉴赏模式：没有任务、没有密码格，提示 / 线索换成"下一关" */
 body.mode-view #hud-tl, body.mode-view #hud-tr .codes, body.mode-view .game-only { display: none; }
 body:not(.mode-view) .view-only { display: none; }
@@ -282,7 +284,7 @@ body:not(.mode-view) .view-only { display: none; }
 .lockbox.rusty { background: linear-gradient(160deg, #3a2a20, #1a120c); border-color: rgba(200,140,80,0.3); }
 .lockbox.rusty .wheels { background: linear-gradient(180deg, #1a100a, #3a2618 50%, #1a100a); }
 .lockbox.rusty .wheel .face { background: linear-gradient(180deg, #4a2e1a 0%, #b8864a 30%, #d8a868 50%, #b8864a 70%, #4a2e1a 100%); }
-/* 第三章：雨林 —— 写实电影感：深色磨砂、暖琥珀色的字（和第四章一个路子，色调偏青绿） */
+/* 第三章：雨林 —— 写实电影感：深色磨砂、暖琥珀色的字（和第五章一个路子，色调偏青绿） */
 body.theme-jungle { --accent: #d9a45a; --panel: rgba(10,14,12,0.7); --line: rgba(210,214,190,0.14); --warn: #e8a050; }
 body.theme-jungle #hud-tl, body.theme-jungle #hud-tr, body.theme-jungle .slot { border-radius: 4px; box-shadow: none; }
 body.theme-jungle #hud-tr .ct { color: #eedbb4; text-shadow: 0 0 10px rgba(230,170,90,0.25); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
@@ -312,7 +314,26 @@ body.theme-ruin #hud-tr .ct { color: #f4d9a8; text-shadow: 0 0 12px rgba(240,160
 .end .stats.totals { margin-top: -6px; }
 .end .rank { font-size: clamp(72px, 14vh, 120px); }
 
-/* 第四章：太空舱 —— 写实电影感：深色磨砂玻璃、暖白 / 琥珀色的字，没有霓虹光 */
+/* 第四章：冰封 211 —— 写实电影感：冷蓝灰的磨砂底、炉火一样的橘色字（《冰汽时代》的配色） */
+body.theme-frost { --accent: #ffa650; --panel: rgba(10,13,18,0.72); --line: rgba(200,214,236,0.16); --warn: #ff7a3a; }
+body.theme-frost #hud-tl, body.theme-frost #hud-tr, body.theme-frost .slot { border-radius: 3px; box-shadow: none; }
+body.theme-frost #hud-tr .ct { color: #e6eefa; text-shadow: 0 0 10px rgba(255,150,70,0.3); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+body.theme-frost #subtitle { border-radius: 3px; background: rgba(8,10,14,0.68); border: 1px solid rgba(200,214,236,0.14); box-shadow: none; }
+body.theme-frost #crosshair.active { border-color: #ffa650; box-shadow: 0 0 8px rgba(255,166,80,0.45); }
+/* 门上那把"蒸汽压力锁"：黄铜表盘、铸铁外壳、边上结着一圈霜 */
+.lockbox.steam { background: linear-gradient(165deg, #242830, #101216); border: 1px solid rgba(210,226,250,0.16); color: #e2e6ee; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03), inset 0 0 30px rgba(170,200,240,0.08), 0 30px 80px rgba(0,0,0,0.75); }
+.lockbox.steam .hint { color: #a6b0c0; }
+.lockbox.steam .wheels { background: radial-gradient(ellipse at 50% 0%, rgba(200,220,255,0.12), transparent 60%), linear-gradient(180deg, #16120c, #3a2c16 50%, #16120c); box-shadow: inset 0 4px 14px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(200,220,255,0.18); }
+.lockbox.steam .wheel button { background: #33302a; color: #f0d8a8; border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255,240,200,0.08), 0 2px 0 #0c0b09; }
+.lockbox.steam .wheel .face { background: linear-gradient(180deg, #2c2418 0%, #a88a52 30%, #e0c890 50%, #a88a52 70%, #2c2418 100%); }
+.lockbox.steam .wheel .strip div { color: #2a1c0c; text-shadow: 0 1px 0 rgba(255,236,190,0.4); font-family: "DIN Condensed", "Arial Narrow", sans-serif; }
+.lockbox.steam .btn.primary { background: #c8742c; color: #120c06; }
+/* 用黄铜望远镜看熔炉：画面四周一圈黑、中间一个圆 */
+#spyglass { position: fixed; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.6s; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 34vmin, rgba(0,0,0,0.6) 36vmin, #000 39vmin); }
+#spyglass::after { content: ''; position: absolute; left: 50%; top: 50%; width: 72vmin; height: 72vmin; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: inset 0 0 40px rgba(0,0,0,0.8), inset 0 0 0 2px rgba(200,160,90,0.25); }
+#spyglass.on { opacity: 1; }
+
+/* 第五章：太空舱 —— 写实电影感：深色磨砂玻璃、暖白 / 琥珀色的字，没有霓虹光 */
 body.theme-space { --accent: #e8b46a; --panel: rgba(12,15,14,0.7); --line: rgba(220,214,196,0.14); --warn: #ff7a4a; }
 body.theme-space #hud-tl, body.theme-space #hud-tr, body.theme-space .slot { border-radius: 4px; box-shadow: none; }
 body.theme-space #hud-tr .ct { color: #f0dcb0; text-shadow: 0 0 10px rgba(240,170,80,0.25); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
@@ -337,7 +358,7 @@ body.theme-finale { --accent: #e8b830; }
 @keyframes ecIn { from { opacity: 0; transform: translateX(-50%) scale(1.8); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
 @keyframes ecOut { to { opacity: 0; transform: translateX(-50%) translateY(-30px); } }
 
-/* 第四章：找到一位授权码时，画面下方淡入一行电影字幕式的读数 */
+/* 第五章：找到一位授权码时，画面下方淡入一行电影字幕式的读数 */
 .readout { position: fixed; left: 50%; bottom: 24%; transform: translateX(-50%); z-index: 51; pointer-events: none; text-align: center; color: #efe6d0; animation: roIn 0.9s ease-out both; }
 .readout .ro-k { font: 600 12px/1 "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.32em; color: rgba(232,180,106,0.85); }
 .readout .ro-v { margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 14px; }

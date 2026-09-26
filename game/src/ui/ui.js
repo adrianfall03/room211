@@ -73,7 +73,7 @@ export class UI {
       <div class="t-left">
         <div class="t-kicker">3D 宿舍密室逃脱</div>
         <div class="t-logo"><span>逃离</span><span class="num">211</span><span>宿舍</span></div>
-        <div class="t-sub">期末考试当天早上，你通宵打完排位后在电脑前睡着了……醒来发现<b>门被自己的车锁锁上了</b>，准考证也不见了。<b>8:00</b> 高数开考，快逃！<br><span class="t-more">逃出这间 211 之后……门外还有<b>三个</b> 211。</span></div>
+        <div class="t-sub">期末考试当天早上，你通宵打完排位后在电脑前睡着了……醒来发现<b>门被自己的车锁锁上了</b>，准考证也不见了。<b>8:00</b> 高数开考，快逃！<br><span class="t-more">逃出这间 211 之后……门外还有<b>四个</b> 211。</span></div>
         <div><label>主角名字</label><input type="text" id="t-name" maxlength="8" placeholder="给自己起个名字（选填）" value="${esc(defaultName)}"></div>
         <div><label>模式（都不限时）</label>
           <div class="seg mode" id="t-mode">
@@ -86,6 +86,7 @@ export class UI {
             <button data-v="2">第二章<small></small></button>
             <button data-v="3">第三章<small></small></button>
             <button data-v="4">第四章<small></small></button>
+            <button data-v="5">第五章<small></small></button>
           </div></div>
         <div><label>画质</label>
           <div class="seg" id="t-q">
@@ -106,8 +107,8 @@ export class UI {
       sync();
     };
     seg('#t-q', q, (v) => { q = v; onQuality && onQuality(v); });
-    // 章节：游戏模式里没通关的章节锁着；鉴赏模式三章随便选
-    const chNames = ['211 宿舍', '废弃的 211', '动物园 211', '太空舱 211'];
+    // 章节：游戏模式里没通关的章节锁着；鉴赏模式随便选
+    const chNames = ['211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
     const chBtns = [...$('#t-ch', t).querySelectorAll('button')];
     const startBtn = $('#t-start', t);
     const syncCh = () => {
@@ -116,7 +117,7 @@ export class UI {
         const locked = mode === 'game' && i + 1 > unlocked;
         b.classList.toggle('on', i + 1 === chapter);
         b.classList.toggle('locked', locked);
-        $('small', b).textContent = locked ? '🔒 通关上一章解锁' : chNames[i];
+        $('small', b).textContent = locked ? '🔒 未解锁' : chNames[i];
       });
       $('#t-ch-label', t).textContent = mode === 'game' ? '章节（通关一章解锁一章）' : '章节（鉴赏模式随便选）';
       startBtn.textContent = mode === 'game' ? '开 始 逃 脱' : '开 始 鉴 赏';
@@ -159,7 +160,7 @@ export class UI {
       b.addEventListener('mousedown', on); b.addEventListener('mouseup', off); b.addEventListener('mouseleave', off);
     });
   }
-  // 失重（第四章）：触屏按钮和键位提示换成上浮 / 下沉
+  // 失重（第五章）：触屏按钮和键位提示换成上浮 / 下沉
   setZeroG(v) { document.body.classList.toggle('zero-g', !!v); }
   setClock(time, sub) {
     this.el.ct.textContent = time;
@@ -170,7 +171,7 @@ export class UI {
   setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
-    document.body.classList.remove('theme-ruin', 'theme-jungle', 'theme-space', 'theme-finale');
+    document.body.classList.remove('theme-ruin', 'theme-jungle', 'theme-frost', 'theme-space', 'theme-finale');
     if (theme !== 'normal') document.body.classList.add(`theme-${theme}`);
   }
   setCodes(digits, found, icons = null) {

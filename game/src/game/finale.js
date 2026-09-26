@@ -1,6 +1,6 @@
 // 结局过场：梦醒了——新兵报到
 //   眼前一片黑，教官一嗓子"新兵！醒醒！" → 眼皮眨两下睁开：自己坐在征兵站门前的候场区里打瞌睡，
-//   四个 211 原来全是一场梦 → 起立，教官喊"向前走" → 红毯尽头立正 → 少校敬礼、双手递上军帽 →
+//   五个 211 原来全是一场梦 → 起立，教官喊"向前走" → 红毯尽头立正 → 少校敬礼、双手递上军帽 →
 //   你接过军帽戴上、回敬一个军礼 → 礼炮彩带、观众欢呼 → 结算
 //   这是在美国的征兵站：场景里的字、所有人说的话、字幕全是英文
 import * as THREE from 'three';
@@ -82,7 +82,7 @@ export class FinaleDirector {
         g.audio.startMusic('finale');
       }],
       [6.9, () => g.ui.subtitle("Wasn't I just… in the space capsule?", 2.2, me)],
-      [9.2, () => { ch.setExpression('focus'); g.ui.subtitle('Four Room 211s… it was all… a dream?', 2.8, me); }],
+      [9.2, () => { ch.setExpression('focus'); g.ui.subtitle('Five Room 211s… it was all… a dream?', 2.8, me); }],
       [12.2, () => {
         g._cineTo(V(1.3, 1.65, 7.6), V(0.1, 1.4, 5.9), 1.0);
         g.audio.snap(); g._shake(0.05);

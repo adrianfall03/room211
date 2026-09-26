@@ -294,7 +294,101 @@ export class Audio {
     this.tone({ f: 784, dur: 0.7, type: 'sine', gain: 0.1, delay: 0.45 });
   }
 
-  // ----- 第四章：太空舱 -----
+  // ----- 第四章：冰封 211 -----
+  // 暴风雪：两层一直在响的风声；阵风用 gust() 一阵一阵地叠上去
+  startWind(gain = 1) {
+    this.startLoop('wind', { type: 'bandpass', freq: 520, Q: 0.6, gain: 0.05 * gain, brown: false });
+    this.startLoop('windLow', { type: 'lowpass', freq: 170, Q: 0.5, gain: 0.12 * gain, brown: true });
+  }
+  gust(k = 1) {
+    const d = 2.2 + Math.random() * 1.6;
+    this.noise({ dur: d, gain: 0.09 * k, type: 'bandpass', freq: 300 + Math.random() * 200, freq2: 800 + Math.random() * 700, Q: 1.6, curve: [[0.35, 1], [0.6, 0.85], [1, 0]] });
+    this.noise({ dur: d * 0.8, gain: 0.03 * k, type: 'bandpass', freq: 1400, freq2: 2400, Q: 3, delay: d * 0.2, curve: [[0.4, 1], [1, 0]] });
+  }
+  // 窗户被风吹得咯吱响
+  rattle() { for (let i = 0; i < 5; i++) this.noise({ dur: 0.04, gain: 0.1, type: 'bandpass', freq: 1300 + Math.random() * 700, Q: 4, delay: i * 0.05 + Math.random() * 0.02 }); }
+  // 炉火：点着的那一声"呼——"，之后是一直在响的低沉火声（loop）+ 时不时噼啪一下
+  ignite() {
+    this.noise({ dur: 1.5, gain: 0.35, type: 'lowpass', freq: 300, freq2: 1600, brown: true, curve: [[0.08, 1], [0.5, 0.6], [1, 0]] });
+    this.tone({ f: 55, f2: 90, dur: 1.2, type: 'sine', gain: 0.15 });
+  }
+  startFire() {
+    this.startLoop('fire', { type: 'lowpass', freq: 420, Q: 0.4, gain: 0.07, brown: true });
+    this.startLoop('fireHi', { type: 'bandpass', freq: 2600, Q: 0.5, gain: 0.01, brown: false });
+  }
+  crackle(k = 1) {
+    const n = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) this.noise({ dur: 0.02 + Math.random() * 0.03, gain: (0.06 + Math.random() * 0.1) * k, type: 'highpass', freq: 2500 + Math.random() * 3000, delay: Math.random() * 0.25, rev: false });
+  }
+  // 铲煤 / 往炉子里倒煤：哗啦一下
+  shovel() {
+    this.noise({ dur: 0.35, gain: 0.3, type: 'bandpass', freq: 900, Q: 0.7, curve: [[0.1, 1], [1, 0]] });
+    for (let i = 0; i < 9; i++) this.noise({ dur: 0.04, gain: 0.16, type: 'bandpass', freq: 1100 + Math.random() * 1800, Q: 3, delay: 0.08 + i * 0.04 + Math.random() * 0.03 });
+  }
+  // 蒸汽管里"当、当"的水锤声
+  clank(n = 3) {
+    for (let i = 0; i < n; i++) {
+      const d = i * 0.22 + Math.random() * 0.08;
+      this.tone({ f: 170 + Math.random() * 80, f2: 110, dur: 0.28, type: 'triangle', gain: 0.08, delay: d });
+      this.tone({ f: 1100 + Math.random() * 400, dur: 0.2, type: 'sine', gain: 0.022, delay: d });
+      this.noise({ dur: 0.05, gain: 0.14, type: 'bandpass', freq: 1800, Q: 2, delay: d });
+    }
+  }
+  // 城市的蒸汽汽笛：三个音叠在一起、微微颤，远远地从窗外传过来
+  steamWhistle(sec = 3, k = 1) {
+    if (!this.ctx) return;
+    const c = this.ctx, t0 = this.t;
+    const out = c.createGain();
+    out.gain.setValueAtTime(0.0001, t0); out.gain.linearRampToValueAtTime(0.035 * k, t0 + 0.5);
+    out.gain.setValueAtTime(0.035 * k, t0 + sec - 0.7); out.gain.linearRampToValueAtTime(0.0001, t0 + sec);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1500;
+    for (const f of [311, 370, 466]) {
+      const o = c.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 0.94, t0); o.frequency.linearRampToValueAtTime(f, t0 + 0.6);
+      const v = c.createOscillator(), vg = c.createGain(); v.frequency.value = 4.6; vg.gain.value = f * 0.004;
+      v.connect(vg).connect(o.frequency); o.connect(lp);
+      o.start(t0); v.start(t0); o.stop(t0 + sec + 0.1); v.stop(t0 + sec + 0.1);
+    }
+    lp.connect(out); this._out(out, true);
+    this.noise({ dur: sec, gain: 0.04 * k, type: 'highpass', freq: 3000, curve: [[0.1, 1], [0.85, 0.8], [1, 0]] });
+  }
+  // 冰壳碎掉 / 冰柱掉下来摔碎
+  iceBreak() {
+    for (let i = 0; i < 7; i++) this.noise({ dur: 0.05 + Math.random() * 0.05, gain: 0.2, type: 'highpass', freq: 2500 + Math.random() * 4000, delay: i * 0.03 + Math.random() * 0.03 });
+    this.tone({ f: 3200, f2: 1800, dur: 0.2, type: 'sine', gain: 0.04 });
+  }
+  // 小铁件掉在地上：叮、叮叮
+  tink() { [0, 0.18, 0.3, 0.37].forEach((d, i) => this.tone({ f: 2400 - i * 90, f2: 2050, dur: 0.16, type: 'sine', gain: 0.08 / (i + 1), delay: d })); }
+  // 气动传送管："咻——咚"
+  tubeWhoosh() {
+    this.noise({ dur: 0.9, gain: 0.25, type: 'bandpass', freq: 300, freq2: 2400, Q: 1.2, curve: [[0.6, 1], [1, 0]] });
+    this.noise({ dur: 0.2, gain: 0.4, type: 'lowpass', freq: 500, brown: true, delay: 0.85 });
+    this.tone({ f: 200, f2: 90, dur: 0.18, type: 'sine', gain: 0.12, delay: 0.85 });
+  }
+  // 上发条：一格一格往上拧
+  ratchet(n = 8) {
+    for (let i = 0; i < n; i++) { this.noise({ dur: 0.025, gain: 0.25, type: 'bandpass', freq: 2600, Q: 3, delay: i * 0.11 }); this.tone({ f: 900, dur: 0.02, type: 'square', gain: 0.02, delay: i * 0.11 }); }
+  }
+  // 自动机醒过来：嗤——放汽，齿轮"嗡——"地转起来，最后"叮"一声
+  automatonBoot() {
+    this.hiss();
+    this.tone({ f: 55, f2: 220, dur: 1.9, type: 'sawtooth', gain: 0.03, attack: 0.3 });
+    this.clank(2);
+    this.tone({ f: 1318, dur: 1.2, type: 'sine', gain: 0.06, delay: 2.1 });
+    this.tone({ f: 1976, dur: 0.8, type: 'sine', gain: 0.03, delay: 2.1 });
+  }
+  // 自动机说话：一串低低的方波"嘟嘟"声（字幕出来的时候配一下）
+  robotVoice(dur = 1.2) {
+    const n = Math.max(3, Math.round(dur / 0.13));
+    for (let i = 0; i < n; i++) this.tone({ f: 110 + ((i * 37) % 5) * 14, dur: 0.1, type: 'square', gain: 0.018, delay: i * 0.13, rev: false });
+  }
+  // 打字机：咔哒；换行时"叮"
+  typeClack() { this.noise({ dur: 0.03, gain: 0.2, type: 'bandpass', freq: 1800 + Math.random() * 800, Q: 1.5, rev: false }); this.tone({ f: 160, f2: 90, dur: 0.04, type: 'square', gain: 0.025, rev: false }); }
+  typeDing() { this.tone({ f: 2093, dur: 0.6, type: 'sine', gain: 0.07 }); }
+  // 城市广播：一口铜钟"当——当——"
+  bell() { for (const d of [0, 1.1]) { this.tone({ f: 523, dur: 1.6, type: 'triangle', gain: 0.07, delay: d }); this.tone({ f: 523 * 2.76, dur: 0.9, type: 'sine', gain: 0.02, delay: d }); this.tone({ f: 262, dur: 1.8, type: 'sine', gain: 0.05, delay: d }); } }
+
+  // ----- 第五章：太空舱 -----
   hiss() { this.noise({ dur: 1.1, gain: 0.3, type: 'highpass', freq: 2500, curve: [[0.05, 1], [0.6, 0.6], [1, 0]] }); this.tone({ f: 80, f2: 50, dur: 0.4, type: 'sine', gain: 0.12 }); }
   robotBeep(n = 2, base = 900) {
     for (let i = 0; i < n; i++) this.tone({ f: base * (1 + ((i * 7) % 5) * 0.18), dur: 0.07, type: 'square', gain: 0.035, delay: i * 0.09, rev: false });
@@ -311,7 +405,7 @@ export class Audio {
     for (let t = 0; t < sec; t += 0.5) { this.tone({ f: 880, f2: 660, dur: 0.24, type: 'square', gain: 0.045, delay: t, rev: false }); this.tone({ f: 660, dur: 0.2, type: 'square', gain: 0.03, delay: t + 0.25, rev: false }); }
   }
 
-  // ----- 第四章彩蛋：卡冈图雅 / 书架背后 -----
+  // ----- 第五章彩蛋：卡冈图雅 / 书架背后 -----
   // 大喊（隔着书架、隔着时空，闷闷的）："啊——！" 锯齿波 + 两个元音共振峰
   shout(pitch = 1, dur = 0.8, muffled = false) {
     if (!this.ctx) return;
@@ -431,6 +525,7 @@ export class Audio {
     if (!this.ctx || this._musicTimer) return;
     if (theme === 'ruin') return this._musicRuin();
     if (theme === 'jungle') return this._musicJungle();
+    if (theme === 'frost') return this._musicFrost();
     if (theme === 'space') return this._musicSpace();
     if (theme === 'finale') return this._musicFinale();
     const chords = [[220, 261.6, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 233.1, 293.7]];
@@ -517,13 +612,62 @@ export class Audio {
     play();
     this._musicTimer = setInterval(play, 8600);
   }
+  // 冰封 211：《冰汽时代》式的配乐——低沉的弦乐铺底（D 小调），隔一会儿一段大提琴旋律，远处铁砧一样的一声金属回响；
+  //   紧张起来时，底下多一层定音鼓一样的闷响
+  _cello(f, delay, dur, gain = 0.03) {
+    const c = this.ctx, t0 = this.t + delay;
+    const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(), v = c.createOscillator(), vg = c.createGain();
+    o.type = 'sawtooth'; o.frequency.value = f;
+    v.frequency.value = 5.2; vg.gain.value = f * 0.006; v.connect(vg).connect(o.frequency);
+    fl.type = 'lowpass'; fl.frequency.value = 900; fl.Q.value = 0.8;
+    g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(gain, t0 + Math.min(0.5, dur * 0.35)); g.gain.linearRampToValueAtTime(gain * 0.8, t0 + dur * 0.8); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+    o.start(t0); v.start(t0); o.stop(t0 + dur + 0.1); v.stop(t0 + dur + 0.1);
+  }
+  _musicFrost() {
+    const prog = [[73.4, 110, 174.6], [58.3, 87.3, 146.8], [65.4, 98, 155.6], [55, 82.4, 138.6]];
+    const motifs = [
+      [[293.7, 1.4], [349.2, 1.4], [329.6, 1.1], [293.7, 2.4]],
+      [[220, 1.3], [261.6, 1.3], [233.1, 1.2], [220, 2.6]],
+      [[349.2, 1.2], [392, 1.2], [440, 1.6], [392, 1.1], [349.2, 2.2]],
+    ];
+    let i = 0;
+    const play = () => {
+      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t, T = 9.6;
+      ch.forEach((f) => {
+        for (const det of [-7, 6]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          fl.type = 'lowpass'; fl.Q.value = 0.6;
+          fl.frequency.setValueAtTime(220 + this.tension * 400, t0);
+          fl.frequency.linearRampToValueAtTime(420 + this.tension * 800, t0 + T * 0.5);
+          fl.frequency.linearRampToValueAtTime(220 + this.tension * 300, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.026, t0 + 3); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); o.stop(t0 + T + 0.1);
+        }
+      });
+      // 大提琴：每隔一段来一句
+      if (i % 2 === 0) {
+        let d = 0.8;
+        for (const [f, len] of motifs[(i / 2) % motifs.length]) { this._cello(f, d, len + 0.3, 0.022 + this.tension * 0.01); d += len; }
+      }
+      // 很远的一声铁砧
+      if (i % 3 === 1) { const d = 2 + Math.random() * 5; this.tone({ f: 1480, dur: 2.2, type: 'sine', gain: 0.007, delay: d, dest: this.mus }); this.tone({ f: 2090, dur: 1.4, type: 'sine', gain: 0.004, delay: d, dest: this.mus }); }
+      // 紧张起来：定音鼓
+      if (this.tension > 0.3) for (let n = 0; n < 8; n++) this.tone({ f: 58, f2: 44, dur: 0.5, type: 'sine', gain: 0.04 * this.tension, delay: n * 1.2, dest: this.mus });
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 9000);
+  }
   // 暴雨：两层噪声——高频的雨点 + 低频的雨声轰鸣
   startRain(gain = 1) {
     this.startLoop('rain', { type: 'bandpass', freq: 2400, Q: 0.35, gain: 0.07 * gain, brown: false });
     this.startLoop('rainLow', { type: 'lowpass', freq: 420, Q: 0.5, gain: 0.1 * gain, brown: true });
   }
   // 太空：空灵的合成器长音 + 慢慢的琶音（动画里宇宙场景的配乐）
-  // 第四章：太空舱 —— 电影配乐式的氛围音：低沉的弦乐铺底、舱里空气循环的底噪、偶尔一声很远的金属回响；越紧张滤波开得越大，还有心跳一样的低音
+  // 第五章：太空舱 —— 电影配乐式的氛围音：低沉的弦乐铺底、舱里空气循环的底噪、偶尔一声很远的金属回响；越紧张滤波开得越大，还有心跳一样的低音
   _musicSpace() {
     const prog = [[73.4, 110, 174.6], [65.4, 98, 155.6], [69.3, 103.8, 164.8], [61.7, 92.5, 146.8]];
     let i = 0;

@@ -1,5 +1,5 @@
 // 结局（征兵站门前）的写实贴图：红砖、混凝土地砖、草地、红毯、树叶贴片、远处的林带、室内百叶窗……
-//   每种表面都配一张法线贴图（从高度图算）和粗糙度贴图，和第四章一个标准
+//   每种表面都配一张法线贴图（从高度图算）和粗糙度贴图，和第五章一个标准
 import * as THREE from 'three';
 import { makeCanvas, toTex, createNoise, normalFromHeight, pixels } from './textures.js';
 import { mulberry32, clamp, lerp } from './util.js';

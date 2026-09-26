@@ -1,4 +1,4 @@
-// 第四章：太空舱 211 —— 还是那间宿舍的布局，被搬进了近地轨道上的一节旧空间站舱段。
+// 第五章：太空舱 211 —— 还是那间宿舍的布局，被搬进了近地轨道上的一节旧空间站舱段。
 //   写实电影感（参考《太空孤航者》）：刷着青绿色漆的铝面板、米黄色的天花板、满墙的线缆 / 货包 / 设备盒，
 //   夜间模式下舱里很暗，只有几盏暖色的工作灯、单色荧光屏和南墙舱门后面那节被琥珀色灯光照亮的驾驶舱；
 //   窗外（跟着镜头走的天空盒）：写实的地球（柔和的晨昏线、海面反光、大气层边缘、钠灯色的城市灯光）、月亮、太阳；
@@ -339,7 +339,7 @@ function makeRobot() {
   const faceM = mesh(new THREE.SphereGeometry(0.153, 28, 16, Math.PI * 0.5 - 0.95, 1.9, Math.PI * 0.5 - 0.5, 1.0), faceMat, { cast: false });
   faceM.userData.keepMat = true;
   body.add(faceM);
-  // 两侧的导风口 + 小风扇（ears：第四章让它们转起来）
+  // 两侧的导风口 + 小风扇（ears：第五章让它们转起来）
   const ears = [];
   for (const s of [-1, 1]) {
     const duct = new THREE.Group(); duct.position.set(s * 0.138, 0, 0); duct.rotation.z = Math.PI / 2; body.add(duct);
@@ -358,9 +358,9 @@ function makeRobot() {
   const lab = TX.makeCanvas(128, 48), lx = lab.getContext('2d');
   lx.fillStyle = '#e2dfd6'; lx.fillRect(0, 0, 128, 48); lx.fillStyle = '#1b1c1a'; lx.font = 'bold 22px "DIN Condensed","Arial Narrow",sans-serif'; lx.textAlign = 'center'; lx.fillText('CREW ASSIST 211', 64, 31);
   body.add(mesh(new THREE.PlaneGeometry(0.07, 0.026), new THREE.MeshStandardMaterial({ map: TX.toTex(lab, { wrap: false }), roughness: 0.7 }), { y: 0.05, z: -0.146, ry: Math.PI, rx: 0.3, cast: false }));
-  // 原来的"推进器光"：写实版没有，留一个看不见的占位（第四章会去缩放它）
+  // 原来的"推进器光"：写实版没有，留一个看不见的占位（第五章会去缩放它）
   const jet = new THREE.Object3D(); body.add(jet);
-  // 原来的漫画气泡：写实版不再在头顶冒符号，改成在脸上换表情（第四章的 _robot 读 flashMode）
+  // 原来的漫画气泡：写实版不再在头顶冒符号，改成在脸上换表情（第五章的 _robot 读 flashMode）
   const robot = { root, body, faceCanvas: fc, faceTex, faceMat, ears, ring, tipMat, jet, mode: 'dizzy', flashT: 0, flashMode: null };
   robot.emote = {
     show(kind, dur = 1.6) { robot.flashMode = kind === '!' || kind === '?' ? 'alert' : 'happy'; robot.flashT = dur; },
@@ -747,7 +747,7 @@ export function decorateSpace(ctx) {
   // ===== 宿舍的家具 → 舱内设备（休眠舱、资料库、信息接收站、驾驶舱、储藏室……）=====
   const gear = buildSpaceGear(ctx, P);
   refs.gear = gear;
-  // 屏幕：生命维持（报警）、观测台的轨道图、驾驶舱的系统屏；信息接收站的大屏由第四章自己画
+  // 屏幕：生命维持（报警）、观测台的轨道图、驾驶舱的系统屏；信息接收站的大屏由第五章自己画
   const screens = [[gear.life.screen, 'life'], [gear.obs.screen, 'orbit'], [gear.cockpit.sysScreen, 'orbit']].map(([sc, mode]) => ({ canvas: sc.canvas, tex: sc.tex, mode }));
   for (const sc of screens) TS.drawOrbitScreen(sc.canvas, 0, {});
   refs.spaceScreens = screens;

@@ -1,6 +1,6 @@
 // 门口的"光门"：出门时门外不再是走廊，而是一整片光——人走进光里，下一间 211 的门口也亮着同一片光，
 // 人从光里走出来，门在身后自己关上、又锁上了。
-//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'light' 第三章（暖白色的一片雾光）/ 'space' 第四章（淡蓝色光门）
+//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'light' 第三章（暖白色的一片雾光）/ 'forge' 第四章（熔炉一样的橘红色暖光）/ 'space' 第五章（淡蓝色光门）
 import * as THREE from 'three';
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
@@ -36,6 +36,25 @@ const FRAG = {
       float alpha = smoothstep(1.05, 0.3, r) + rays * smoothstep(1.2, 0.4, r);
       gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
     }`,
+  // 第四章：门外是熔炉那样的一片橘红色的暖光，风雪被光吹得一道道往外飘，火星往上飞
+  forge: /* glsl */ `
+    uniform float time, power; varying vec2 vUv;
+    float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    void main() {
+      vec2 c = vUv - 0.5; c.x *= 0.5;
+      float r = length(c) * 2.0, a = atan(c.y, c.x);
+      float rays = pow(abs(sin(a * 6.0 + time * 0.5)), 6.0) * 0.3;
+      vec3 col = mix(vec3(1.0, 0.55, 0.22), vec3(1.0, 0.93, 0.78), smoothstep(0.85, 0.0, r));
+      // 风雪：斜着往外飘的一道道白
+      vec2 sp = vec2(vUv.x * 18.0 + time * 1.3, vUv.y * 6.0 + time * 0.4);
+      float snow = step(0.93, h(floor(sp))) * smoothstep(0.2, 0.9, r);
+      // 火星：往上飘的小亮点
+      vec2 ep = vec2(vUv.x * 30.0, vUv.y * 14.0 - time * 1.6);
+      float ember = step(0.97, h(floor(ep))) * smoothstep(0.1, 0.6, r);
+      col += vec3(0.9, 0.95, 1.0) * snow * 0.6 + vec3(1.0, 0.6, 0.2) * ember;
+      float alpha = smoothstep(1.05, 0.25, r) + rays * smoothstep(1.2, 0.35, r);
+      gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
+    }`,
   space: /* glsl */ `
     uniform float time, power; varying vec2 vUv;
     void main() {
@@ -49,7 +68,7 @@ const FRAG = {
 };
 // 光门后面那层不透明的底色（挡住门外的走廊），和照进屋里的灯光颜色
 const TINT = {
-  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], light: ['#fff2dc', '#ffe2b8'], space: ['#e2f4ff', '#cfe8ff'],
+  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], light: ['#fff2dc', '#ffe2b8'], forge: ['#ffd8a8', '#ffb070'], space: ['#e2f4ff', '#cfe8ff'],
 };
 // 贴着门洞往屋里撒的一片光（墙上的光晕、地上的光斑）
 const HALO_FRAG = /* glsl */ `
