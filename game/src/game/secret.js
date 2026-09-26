@@ -1,4 +1,4 @@
-// 第四章隐藏任务线："书架背后的幽灵"（致敬《星际穿越》）
+// 第五章隐藏任务线："书架背后的幽灵"（致敬《星际穿越》）
 //   ① 玩一会儿之后，资料库里自己飘出来一张索引卡：INDEX 001「引力异常 → 信息接收站 · 频道 211」（笔迹和我一模一样）
 //   ② 信息接收站切到频道 211：一段来源不明的摩尔斯电码，时间戳是考试前一天夜里 02:47，解码出 INDEX 002：储藏室 · 货柜 G 的授权码
 //   ③ 打开货柜 G：里面约束着一颗微型黑洞"卡冈图雅"。凑近去看——失重里刹不住，胳膊肘撞上了控制杆……
@@ -1018,7 +1018,7 @@ export class Secret {
     g.camera.fov = 42; g.camera.updateProjectionMatrix();
     g.audio.stopAllLoops(1.5);
     S.ach.add('stay');
-    S.done.push({ n: 4, elapsed: S.elapsed, par: this.CH.par, hints: S.hints });
+    S.done.push({ n: this.CH.n, elapsed: S.elapsed, par: this.CH.par, hints: S.hints });
     g.showEnd({ secret: true });
     this.endView(0);
     g.ui.fade(0, { dur: 2.6, white: true, card: '' });

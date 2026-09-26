@@ -485,7 +485,7 @@ export function createCharacter(opts = {}) {
     shock: { eyes: 'wide', mouth: 'O', brows: 'raised' },
     sleep: { eyes: 'closed', mouth: 'neutral', brows: 'relaxed' },
     focus: { eyes: 'open', mouth: 'neutral', brows: 'normal' },
-    // 下面几种只有第四章彩蛋的过场用得上：不预先生成，用到之前调 prepare() 在后台画好
+    // 下面几种只有第五章彩蛋的过场用得上：不预先生成，用到之前调 prepare() 在后台画好
     shout: { eyes: 'squint', mouth: 'yell', brows: 'worried' },
     warm: { eyes: 'smile', mouth: 'smile', brows: 'relaxed' },
     sad: { eyes: 'open', mouth: 'neutral', brows: 'worried' },

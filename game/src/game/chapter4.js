@@ -1,520 +1,581 @@
-// 第四章：太空舱 211（近地轨道 408 km，失重）
-//   舱里只剩你和一个失控的机器人：室友们的休眠舱都空了——他们早就坐返回舱回地球了，只在舱里给你留了言。
-//   气闸舱门上是一个三位数的授权码面板：
-//   🤖 失控的机器人小圆在天花板附近打转 → 按住空格飘上去抓住它，它重启后告诉你第一位
-//   💧 驾驶舱（原来的洗手间）里飘着一颗大水球，里面泡着一张纸条 → 一口一口把水球喝掉
-//   🌍 室友说第三位"写在地球上" → 打开遮光板，等太空舱绕到地球背面（地球"关灯"），城市灯光拼出了数字
-//   另外还有一条隐藏任务线（索引卡 → 信息接收站的频道 211 → 储藏室的货柜 G → 卡冈图雅），见 secret.js
+// 第四章：冰封 211（21:30 · 零下七十度，暴风雪就要来了）
+//   参考《冰汽时代》：宿舍在一座末日寒潮里的蒸汽城市里——陨石坑一样的大坑中间立着一座巨大的熔炉，全城靠它取暖。
+//   室友们下矿上夜班去了，门上锁着一把黄铜"蒸汽压力锁"，三个表盘刻着 🏭🔥⚙️：
+//   🏭 窗户冻满了冰花 → 擦开 → 用窗边的黄铜望远镜看熔炉：塔身上那根信号灯柱亮着几盏灯
+//   🔥 暖炉是凉的 → 门口雪堆里拔出冰镐 → 撬开冻住的煤箱 → 添煤点火 → 墙上的压力表慢慢爬上去，停在那一位上
+//   ⚙️ 我的书桌前坐着宿舍的蒸汽自动机「老铁」，冻成了铁疙瘩 → 屋里暖和起来之后，天花板上那根大冰柱化了，掉下一把发条钥匙
+//      → 等老铁也化开了，给它上发条 → 它醒过来，在打字机上敲出最后一位
+//   暖炉点着之后，炉子周围出现一圈"热区"，越烧越大：霜一圈圈化开，冰柱滴水，镜子、压力表、老铁身上的霜也跟着化
 import * as THREE from 'three';
-import { clamp, lerp, easeInOut, easeOut, smoothstep } from '../core/util.js';
+import { clamp, lerp, easeInOut, easeOut, easeOutBack } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
-import * as TS from '../core/tex_space.js';
-import { drawPodScreen, drawComms } from '../world/spacegear.js';
-import { Secret } from './secret.js';
+import * as TX from '../core/textures.js';
+import * as TF from '../core/tex_frost.js';
+import { MAST_WORLD } from '../world/frost.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-const _p = V(), _q = V(), _h = V(), _d = V(), _c = new THREE.Color();
-const ORBIT = 100; // 绕地球一圈（秒），真实的是 90 分钟
-
-// 轨道相位 → 太阳绕舱转的角度：满地球和日食附近走得慢，中间的月牙阶段走得快
-const thetaOf = (p) => Math.PI * 2 * p - 0.4 * Math.sin(Math.PI * 4 * p);
+const _p = V(), _q = V();
+const HEAT_MAX = 4.6, HEAT_T = 45; // 热区最大半径（米）、烧到最大要几秒
+const BOT_D = Math.hypot(0.95 + 1.47, 0.25 - 2.02); // 老铁离暖炉多远
+const KEY_D = Math.hypot(-0.55 + 1.47, 1.45 - 2.02);
+const MIRROR_D = Math.hypot(-0.67 + 1.47, 4.5 - 2.02);
+const GAUGE_D = Math.hypot(-1.64 + 1.47, 2.62 - 2.02);
+const CLOCK_D = Math.hypot(1.22 + 1.47, 4.5 - 2.02);
 
 export const CH4 = {
-  n: 4, theme: 'space',
-  title: '第四章 · 太空舱 211', sub: '近地轨道 408 km · 失重', tag: '第四章 · 太空舱 211',
-  clock: [3, 0], lockName: '气闸舱门', doorName: '气闸舱门', codeLen: 3, codeIcons: ['🤖', '💧', '🌍'],
+  n: 4, theme: 'frost',
+  title: '第四章 · 冰封 211', sub: '21:30 · 零下 70°C · 暴风雪将至', tag: '第四章 · 冰封 211',
+  clock: [21, 30], lockName: '蒸汽压力锁', doorName: '防寒铁门', codeLen: 3, codeIcons: ['🏭', '🔥', '⚙️'],
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
-  big: ['waterBall', 'signZeroG', 'station', 'dashboard', 'lockerG', 'monitor2', 'telescope', 'pilotSeat', 'dispenser', 'storageRack'],
-  items: {},
+  big: ['stove', 'automaton', 'laundry', 'pipe', 'snowdrift', 'keyIce', 'coalCrate'],
+  items: {
+    icePick: { icon: '⛏️', name: '冰镐', desc: '一把冰镐，镐尖上还挂着冰碴。撬冰用的' },
+    coal: { icon: '🪨', name: '煤块', desc: '一大把煤块，黑乎乎的，沉甸甸的。该添进炉子里' },
+    windKey: { icon: '🗝️', name: '发条钥匙', desc: '一把黄铜发条钥匙，上面刻着"No.211"' },
+  },
 
-  // 氧气随故事钟慢慢往下掉，最低停在 20%，不会耗尽
-  o2: (g) => Math.ceil(100 - 80 * g.storyP()),
-  clockText(g) { return `O₂ ${this.o2(g)}%`; },
-  // 任务钟：从 03:00:00 开始走
+  // 屋里多冷：没生火时慢慢往下掉；暖炉烧起来之后一路升到十几度
+  temp(g) {
+    const base = -31 - 6 * g.storyP();
+    const k = this._litT >= 0 ? easeOut(clamp(this._litT / HEAT_T, 0, 1)) : 0;
+    return Math.round(lerp(base, 14, k));
+  },
+  clockText(g) {
+    const mm = 30 + g.storyMinutes();
+    const t = this.temp(g);
+    return `21:${String(mm).padStart(2, '0')} · ${t > 0 ? '+' : ''}${t}°C`;
+  },
+  // 挂钟冻住了，停在室友出门的 21:02；屋里暖和到挂钟那儿，它才重新走起来
   clockHands(g) {
-    const e = g.S ? g.S.elapsed : 0;
-    return { h: 3 + e / 3600, m: (e / 60) % 60, s: e % 60 };
+    if (!this._clockThawed) return { h: 21, m: 2, s: 14 };
+    const gm = 29.99 * g.storyP();
+    return { h: 21, m: 30 + gm, s: (gm % 1) * 60 };
   },
 
   init(g) {
     const R = g.refs, S = g.S;
-    // 写实电影感：人物用原来的写实材质（从第三章过来的话把卡通材质换回去）
     untoonify(g.ch.root);
-    g.ctrl.float = 1; g.ctrl.floatTarget = 0.35;
-    // 这一章用不上紫光手电：它那盏灯藏起来（每个像素都要算一遍灯光，能省则省）；换章时 game.js 会放回来
-    g.uvLight.visible = false;
-    // 通往驾驶舱的舱门一开始就开着：从乘员舱望过去，门后那节舱段是被琥珀色的灯照亮的
-    const D = R.wcDoor;
-    if (!D.open) { D.open = true; g.collision.setEnabled('wcShut', false); g.collision.setEnabled('wcOpen', true); D.camBox.makeEmpty(); D.pivot.rotation.y = (D.base || 0) + D.openAngle; R.lights.wc.shadow.needsUpdate = true; }
-    // 一层很淡的青灰色空气感：远处的东西稍微沉下去，灯光有了"体积"
-    g.scene.fog = new THREE.FogExp2('#141c1b', 0.038);
+    g.uvLight.visible = false; // 这一章用不上紫光手电
+    g.scene.fog = new THREE.FogExp2('#0d1219', 0.03);
     g.lightMode = 'game';
-    R.spaceSky.drawDigit(S.digits[2]);
-    // 水球里的纸条
-    const W = R.waterBall, c = W.noteCanvas, x = c.getContext('2d');
-    x.fillStyle = '#fff6c8'; x.fillRect(0, 0, 128, 96); x.strokeStyle = '#e8c860'; x.lineWidth = 3; x.strokeRect(3, 3, 122, 90);
-    x.fillStyle = '#2a6fd8'; x.font = 'bold 20px sans-serif'; x.textAlign = 'center'; x.fillText('💧 =', 40, 58);
-    x.fillStyle = '#e8202a'; x.font = 'bold 56px sans-serif'; x.fillText(String(S.digits[1]), 88, 70);
-    W.noteTex.needsUpdate = true;
-    this._phase = 0.08; this._lapse = null; this._alarm = 0; this._speed = 0; this._look = 0; this._pa = 0;
-    this._drawKeypad(g, 'locked');
-    const rb = R.robot; rb.state = 'tumble'; rb.mode = 'dizzy';
-    // 休眠舱床头的状态屏：室友们的都空了，只有我的是"已苏醒"
+    // 熔炉信号灯柱：亮着几盏就是 🏭 那一位
+    R.frostCity.setLamps(S.digits[0]);
+    // 状态
+    this._litT = -1; this._od = 0; this._odT = 0; this._storm = 0;
+    this._gustT = 3; this._crackT = 0.5; this._clankT = 8; this._breathT = 1.5; this._leakT = 1; this._doorSnowT = 0.5;
+    this._keyState = 0; this._clockThawed = false; this._iceHeat = -1; this._wipes = 0; this._scope = false;
+    R.frost.overdrive = 0;
+    R.frost.heat.uHeatR.value = 0;
+    // 气动传送管：室友们塞进来的信
     const [A, B, C] = S.mates;
-    for (const p of R.gear.pods) {
-      const me = p.who < 0;
-      drawPodScreen(p.screen.canvas, { code: p.code, name: me ? S.name : S.mates[p.who], status: me ? '已苏醒 · 超时 2:58' : '空 · 06:52 已离舱', ok: me, warn: !me });
-      p.screen.tex.needsUpdate = true;
-    }
-    // 信息接收站：返回舱发回来的消息
-    this._comms = [
-      { text: `[06:52] ${A}：上返回舱了！他还没醒？`, color: '#ffcf8a' },
-      { text: `[06:53] ${B}：叫了八百遍，睡得跟死猪一样`, color: '#cfe8d6' },
-      { text: `[06:55] ${C}：授权码拆成三份了 🤖💧🌍`, color: '#e8d6bc' },
-      { text: '[07:10] 返回舱：已脱离轨道，三小时后溅落', color: '#8cf0a4' },
-    ];
-    this._commsT = 0; this._mistT = 0;
-    this.secret = new Secret(g, this);
+    this._tube = [{ who: `${A}、${B}、${C}`, time: '21:02', lines: [
+      '睡神：', '我们仨下矿上夜班去了（城里的煤又不够烧了）。', '你睡得跟冻猪肉似的，怎么叫都叫不醒。',
+      '门给你锁上了——<b>蒸汽压力锁</b>，3 位：', '🏭 熔炉顶上的信号灯会告诉你（窗户冻住了？擦擦）',
+      '🔥 炉子烧旺了，墙上的压力表自己会指给你看', '⚙️ 老铁记得最后一位——可惜它冻成了铁疙瘩',
+      '附：冰镐插在门口的雪堆里，煤箱冻上了自己撬。'] }];
+    this._tubeUnread = true;
+    R.tube.lamp.material.emissiveIntensity = 2.2;
+    R.automaton.setState('frozen');
+    R.automaton.onPuff = (p, k) => g.fx.emit('steam', p, { count: k > 0.5 ? 3 : 1, speed: 0.25, spread: 0.4, up: 1.2, gravity: 0.15, drag: 1.2, life: 2.4, size: 0.14, colors: ['#e8eef4', '#cfd8e0'], grow: 2.4 });
+    R.automaton.onKey = () => g.audio.typeClack();
+    this._paper = ['211 号住所', '住户：4 人', '自动机：老铁', '……'];
+    this._drawPaper(g);
+    this._dressUp(g);
+    // 暴风雪一直在刮
+    g.audio.startWind();
   },
 
-  _drawKeypad(g, mode) {
-    const K = g.refs.hatch.keypad, c = K.canvas, x = c.getContext('2d'), S = g.S;
-    x.fillStyle = '#1c1f1e'; x.fillRect(0, 0, 128, 160);
-    x.fillStyle = '#070a08'; x.fillRect(6, 6, 116, 40);
-    const col = mode === 'open' ? '#8cf0a4' : mode === 'error' ? '#ff5a3c' : '#ffb04a';
-    x.strokeStyle = 'rgba(0,0,0,0.6)'; x.lineWidth = 3; x.strokeRect(6, 6, 116, 40);
-    x.fillStyle = col; x.font = 'bold 22px sans-serif'; x.textAlign = 'center';
-    x.fillText(mode === 'open' ? 'OPEN' : S.digits.map((d, i) => (S.found[i] ? '•' : '_')).join(' '), 64, 34);
-    x.font = 'bold 12px sans-serif'; x.fillText(mode === 'open' ? 'AIRLOCK READY' : 'AIRLOCK LOCKED', 64, 62);
-    for (let i = 0; i < 12; i++) {
-      const bx = 14 + (i % 3) * 36, by = 72 + Math.floor(i / 3) * 21;
-      x.fillStyle = '#3a3e3b'; x.fillRect(bx, by, 30, 17); x.fillStyle = 'rgba(255,255,255,0.08)'; x.fillRect(bx, by, 30, 3);
-      x.fillStyle = '#d6d2c4'; x.font = 'bold 12px sans-serif'; x.fillText(['1', '2', '3', '4', '5', '6', '7', '8', '9', '✕', '0', '✓'][i], bx + 15, by + 13);
-    }
-    K.tex.needsUpdate = true;
+  // 主角换上毛线帽和围巾（换章时 game.js 会摘掉 refs.wear 里的东西）
+  _dressUp(g) {
+    const ch = g.ch, wear = [];
+    const knitT = TX.genCloth({ base: '#7a2a22', seed: 97, contrast: 1.5, slub: 0.6 }); knitT.repeat.set(6, 2);
+    const knit = new THREE.MeshStandardMaterial({ map: knitT, roughness: 0.96 });
+    const knit2 = new THREE.MeshStandardMaterial({ color: '#c9b48a', roughness: 0.95 });
+    const m = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0, s = [1, 1, 1]) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.scale.set(...s); o.castShadow = true; o.receiveShadow = true; return o; };
+    // 毛线帽：帽身 + 翻边 + 顶上一个毛球
+    const hat = new THREE.Group();
+    hat.add(m(new THREE.SphereGeometry(0.106, 28, 16, 0, Math.PI * 2, 0, Math.PI * 0.56), knit, 0, -0.01, -0.004, -0.12, 0, 0, [0.96, 1.12, 1.1]));
+    hat.add(m(new THREE.TorusGeometry(0.1, 0.013, 8, 32), knit2, 0, -0.022, -0.004, Math.PI / 2 - 0.12, 0, 0, [0.97, 1.12, 1]));
+    hat.add(m(new THREE.SphereGeometry(0.028, 12, 10), knit2, 0, 0.112, -0.02));
+    ch.helmetSlot.add(hat); wear.push(hat);
+    // 围巾：绕脖子一圈 + 胸前垂下来两截
+    const scarf = new THREE.Group();
+    scarf.add(m(new THREE.TorusGeometry(0.072, 0.03, 10, 28), knit, 0, 0.035, 0.005, Math.PI / 2, 0, 0, [1.05, 1, 1]));
+    ch.J.neck.add(scarf); wear.push(scarf);
+    const tails = new THREE.Group();
+    tails.add(m(new THREE.BoxGeometry(0.075, 0.26, 0.022), knit, 0.045, 0.42, 0.12, -0.18, 0, 0.08));
+    tails.add(m(new THREE.BoxGeometry(0.07, 0.2, 0.022), knit, 0.085, 0.45, 0.108, -0.16, 0.2, 0.18));
+    ch.J.torso.add(tails); wear.push(tails);
+    g.refs.wear = wear;
   },
 
-  portal: 'space',
-  lockView: { cam: V(-1.15, 1.72, 2.95), look: V(-1.78, 1.6, 3.4) },
-  relockLine: '……气闸舱门又锁上了？！',
+  // ---------- 进门 ----------
+  // 人从门口的光里走进来，门在身后关上：一阵风雪卷进来，铁链上"咔咔"结满冰碴，压力锁的表盘自己转回去锁上
+  portal: 'forge',
+  lockView: { cam: V(-0.95, 1.15, 4.25), look: V(-1.62, 0.78, 3.66) },
+  relockLine: '……铁链上一下子结满了冰？！又锁上了！',
   intro(g, { prepare }) {
-    const R = g.refs, [A, B, C] = g.S.mates;
-    if (prepare) { g.ctrl.float = 1; g.ctrl.floatTarget = 0.35; g.enterRoom({ prepare: true }); return; }
+    if (prepare) { g.enterRoom({ prepare: true }); return; }
     const T = g.enterRoom({ prepare: false });
-    g.after(T - 0.4, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.3, lookPitch: -0.2 }; g.ui.subtitle('……嗯？脚底下怎么空空的？', 1.8, g.S.name); });
-    g.after(T + 1.1, () => {
-      this.speedLines(g, 1.2);
-      g._shake(0.12);
-      g.ui.subtitle('我……我飘起来了？！', 2.0, g.S.name);
-      g._cineTo(V(-0.35, 2.05, 3.5), V(-0.98, 1.95, 3.85), 0.6);
+    const say = (t, d = 2.6) => g.ui.subtitle(t, d, g.S.name);
+    g.after(T - 0.3, () => { g.ch.setExpression('shock'); g._cutPose = { lookYaw: 0.4, lookPitch: 0.05 }; say('嘶——好冷好冷好冷！！', 1.8); this._breath(g, 1.4); });
+    g.after(T + 1.0, () => {
+      g._cineTo(V(-0.35, 1.72, -0.7), V(0.25, 1.62, -3.6), 2.0);
+      g._cutPose = { lookYaw: 0.2, lookPitch: 0.1 };
+      g.audio.bell();
     });
-    g.after(T + 3.1, () => {
-      const rp = R.robot.root.position;
-      g._cutPose = { lookYaw: 0.9, lookPitch: 0.35 };
-      g._cineTo(rp.clone().add(V(0.5, -0.12, 0.75)), rp.clone(), 1.6);
-      R.robot.emote.show('!', 1.4); g.audio.robotBeep(3);
-    });
-    g.after(T + 3.9, () => g.ui.subtitle('警……警告……陀螺仪……失、失、失控……', 2.4, '？？？（机器人）'));
-    g.after(T + 6.4, () => {
-      g._cutPose = { lookYaw: -0.2, lookPitch: 0.25 };
-      g._cineTo(V(-0.2, 1.75, 1.6), V(-1.3, 0.7, 0.1), 1.6);
-      g.audio.robotBeep(1, 400);
-    });
-    g.after(T + 7.1, () => g.ui.subtitle(`休眠舱……上面写着${A}、${B}、${C}的名字。里面……都是空的？`, 3.0, g.S.name));
-    g.after(T + 10.1, () => {
-      g._cineTo(V(-0.4, 1.9, 2.6), V(-1.2, 1.5, 3.8), 1.4);
-      g.audio.pa();
-      g.ui.subtitle(`【211 舱广播】早上好，${g.S.name}。你是本舱最后一位苏醒的乘员。其他乘员已于 06:52 乘返回舱离开。生命维持系统故障，请尽快经气闸舱撤离。`, 4.6, '📢 舱内广播');
-    });
-    g.after(T + 14.9, () => { g.ch.setExpression('shock'); g.ui.subtitle('……又把我一个人丢下了？！这帮家伙！', 2.4, g.S.name); });
-    g.after(T + 17.4, () => { g._cutPose = null; g.ch.setExpression('neutral'); g.ui.subtitle('气闸舱门……又是密码锁。这回是太空版的密室逃脱？', 2.6, g.S.name); g._cineTo(null, null, 1.2); });
-    g.after(T + 18.8, () => g.beginPlay());
+    g.after(T + 1.8, () => g.ui.subtitle('【城市广播】全体市民请注意：气温已降至零下七十度，暴风雪将在一小时后抵达。请各住所保持暖炉燃烧——熔炉不灭，城市不亡。', 5.2, '📢 城市广播'));
+    g.after(T + 7.2, () => { g._cineTo(V(0.05, 1.55, -0.55), V(0.95, 1.05, 0.25), 1.6); g.audio.clank(2); });
+    g.after(T + 7.6, () => say('……那是什么？一台蒸汽机器人？坐在我的位子上，冻成了一块铁疙瘩。', 3.2));
+    g.after(T + 11.0, () => { g._cineTo(V(-0.35, 1.3, 1.25), V(-1.47, 0.55, 2.05), 1.5); g.audio.gust(1.2); });
+    g.after(T + 11.4, () => say('炉子也是凉的……再不生火，我也要冻成冰棍了。', 3.0));
+    g.after(T + 14.4, () => { g._cutPose = null; g.ch.setExpression('neutral'); g._cineTo(null, null, 1.2); });
+    g.after(T + 15.6, () => g.beginPlay());
   },
-  onSlam(g) { g.audio.hiss(); },
-  // 气闸舱门：'hide' 面板是绿的（门开着）/ 'anim' 转轮自己拧紧、面板变红、警示灯闪一下 / 'show' 直接锁好
+  onSlam(g) {
+    g.audio.gust(1.4);
+    g.fx.emit('dust', V(-1.6, 0.8, g.refs.door.z), { count: 30, speed: 1.1, spread: 1.2, up: 0.3, gravity: -0.3, drag: 1.4, life: 2.2, size: 0.018, colors: ['#eef4fc', '#d8e2ee'], sway: 0.4 });
+    g.fx.emit('steam', V(-1.62, 0.7, g.refs.door.z), { count: 3, speed: 0.7, spread: 1, up: 0.15, gravity: 0, drag: 1.6, life: 1.6, size: 0.2, colors: ['#d8e0ea'], grow: 1.4 });
+  },
+  // 门锁：'hide' / 'anim'（铁链一节一节缠回去，冰碴一下子结满，压力锁弹出来）/ 'show'
   relock(g, mode) {
-    const H = g.refs.hatch;
-    if (!H.wheel.userData.home) H.wheel.userData.home = H.wheel.rotation.z;
-    const w0 = H.wheel.userData.home;
-    if (mode === 'hide') { this._drawKeypad(g, 'open'); H.wheel.rotation.z = w0 + Math.PI * 2; return; }
-    if (mode !== 'anim') { H.wheel.rotation.z = w0; this._drawKeypad(g, 'locked'); return; }
-    g.audio.hiss(); g.audio.clunk();
-    g.tween(0.8, (k) => (H.wheel.rotation.z = w0 + Math.PI * 2 * (1 - k)), { ease: easeInOut }).cut = true;
-    g.after(0.5, () => { this._drawKeypad(g, 'error'); g.audio.robotBeep(2, 500); this._alarm = 1.2; });
-    g.after(1.0, () => this._drawKeypad(g, 'locked'));
+    const H = g.refs.frostLock, l = H.lock;
+    H.dropped.visible = false;
+    l.scale.setScalar(1);
+    H.links.count = H.N;
+    H.lamp.emissive.set('#ff3a1a');
+    H.crust.visible = true; H.crust.scale.setScalar(1);
+    if (mode === 'hide') { H.group.visible = false; g.collision.setEnabled('lockCable', false); return; }
+    H.group.visible = true; g.collision.setEnabled('lockCable', true);
+    if (mode !== 'anim') return;
+    l.scale.setScalar(0.001);
+    H.crust.visible = false;
+    H.links.count = 1;
+    g.tween(0.5, (k) => { H.links.count = Math.max(1, Math.round(k * H.N)); }, { ease: (t) => t }).cut = true;
+    g.after(0.35, () => g.audio.chainDrop());
+    g.after(0.5, () => {
+      g.audio.clunk(); g.audio.hiss();
+      g.tween(0.3, (k) => l.scale.setScalar(Math.max(0.001, easeOutBack(k))), { ease: (t) => t }).cut = true;
+      g.fx.emit('steam', l.getWorldPosition(V()).add(V(0.08, 0.05, 0)), { count: 4, speed: 0.35, spread: 0.8, up: 0.8, gravity: 0.1, drag: 1.3, life: 1.3, size: 0.07, colors: ['#e8eef4', '#cfd8e0'], grow: 1.8 });
+    });
+    g.after(0.8, () => {
+      H.crust.visible = true; H.crust.scale.setScalar(0.001);
+      g.audio.iceBreak();
+      g.tween(0.4, (k) => H.crust.scale.setScalar(Math.max(0.001, k)), { ease: (t) => t }).cut = true;
+    });
   },
   onPlay(g) {
-    g.ui.toast('第四章 · 趁着氧气还够，打开气闸舱门', '', '🧑‍🚀');
-    this.floatTip(g);
-    g.after(3.2, () => g.ui.subtitle('我的休眠舱……舱盖还开着，里面好像贴着什么东西？', 3.6, g.S.name));
+    g.ui.toast('第四章 · 在暴风雪来临之前，逃出冰封 211', '', '❄️');
+    g.after(1.4, () => g.ui.subtitle('南墙上那根黄铜管子里好像塞着什么东西？还亮着一盏小红灯。', 3.4, g.S.name));
   },
-  // 鉴赏模式也要知道怎么在失重里飘
-  onViewPlay(g) { this.floatTip(g); },
-  floatTip(g) { g.after(1.6, () => g.ui.toast(g.input.isTouch ? '失重操作：右下角按住 <b>▲上浮</b> / <b>▼下沉</b> · 松手还会往前飘' : '失重操作：按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉 · 松手还会往前飘', '', '🪐')); },
-  exitLine: () => '小圆，替我跟他们说声再见！',
+  exitLine: () => '老铁，帮我看好炉子！',
   onDoorOpen(g) {
-    const rb = g.refs.robot;
-    rb.mode = 'happy'; rb.emote.show('heart', 2.4);
-    g.refs.floaters.impulse(0.5, V(-0.5, 0.1, 0.3));
-    this.speedLines(g, 1.6);
-    g.audio.hiss(); g.audio.sparkle();
-    g.fx.emit('dust', V(-1.5, 1.2, g.refs.door.z), { count: 40, speed: 0.8, spread: 1, up: 0.4, gravity: 0, drag: 1.2, life: 2.2, size: 0.1, colors: ['#e8e4dc', '#cfd6d2'], sway: 0.2 });
+    const bot = g.refs.automaton;
+    if (bot.state !== 'frozen') { bot.setState('cheer'); g.audio.steamWhistle(2.2, 0.6); }
+    g.audio.gust(1.3);
   },
-  onEnd() {},
+  onEnd(g) { const bot = g.refs.automaton; if (bot.state !== 'frozen') bot.setState('cheer'); },
 
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.readNote && !f.triedDoor) return [{ text: '看看自己那台开着的休眠舱', done: false }];
+    if (!f.readTube && !f.triedDoor) return [{ text: '看看南墙上那根铜管子', done: false }];
     return [
-      { text: '🤖 让失控的机器人冷静下来', done: F[0] },
-      { text: '💧 找到泡在水里的那一位', done: F[1] },
-      { text: '🌍 找到"写在地球上"的那一位', done: F[2] },
-      { text: f.unlocked ? '出舱！' : `打开气闸舱门（${n}/3）`, done: false },
+      { text: '🏭 数一数熔炉的信号灯', done: F[0] },
+      { text: '🔥 让暖炉烧起来', done: F[1] },
+      { text: '⚙️ 唤醒自动机「老铁」', done: F[2] },
+      { text: f.unlocked ? '出门！' : `打开蒸汽压力锁（${n}/3）`, done: false },
     ];
   },
   hint(g) {
-    const S = g.S, f = S.f, F = S.found;
-    const sh = this.secret && this.secret.hint();
-    if (sh) return sh;
-    if (!f.readNote) return '东边那台舱盖开着的休眠舱是你的——里面贴着室友留的纸条。';
-    if (!f.triedDoor) return '去门口看看那扇气闸舱门，门框边上有个密码面板。';
-    if (!F[0]) return '天花板附近有个转个不停的机器人……按住空格飘上去，抓住它！';
-    if (!F[1]) return f.talkedB ? '驾驶舱（原来的洗手间）里飘着一颗大水球，里面泡着一张纸条……一口一口把它喝掉。' : `去看看${S.mates[1]}的休眠舱（西边靠窗那台）里的留言，或者问问小圆。`;
-    if (!F[2]) {
-      if (!f.curtainOpen) return '窗户的遮光板还关着——先打开它看看外面。';
-      return '等太空舱绕到地球背面、地球"关灯"的时候，看看城市的灯光。（对着窗户"看风景"可以快进）';
+    const S = g.S, f = S.f, F = S.found, inv = S.inv;
+    if (!f.readTube) return '南墙上那个黄铜盒子是气动传送管，里面有室友塞过来的信。';
+    if (!f.triedDoor) return '去门口看看那把结满冰碴的蒸汽压力锁。';
+    if (!F[1]) {
+      if (!f.lit) {
+        if (!inv.includes('icePick') && !f.crateOpen) return '门口那堆雪里插着一把冰镐，拔出来。';
+        if (!f.crateOpen) return '暖炉旁边的煤箱冻住了——用冰镐把盖子上的冰撬开。';
+        if (!inv.includes('coal')) return '从煤箱里抓一把煤。';
+        return '把煤添进暖炉，点火。';
+      }
+      return '暖炉烧起来了——看看炉子边上那根竖管上的压力表。';
     }
-    return `授权码凑齐了！去门口的密码面板，按🤖💧🌍的顺序输入：${S.digits.join('')}`;
+    if (!F[0]) {
+      if (!f.wiped) return '窗户上结满了冰花，走到窗边多擦几下。';
+      return '窗边书桌上架着一台黄铜望远镜，用它看看熔炉塔身上那根信号灯柱，数一数亮着几盏。';
+    }
+    if (!F[2]) {
+      if (!f.keyFell) return '老铁背后有个发条孔……发条钥匙冻在天花板那根横管下面的大冰柱里了。屋里暖和起来，冰柱自己会化。';
+      if (!inv.includes('windKey') && !f.keyIn) return '冰柱化了，发条钥匙掉在了地上，捡起来。';
+      if (!this._botThawed(g)) return '老铁身上的冰还没化开——等暖炉把屋子再烘热一点。';
+      return '把发条钥匙插进老铁背后的发条孔，给它上发条。';
+    }
+    return `密码凑齐了！去门口，按🏭🔥⚙️的顺序输入：${S.digits.join('')}`;
   },
   story(g, p) {
     const S = g.S;
-    const pa = (key, text, cb) => { if (S.msgSent[key]) return; S.msgSent[key] = true; g.audio.pa(); g.after(1.0, () => { g.ui.subtitle(text, 3.8, '📢 舱内广播'); cb && cb(); }); };
-    if (p > 0.3) pa('o2', `氧气剩余 ${this.o2(g)}%。请乘员保持冷静，减少剧烈运动。`);
-    if (p > 0.5) pa('debris', '警告！太空碎片接近——正在执行规避机动！请抓紧扶手！', () => this.debris(g));
-    if (p > 0.8) pa('last', '氧气偏低！请尽快撤离！重复，请尽快撤离！', () => { S.f.alarm = true; });
+    const pa = (key, text, cb) => { if (S.msgSent[key]) return; S.msgSent[key] = true; g.audio.bell(); g.after(1.4, () => { g.ui.subtitle(text, 4.6, '📢 城市广播'); cb && cb(); }); };
+    const [A, , C] = S.mates;
+    if (p > 0.22) pa('cold', '【城市广播】气温持续下降，已达零下七十三度。请节约煤炭，一户一炉。');
+    if (p > 0.38 && !S.msgSent.capA) { S.msgSent.capA = true; this._capsule(g, { who: A, time: g.clockText.slice(0, 5), lines: ['矿上冷到怀疑人生！！', '你醒了没？炉子记得烧！', '（老铁冻住之前说了句"晚安"，好心酸）'] }); }
+    if (p > 0.52) pa('od', '【城市广播】熔炉进入超载模式！全城供暖加大！所有工人远离熔炉核心！', () => this.overdrive(g));
+    if (p > 0.68 && !S.msgSent.capC) { S.msgSent.capC = true; this._capsule(g, { who: C, time: g.clockText.slice(0, 5), lines: ['暴风雪要来了！！', '出不来就在屋里烤火，别冻成冰雕 🥶', '我们在矿上等你。'] }); }
+    if (p > 0.84) pa('storm', '【城市广播】暴风雪已抵达城郊！重复，暴风雪已抵达！关好门窗，守住暖炉！', () => { this._storm = 1; g.audio.gust(1.6); g._shake(0.12); });
   },
-
-  // 太空碎片擦过：警报、摇晃、东西满屋乱飞、集中线
-  debris(g) {
-    this._alarm = 4.5;
-    g.audio.alarm(4);
-    g._shake(0.5);
-    this.speedLines(g, 1.4);
-    g.refs.floaters.impulse(1.1);
-    g.refs.robot.emote.show('!', 1.5);
-    g.after(1.2, () => g.ui.subtitle('哇啊啊啊——！！', 1.6, g.S.name));
-  },
-  // 找到一位授权码：画面角落淡入一行电影字幕式的读数（不再弹漫画分镜）
-  eyecatch(g, icon, digit) {
-    const el = document.createElement('div');
-    el.className = 'readout';
-    const n = { '🤖': 1, '💧': 2, '🌍': 3 }[icon] || '';
-    el.innerHTML = `<div class="ro-k">AIRLOCK AUTH · DIGIT ${n}/3</div><div class="ro-v"><span class="ro-ic">${icon}</span><b>${digit}</b></div><div class="ro-bar"></div>`;
-    document.body.appendChild(el);
-    g.audio.robotBeep(2, 1400);
-    setTimeout(() => el.classList.add('out'), 2600);
-    setTimeout(() => el.remove(), 3400);
-  },
-  // 原来的漫画"集中线"：写实版改成镜头被撞了一下——一震 + 一下色散
-  speedLines(g, dur = 1) {
-    const G = g.gfx.grade;
-    G.cur.aberration = Math.max(G.cur.aberration, 0.004 + 0.004 * Math.min(1, dur));
-    if (g._shake) g._shake(0.04 * Math.min(1.5, dur));
+  // 熔炉超载：窗外的熔炉一下子亮起来，汽笛长鸣，整座城都在震
+  overdrive(g) {
+    this._od = 1; this._odT = 14;
+    g.audio.steamWhistle(4.5, 1);
+    g.after(0.4, () => g.audio.rumble(3.5, 0.3));
+    g._shake(0.1);
+    g.after(2.2, () => g.audio.rattle());
   },
 
   handlers(g) {
     const H = {};
     const S = () => g.S;
     const flav = (label, text) => ({ label, verb: '查看', reach: false, act: () => g.say(g._fill(text), 3.6) });
-    const F = {
-      shelf: ['资料库', '资料库：每一本书都拿松紧带勒着，不然全飘走了。顶上还有一盒索引卡。'],
-      monitor2: ['生命维持控制台', '屏幕一片红：LIFE SUPPORT FAILURE。氧气条在一点点往下掉。'],
-      farDesks: ['观测台', '窗前的观测台：一台望远镜、一张星图，还有一行小字："别在值班时偷看月亮"。'],
-      shoeRack: ['氧气瓶架', '一排备用氧气瓶，用绑带勒得死死的。瓶身上写着"211 专用"。'],
-      storageBox: ['补给货箱', '补给货箱："太空泡面 ×48，太空辣条 ×12，高数习题集 ×4"……为什么太空里也要做高数？'],
-      blackTable: ['太空厨房', '太空厨房：加热器、饮水嘴，墙上用魔术贴粘着一排食物包。泡面桶……又飘走了一个。'],
-      foldTable: ['舱外宇航服', '舱外宇航服，尺码 XL。头盔的金色面罩上映着我的脸。……我可不会穿这玩意儿出舱。'],
-      pilotSeat: ['驾驶座', '（系好安全带）……操纵杆是锁着的，屏幕上写着"自动驾驶中"。'],
-      dashboard: ['仪表台', '导航屏上是一条弯弯的返航轨道——室友们的返回舱早就沿着它回地球了。'],
-      dispenser: ['饮水机', '饮水机漏水了，漏出来的水在失重下团成了一颗大水球……'],
-      storageRack: ['储物架', '储物架上塞满了补给箱。最里面贴墙立着一个贴满警示条的货柜，门上写着一个大大的"G"。'],
-      telescope: ['望远镜', ''],
-      pinkBag: ['货物袋', '一袋真空包装的零食，标签上写着"太空辣条"。'],
-      suitcase: ['个人储物箱', '我的储物箱被绑带固定在休眠舱边上。'],
-      box350: ['饮用水', '一整包 350ml 的饮用水袋，每袋都带吸管。'],
-      basket: ['脏衣篓', '脏衣篓的盖子扣得死死的——在太空里，脏衣服会飘出来追着你跑。'],
-      bin: ['垃圾桶', '垃圾桶是抽气式的，盖子一开就"呼"地一声。'],
-      ac: ['空气循环机', '空气循环机呼呼地吹——氧气就靠它了……现在它在报警。'],
-      roster: ['值日表', ''],
-      extinguisher: ['灭火器', '太空专用灭火器。千万别在这里按——后坐力会把你喷到对面墙上。'],
-      firstAid: ['急救包', '急救包上写着：晕太空请吃一片。'],
-      signZeroG: ['警示牌', '⚠ ZERO-G 失重区域 · 请抓紧扶手。'],
-      cola: ['可乐罐', '一罐飘着的可乐。打开的话，气泡会在罐子里变成一整坨泡沫……还是算了。'],
-      sock: ['袜子', '一只飘在空中的袜子。味道也在空中飘。'],
-      book: ['书', '一本摊开的书在半空中慢慢翻页：《从零开始的太空生活》。'],
-      duck: ['小黄鸭', '一只小黄鸭——在太空里，它终于不用浮在水面上了。'],
-      gamepad: ['手柄', '{A}的手柄。上面还沾着薯片渣。'],
-      pillow: ['枕头', '我的枕头飘到了这儿……难怪我脖子疼。'],
-      headphones: ['头戴耳机', '一副耳机在空中慢慢翻跟头。'],
-      helmet: ['红白头盔', '红白头盔在舱里飘着……可惜它不是宇航员头盔。'],
-      paper: ['复习资料', '高数复习资料在半空中翻页……写满了"失重状态下的积分"。'],
-      apple: ['苹果', '一个在空中慢慢自转的苹果。牛顿看了会沉默。'],
-      ticket: ['准考证', '准考证……考场在地球上。'],
-      uvLight: ['紫光手电', '紫光手电在储物箱里飘着。这次用不上它了。'],
-      suitNote: ['便利贴', '储物箱上的便利贴："返回地球之后再打开"。'],
+    const Fl = {
+      foldTable: ['折叠桌', '门边的折叠桌，铁桌腿冻在了地板上。桌上的矿泉水冻成了一根冰棍。'],
+      bedW1: ['{A}的床', '{A}的床上铺着一张狼皮褥子，被子冻得硬邦邦的，能立起来。'],
+      bedW2: ['{B}的床', '{B}的床，蚊帐冻成了一张冰网，一碰就"咔啦"响。'],
+      shelf: ['书架', '书冻成了一整块，抽不出来。书脊上写着《蒸汽机原理》《煤炭的一百种烧法》《法典（注释版）》。'],
+      shoeRack: ['鞋架', '鞋架上一排毡靴，每一双里都塞着报纸——保暖用的。'],
+      storageBox: ['收纳箱', '收纳箱里是四条厚棉裤。标签上写着"议会配给 · 211"。'],
+      polkaBag: ['收纳袋', '一袋子毛线手套，全是单只的。'],
+      box350: ['纸箱', '一箱"应急口粮"……打开一看，是锯末饼干。'],
+      bedE1: ['我的床', '我的床上盖着一张驯鹿皮……难怪我没冻死。'],
+      patternRoll: ['凉席卷', '凉席在这种地方有什么用？……冻得跟一根木棍一样。'],
+      bedE2: ['{C}的床', '{C}的床，上铺挂着一盏熄了的马灯，枕头边放着一本《如何在冰原上活下去》。'],
+      farDesks: ['窗边书桌', '窗边的书桌：一盏马灯、一台黄铜望远镜，还有一本冻住的账本："本周煤炭：-3 箱"。'],
+      yellowBag: ['黄色袋子', '黄底蓝点的袋子，里面装着两双毡靴。'],
+      toteBag: ['红色袋子', '红色的大袋子，里面是一捆劈好的木柴——可惜受潮了，点不着。'],
+      redBag: ['红色收纳包', '{C}的冬衣都在里面……他居然穿着短袖去的矿上？'],
+      paper: ['复习资料', '复习资料冻在了地板上，揭不起来。上面写满了"热力学第二定律"。'],
+      fallenBooks: ['掉在地上的书', '书架前的地上掉着三本书，冻在了地板上。今天晚上，好像也有书自己从书架上掉了下来。'],
+      folder: ['文件夹', '《矿工排班表——{C}整理》：夜班：{A}、{B}、{C}。备注："睡神不叫他了，叫不醒。"'],
+      calendar: ['台历', '台历上写着：寒潮第 211 天。今天那一格画了一片雪花。'],
+      notebook: ['笔记本', '笔记本上画着一台熔炉，旁边写着："熔炉：热功率 = 煤 × 效率 × 希望"。'],
+      apple: ['苹果', '一个苹果冻成了冰疙瘩，敲在桌上"当当"响。'],
+      drawer: ['抽屉', '抽屉冻住了，拉不开。'],
+      suitcase: ['行李箱', '行李箱上结了一层霜，拉链冻住了。'],
+      basket: ['脏衣篓', '脏衣篓里的袜子冻成了一只只"冰袜"。……好在闻不到味道了。'],
+      bin: ['垃圾桶', '垃圾桶里全是烧完的煤渣。'],
+      roster: ['值日表', '值日表：周一 {A} 添煤　周二 {B} 添煤　周三 {C} 添煤　周四 我……周五 老铁（自动机）。'],
+      graffiti: ['隔板涂鸦', '隔板上写着"窗外有猴!!"……旁边多了一行歪歪扭扭的："雪猴！"'],
+      wcBucket: ['水桶和拖把', '水桶里的水冻成了一整块，拖把直直地插在冰里。'],
+      shower: ['花洒', '花洒下面挂着一根冻住的水柱……现在洗澡等于自杀。'],
+      towels: ['毛巾', '四条毛巾冻成了四块板子，敲起来"当当"响。'],
+      stoolMe: ['凳子', '老铁坐着的凳子，被它压得吱吱响。'],
+      poster_survive: ['宣传画', '宣传画：「城市必须存续」——红底上画着一座熔炉，底下一圈人手拉着手。'],
+      poster_law: ['法典告示', '法典告示：第 211 条——宿舍必须按时熄灯；打排位不得超过凌晨三点。……这条是谁提的？'],
+      poster_coal: ['宣传画', '宣传画：「节约煤炭」——一块煤 = 一个温暖的夜。'],
+      poster_automaton: ['招工广告', '招工广告：「自动机——不吃、不睡、不怕冷（冻住了除外）」。'],
+      laundry: ['晾衣绳', '晾着的衣服冻成了一块块铁板。一件衬衫硬得能当盾牌用。'],
+      snowdrift: ['雪堆', '门缝底下吹进来一大堆雪……室友们出门的脚印一路踩到了门口。'],
+      lantern: ['马灯', '一盏马灯，火苗被门缝里钻进来的风吹得一晃一晃。屋里就这点亮了。'],
     };
-    for (const [id, [l, t]] of Object.entries(F)) H[id] = flav(l, t);
-    H.roster = flav('值日表', '值日表：周一 {A}　周二 {B}　周三 {C}　周四 我……周五 小圆（机器人）。');
-    H.clock = { label: '任务钟', verb: '看时间', reach: false, act: () => g.say(`${g.clockText}……氧气一点点在往下掉，得抓紧！`) };
-    H.noodles = { label: '太空泡面', verb: '吸一口面条', act: () => {
-      g.audio.slurp();
-      g.say(S().f.noodle ? '面条已经泡发了……在太空里泡面会变成一个大面球。' : '吸溜——面条在空中飘成了一个圈，吃进去一半，另一半飘走了。', 3);
-      S().f.noodle = true;
+    for (const [id, [l, t]] of Object.entries(Fl)) H[id] = flav(l, t);
+    H.pipe = { label: '蒸汽管', verb: '摸一下', act: () => g.say(S().f.lit ? '嘶——烫！管子里的蒸汽"当当"地响，热气一路往墙里走。' : '管子冰凉，外面结了一层白霜……里面一点热气都没有。', 3) };
+    H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => g.say(this._clockThawed ? `挂钟又走起来了：${g.clockText.slice(0, 5)}。` : '挂钟冻住了，指针停在 21:02——室友们出门的那一刻。', 3.2) };
+    H.curtain = { label: '厚窗帘', verb: '拉一拉', act: () => g.say('厚厚的棉窗帘冻得硬邦邦的，拉不动……还好它本来就拉开着。', 3) };
+    // ---- 气动传送管 ----
+    H.tube = { label: '气动传送管', verb: () => (this._tubeUnread ? '取出铜胶囊' : '看看信'), act: () => this.openTube(g) };
+    // ---- 🏭 窗户 + 望远镜 ----
+    H.window = { label: '窗户', verb: () => (S().f.wiped ? '看窗外' : '擦掉冰花'), reach: true, act: (hv) => this.wipeWindow(g, hv && hv.point) };
+    H.spyglass = { label: '黄铜望远镜', verb: '看熔炉', reach: false, act: () => this.lookScope(g) };
+    // ---- 🔥 暖炉 ----
+    H.icePick = { label: '冰镐', verb: '拔出来', act: () => {
+      g.give('icePick'); g.refs.icePick.visible = false; g.audio.iceBreak();
+      g.fx.emit('dust', g.refs.icePick.position.clone().add(V(0, 0.2, 0)), { count: 10, speed: 0.5, spread: 0.8, up: 0.6, gravity: -1, drag: 1, life: 1, size: 0.03, colors: ['#eef4fc'] });
+      g.say('一把冰镐，斜插在门口的雪堆里——室友们留下的。', 3);
     } };
-    H.candies = { label: '一团巧克力豆', verb: '张嘴去接', act: () => {
-      const s = S();
-      g.audio.crunch();
-      if (s.f.candy) { g.say('巧克力豆被你吃得差不多了，剩下几颗还在转圈。', 2.6); return; }
-      s.f.candy = true; s.freeHints++;
-      g.fx.emit('dust', g.refs.candies.group.getWorldPosition(V()), { count: 6, speed: 0.25, spread: 0.6, up: 0.2, gravity: 0, drag: 1, life: 1.4, size: 0.025, colors: ['#e0b024', '#a8201c', '#1d4e92'] });
-      g.say('啊呜——张嘴接住一颗巧克力豆！甜！（下一次提示免费）', 3);
+    H.coalCrate = { label: '煤箱', verb: () => (S().f.crateOpen ? (S().f.lit ? '查看' : '抓一把煤') : S().inv.includes('icePick') ? '用冰镐撬开' : '打开'), act: () => this.onCrate(g) };
+    H.stove = { label: '铸铁暖炉', verb: () => (S().f.lit ? '烤烤火' : S().inv.includes('coal') ? '添煤、点火' : '查看'), act: () => this.onStove(g) };
+    H.soup = { label: '一锅汤', verb: () => (S().f.lit ? '喝一口' : '查看'), act: () => this.onSoup(g) };
+    H.gauge = { label: '压力表', verb: '查看', reach: false, act: () => g.say(S().f.lit ? (S().found[1] ? `压力表的指针稳稳地停在 ${S().digits[1]} 上。` : '指针正在往上爬……') : '压力表上结着霜，指针趴在最左边的"❄"上——一点压力都没有。', 3.2) };
+    H.valve = { label: '阀门', verb: '拧一拧', act: () => {
+      if (!S().f.lit) { g.say('阀门冻得死死的，拧不动。', 2.6); return; }
+      g.audio.hiss();
+      g.fx.emit('steam', g.refs.valve.position.clone().add(V(0.06, 0.04, 0)), { count: 12, speed: 0.6, spread: 0.6, up: 0.8, gravity: 0.3, drag: 1.4, life: 1.6, size: 0.12, colors: ['#f0f4f8', '#dce4ec'], grow: 2.2 });
+      g.say('拧开一点——嗤！一股热蒸汽喷了出来，脸一下子暖和了。', 3);
     } };
-    // ---- 🤖 机器人 ----
-    H.robot = {
-      label: () => (g.refs.robot.state === 'tumble' ? '失控的机器人' : '小圆（机器人）'),
-      verb: () => (g.refs.robot.state === 'tumble' ? '抓住它' : '聊天'), reach: true,
-      act: () => this.onRobot(g),
-    };
-    // ---- 💧 水球 ----
-    H.waterBall = { label: '大水球', verb: () => (g.refs.waterBall.freed ? '看看纸条' : '喝一口'), act: () => this.drink(g) };
-    // ---- 🌍 窗户 ----
-    H.curtain = { label: '遮光板', verb: () => (S().f.curtainOpen ? '关上' : '打开'), act: () => this.toggleShutter(g) };
-    H.window = { label: '舷窗', verb: () => (S().f.curtainOpen ? '看风景' : '查看'), reach: false, act: () => this.lookEarth(g) };
-    // ---- 休眠舱：室友们的都空了，只留下一段留言；我的那台舱盖开着 ----
-    H.bedW1 = { label: () => `休眠舱 W-01 · ${g.S.mates[0]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 0) };
-    H.bedW2 = { label: () => `休眠舱 W-02 · ${g.S.mates[1]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 1) };
-    H.bedE2 = { label: () => `休眠舱 E-02 · ${g.S.mates[2]}`, verb: '查看留言', reach: false, act: () => this.podLog(g, 2) };
-    H.bedE1 = { label: '我的休眠舱', verb: () => (S().f.readNote ? '查看' : '看看里面'), reach: false, act: () => this.myPod(g) };
-    H.telescope = { label: '望远镜', verb: '看一眼', reach: false, act: () => g.say(S().f.curtainOpen ? '望远镜里，地球的海面反着光，云一团一团地往后退……' : '镜头对着舷窗——可遮光板还关着，只看得到一片灰。', 3.4) };
-    H.station = { label: '信息接收站', verb: '查看消息', act: () => this.openStation(g) };
-    // ---- 隐藏任务线（索引卡 / 货柜 G / 卡冈图雅 / 那本书）----
-    Object.assign(H, this.secret.handlers());
+    // ---- ⚙️ 老铁 ----
+    H.keyIce = { label: '大冰柱', verb: '查看', reach: false, act: () => {
+      g.say(S().inv.includes('icePick') ? '一根粗大的冰柱，里面冻着一把铜钥匙……挂得太高了，冰镐够不着。等屋里暖和起来，它自己会化吧？' : '天花板那根横管底下挂着一根粗冰柱……里面冻着一把铜钥匙！', 3.8);
+      g.clue('keyIce', '天花板横管下的<b>大冰柱</b>里冻着一把<b>铜钥匙</b>——屋里暖和起来才会化。');
+    } };
+    H.windKey = { label: '发条钥匙', verb: '捡起来', act: () => {
+      g.give('windKey'); g.refs.keyIce.key.visible = false; g.audio.tink();
+      g.say('一把黄铜发条钥匙，上面刻着"No.211"……和老铁胸口的铭牌一样。', 3.2);
+    } };
+    H.automaton = { label: '自动机「老铁」', verb: () => (g.refs.automaton.state !== 'frozen' ? '聊天' : S().inv.includes('windKey') ? '插上发条钥匙' : '查看'), reach: false, act: () => this.onBot(g) };
+    H.typewriter = { label: '打字机', verb: '看看纸上', reach: false, act: () => {
+      const node = g.ui.doc({ variant: 'plain', title: '打字机上的纸', html: `<div style="font-family:'Courier New',monospace;line-height:1.9">${this._paper.map((l) => l.replace(/</g, '&lt;')).join('<br>')}</div>` });
+      g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
+    } };
     // ---- 开关、门、洗手间 ----
-    H.switch = { label: '舱内照明', verb: () => (S().f.lightsOn ? '切回夜间模式' : '打开照明'), act: () => this.toggleLights(g) };
-    H.door = { label: '气闸舱门', verb: () => (S().f.unlocked ? '出舱' : '输入授权码'), act: () => this.onDoor(g) };
-    H.wcDoor = { label: '驾驶舱门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
-    H.cubDoor = { label: '储藏室舱门', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
-    H.mirror = { label: '穿衣镜', verb: '照镜子', reach: false, act: () => g.say('镜子里的我头发全都竖了起来——失重版的超级赛亚人。', 3) };
-    H.wcMirror = H.mirror;
-    H.wcWindow = { label: '小窗', verb: '看窗外', reach: false, act: () => {
+    H.switch = { label: '电灯开关', verb: () => (S().f.lightsOn ? '关灯' : '开灯'), act: () => {
+      const s = S();
+      s.f.lightsOn = !s.f.lightsOn; g.audio.switchClick();
+      g.refs.switchRocker.rotation.x = s.f.lightsOn ? -0.12 : 0.12;
+      if (s.f.lightsOn) { g.light.flicker = 0.9; if (!s.f.bulbSeen) { s.f.bulbSeen = true; g.say('灯泡里的钨丝一闪一闪的……是熔炉那边送过来的电。', 3); } }
+    } };
+    H.door = { label: '蒸汽压力锁', verb: () => (S().f.unlocked ? '出门' : '开锁'), act: () => this.onDoor(g) };
+    H.wcDoor = { label: '洗手间门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
+    H.cubDoor = { label: '厕所隔间', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
+    H.sink = { label: '洗漱台', verb: '拧水龙头', act: () => g.say('水龙头底下挂着一根冻住的水柱……一滴水都拧不出来。', 3) };
+    H.toilet = { label: '厕所', verb: '冲水', act: () => { g.audio.iceBreak(); g.say('一拉绳——"咔啦"。水箱冻成了一整块冰，冲不了。', 3); } };
+    H.mirror = { label: '穿衣镜', verb: '照镜子', reach: false, act: () => {
+      if (g.refs.mirrorFrost.material.opacity > 0.3) { g.say('镜子上结满了冰花，照不出人。', 2.6); return; }
+      g.ch.setExpression('grin', 2.2);
+      g.say(['镜子上的霜化了——镜子里的我戴着毛线帽，冻得鼻头通红。', '围巾是谁给我系上的？……管他呢，暖和就行。', '别照了，再照眉毛都要结冰了！'][(this._mirN = (this._mirN || 0) + 1) % 3], 3.2);
+    } };
+    H.wcMirror = { label: '镜子', verb: '照镜子', reach: false, act: () => g.say('洗手间的镜子上冻着厚厚一层霜，照不出人。', 2.6) };
+    H.wcWindow = { label: '窗户', verb: '看窗外', reach: false, act: () => {
       const O = g.refs.outside;
-      if (O.busy) { g.say('三只穿着宇航服的猴子还在窗外挥手……'); return; }
-      O.trigger(6); g.audio.monkey(); g.after(0.9, () => g.audio.monkey(1.25)); g.after(1.8, () => g.audio.monkey(1.1));
-      if (!S().f.sawMonkeys) { S().f.sawMonkeys = true; S().ach.add('monkey'); g.ui.toast('发现彩蛋：<b>太空行走的三只猴子</b>', 'clue', '🐒'); }
-      g.say('窗外……三只穿着宇航服的猴子拴着安全绳飘了过去，还冲我挥手？！', 3.8);
+      if (O.busy) { g.say('三只雪猴还挤在一起，冲我摆造型……'); return; }
+      O.trigger(4.5); g.audio.monkey(); g.after(0.8, () => g.audio.monkey(1.25));
+      if (!S().f.sawMonkeys) { S().f.sawMonkeys = true; S().ach.add('monkey'); g.ui.toast('发现彩蛋：<b>挤成一团取暖的三只雪猴</b>', 'clue', '🐒'); }
+      g.say('窗外的枯树上，三只雪猴挤成一团取暖，头顶上各顶着一小撮雪……被吵醒了，摆了个"三不猴"。', 4);
     } };
     return H;
   },
 
-  // ---------- 🤖 ----------
-  onRobot(g) {
-    const S = g.S, rb = g.refs.robot;
-    if (rb.state === 'tumble') {
-      if (g.ctrl.pos.y < 0.72) {
-        g.say(g.input.isTouch ? '够不着……得飘高一点！（按住右下角的 <b>▲上浮</b>）' : '够不着……得飘高一点！（按住 <b>空格</b> 往上飘）', 3);
-        g.ui.toast(g.input.isTouch ? '按住 <b>▲上浮</b> 往上飘 · 按住 <b>▼下沉</b> 往下沉' : '按住 <kbd>空格</kbd> 上浮 · 按住 <kbd>C</kbd> 下沉', '', '🪐');
+  // ---------- 气动传送管 ----------
+  openTube(g) {
+    const S = g.S;
+    g.audio.paper();
+    if (this._tubeUnread) { this._tubeUnread = false; g.refs.tube.lamp.material.emissiveIntensity = 0; g.refs.tube.capsule.visible = false; }
+    const msgs = this._tube.slice().reverse();
+    const html = msgs.map((m) => `<div style="margin-bottom:14px"><div style="opacity:.6;font-size:13px">📨 ${m.time} · ${m.who}</div>${m.lines.join('<br>')}</div>`).join('<hr style="border:none;border-top:1px dashed rgba(0,0,0,.2);margin:10px 0">');
+    const node = g.ui.doc({ title: '气动传送管里的信', html });
+    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
+    if (!S.f.readTube) {
+      S.f.readTube = true;
+      g.clue('tube', '室友的信：门上是<b>蒸汽压力锁</b>（3 位）——🏭 熔炉顶上的信号灯；🔥 暖炉烧旺后看<b>压力表</b>；⚙️ <b>老铁</b>记得（它冻住了）。冰镐在门口雪堆里，煤箱冻上了。');
+      g.after(0.5, () => g.say('下矿上夜班？……又把我一个人丢下了。先把炉子生起来！', 3.4));
+    }
+  },
+  // 又有一封信从管子里"咻——咚"地掉下来
+  _capsule(g, msg) {
+    const T = g.refs.tube;
+    this._tube.push(msg);
+    this._tubeUnread = true;
+    T.flyCap.visible = true; T.flyCap.position.set(0, 1.6, 0);
+    g.audio.tubeWhoosh();
+    g.tween(0.85, (k) => T.flyCap.position.set(-0.03 * k, lerp(1.6, -0.09, k * k), 0.09 * k), { ease: (t) => t, done: () => { T.flyCap.visible = false; T.capsule.visible = true; T.lamp.material.emissiveIntensity = 2.2; } });
+    g.after(1.0, () => g.ui.toast(`气动传送管里掉下来一个铜胶囊：<b>${msg.who}</b> 的信`, '', '📨'));
+  },
+
+  // ---------- 🏭 擦窗户、望远镜 ----------
+  wipeWindow(g, point) {
+    const S = g.S, W = g.refs.windowFrost;
+    if (S.f.wiped) { this.lookOut(g); return; }
+    g.audio.wipe();
+    // 在冰花上"擦"出一道：沿着袖子来回抹几下
+    const c = W.canvas, ctx = c.getContext('2d');
+    const u = point ? clamp((point.x + 1.31) / 2.62, 0.08, 0.92) : 0.5, v = point ? clamp(1 - (point.y - 1.0) / 1.5, 0.12, 0.88) : 0.55;
+    ctx.save(); ctx.globalCompositeOperation = 'destination-out';
+    const r = c.width * 0.07;
+    for (let k = 0; k < 7; k++) {
+      const x = (u + (k - 3) * 0.035 + (Math.random() - 0.5) * 0.02) * c.width, y = (v + Math.sin(k * 1.7) * 0.03) * c.height;
+      const gr = ctx.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(0,0,0,0.95)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.6)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+    W.tex.needsUpdate = true;
+    this._wipes++;
+    g.fx.emit('dust', point ? point.clone().add(V(0, 0, 0.05)) : V(0, 1.7, -3.5), { count: 8, speed: 0.25, spread: 0.8, up: 0.2, gravity: -0.8, drag: 1.2, life: 1.2, size: 0.02, colors: ['#f0f6ff'] });
+    if (this._wipes === 1) g.say('冰花太厚了，得多擦几下……袖子都湿了。', 2.6);
+    if (this._wipes >= 3) {
+      S.f.wiped = true;
+      // 擦开之后，中间一大片慢慢清透（冰花只剩四周一圈）
+      const snap = TX.makeCanvas(c.width, c.height);
+      snap.getContext('2d').drawImage(c, 0, 0);
+      g.tween(1.6, (k) => (W.glowK = 1 - k));
+      g.tween(1.6, (k) => {
+        ctx.save();
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(snap, 0, 0);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.translate(c.width * 0.5, c.height * 0.52); ctx.scale(1, (0.36 * c.height) / (0.42 * c.width));
+        const R0 = 0.42 * c.width;
+        const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, R0);
+        gr.addColorStop(0, `rgba(0,0,0,${0.94 * k})`); gr.addColorStop(0.7, `rgba(0,0,0,${0.85 * k})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = gr; ctx.fillRect(-R0, -R0, R0 * 2, R0 * 2);
+        ctx.restore();
+        W.tex.needsUpdate = true;
+      }, { ease: (t) => t });
+      g.after(0.6, () => this.lookOut(g, true));
+    }
+  },
+  lookOut(g, first = false) {
+    const S = g.S;
+    if (this._scope) return;
+    this._scope = true;
+    g._cineTo(V(0.52, 1.7, -2.8), MAST_WORLD.clone().add(V(0, 1.2, 0)), 1.4);
+    if (first) {
+      g.after(0.8, () => g.ui.subtitle('窗外是……一座城？！大坑中间立着一座巨大的熔炉，一圈圈木屋全都亮着灯，探照灯在雪里扫来扫去。', 4.4, S.name));
+      g.after(5.2, () => g.ui.subtitle('熔炉的塔身上有一根信号灯柱，亮着几盏红灯……太远了，数不清。', 3.2, S.name));
+      g.clue('window', '窗外：熔炉塔身上有一根<b>信号灯柱</b>，亮着几盏红灯……太远了，得找个望远镜。');
+    } else g.after(0.6, () => g.ui.subtitle('熔炉还在暴风雪里烧着……信号灯柱太远了，得用望远镜才看得清。', 3, S.name));
+    g.after(first ? 8.6 : 3.8, () => { g._cineTo(null, null, 1.1); this._scope = false; });
+  },
+  lookScope(g) {
+    const S = g.S;
+    if (this._scope) return;
+    if (!S.f.wiped) { g.say('望远镜对着窗户——可玻璃上全是冰花，什么都看不见。先把窗户擦干净。', 3.4); return; }
+    this._scope = true;
+    let el = document.getElementById('spyglass');
+    if (!el) { el = document.createElement('div'); el.id = 'spyglass'; document.body.appendChild(el); }
+    const cam = g.camera, fov0 = 62;
+    const FM = g.refs.windowFrost.mat;
+    g._cineTo(V(0.46, 1.46, -3.12), MAST_WORLD.clone(), 1.1);
+    g.tween(0.8, (k) => (FM.opacity = 1 - k));
+    g.after(0.7, () => { el.classList.add('on'); g.tween(0.9, (k) => { cam.fov = lerp(fov0, 15, k); cam.updateProjectionMatrix(); }, { ease: easeInOut }); });
+    g.after(1.9, () => g.ui.subtitle(`熔炉的信号灯柱……从下往上数：亮着 ${S.digits[0]} 盏红灯！`, 3.2, S.name));
+    g.after(2.6, () => { if (!S.found[0]) g.foundDigit(0, '望远镜里熔炉的信号灯'); S.f.scoped = true; });
+    g.after(4.8, () => {
+      el.classList.remove('on');
+      g.tween(0.7, (k) => { cam.fov = lerp(15, fov0, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = fov0; cam.updateProjectionMatrix(); } });
+      g._cineTo(null, null, 1.0);
+      g.tween(0.8, (k) => (FM.opacity = k));
+    });
+    g.after(5.9, () => { this._scope = false; });
+  },
+
+  // ---------- 🔥 煤箱、暖炉、汤 ----------
+  onCrate(g) {
+    const S = g.S, C = g.refs.coalCrate;
+    if (!S.f.crateOpen) {
+      if (!S.inv.includes('icePick')) {
+        g.audio.lockedRattle();
+        g.say('煤箱的盖子被一层厚厚的冰壳冻死了……得找个家伙撬开。', 3.2);
+        g.clue('crate', '暖炉旁边的<b>煤箱</b>冻住了，要找个东西把冰撬开。');
         return;
       }
-      this.catchRobot(g);
+      S.f.crateOpen = true;
+      g.take('icePick');
+      g.audio.iceBreak(); g._shake(0.08);
+      g.fx.emit('dust', C.group.position.clone().add(V(0, 0.4, 0)), { count: 18, speed: 0.7, spread: 1, up: 0.9, gravity: -2.5, drag: 0.8, life: 1.2, size: 0.03, colors: ['#e8f0fa', '#cfe0f0'] });
+      C.ice.visible = false;
+      g.tween(0.6, (k) => (C.lid.rotation.x = -1.9 * k), { ease: easeOutBack, delay: 0.2 });
+      g.say('嘿——咔嚓！冰壳碎了，盖子撬开了。满满一箱煤！', 3);
       return;
     }
-    if (rb.state !== 'follow') return;
-    rb.talkT = 2.4;
-    g.audio.robotBeep(2);
-    const [A, B, C] = S.mates;
-    let line;
-    if (!S.found[1]) { line = `💧那一位？${B}走之前把一张纸条泡进水球里了，就飘在驾驶舱！`; S.f.talkedB = true; }
-    else if (!S.found[2]) line = S.f.curtainOpen ? `🌍那一位……${A}说他"写在地球上了"。等我们飞到地球背面，城市的灯光就亮了！` : '先把舷窗的遮光板打开吧！外面的风景超——美的！';
-    else if (!S.f.unlocked) line = `授权码是 ${S.digits.join('')}！快去门口的面板输入！`;
-    else line = '气闸舱已就绪！一路顺风！';
-    g.ui.subtitle(line, 3.4, '小圆（机器人）');
+    if (S.f.lit) { g.say('煤还有大半箱，够烧一整晚的。', 2.6); return; }
+    if (S.inv.includes('coal')) { g.say('手里已经有一把煤了，快添进炉子里！', 2.6); return; }
+    g.give('coal'); g.audio.shovel();
+    g.say('抓了一大把煤块。手套上全是黑的。', 2.6);
   },
-  catchRobot(g) {
-    const S = g.S, rb = g.refs.robot, [A, B, C] = S.mates;
-    rb.state = 'rescue'; rb.rescueT = 0;
-    g.audio.clunk(); g.audio.robotBeep(4);
-    this.speedLines(g, 1.0);
-    g._shake(0.15);
-    g.ch.setExpression('focus', 2);
-    g.say('抓住你了！', 1.4);
-    g.after(1.4, () => { rb.mode = 'blink'; g.audio.bootChime(); g.ui.subtitle('……系统重启中……陀螺仪校准完毕！', 2.2, '？？？（机器人）'); });
-    g.after(3.6, () => {
-      rb.mode = 'happy'; rb.emote.show('heart', 2); g.audio.sparkle();
-      g.fx.emit('spark', rb.root.getWorldPosition(V()), { count: 6, speed: 0.5, spread: 1, up: 0.2, gravity: 0, drag: 2, life: 0.4, size: 0.02, colors: ['#ffe0a0', '#ffffff'] });
-      g.ui.subtitle(`谢谢你，${S.name}！我是 211 舱的生活助理「小圆」！`, 3, '小圆（机器人）');
-      S.ach.add('robot');
-    });
-    g.after(6.8, () => {
-      rb.mode = 'talk'; rb.talkT = 3.6;
-      g.ui.subtitle(`作为报答——气闸授权码🤖那一位是 ${S.digits[0]}！`, 3.6, '小圆（机器人）');
-      g.after(0.4, () => { g.foundDigit(0, '重启之后的机器人小圆'); this.eyecatch(g, '🤖', S.digits[0]); });
-    });
-    g.after(10.6, () => {
-      rb.state = 'follow'; rb.talkT = 3.6;
-      g.ui.subtitle(`另外两位……💧在${B}泡的水球里，🌍……${A}说他"写在地球上了"？`, 3.8, '小圆（机器人）');
-      g.clue('robot', `小圆：💧那一位在${B}泡的<b>水球</b>里（驾驶舱）；🌍那一位被${A}"写在了<b>地球</b>上"。`);
-    });
+  onStove(g) {
+    const S = g.S;
+    if (S.f.lit) {
+      g.say(['炉火呼呼地响，手指头终于有知觉了。', '把手伸过去烤一烤——啊，活过来了。', '炉肚子烧得微微发红……可别把袜子放上去烤（法典第 212 条）。'][(this._warmN = (this._warmN || 0) + 1) % 3], 3);
+      g.ch.setExpression('grin', 2);
+      return;
+    }
+    if (!S.inv.includes('coal')) {
+      g.say('炉子冰凉，里面只剩一点煤灰……得先弄点煤来。', 3);
+      g.clue('stove', '<b>暖炉</b>是凉的，需要<b>煤</b>。');
+      return;
+    }
+    this.lightStove(g);
   },
-
-  // ---------- 💧 ----------
-  drink(g) {
-    const S = g.S, W = g.refs.waterBall;
-    if (W.freed) { this.showNote(g); return; }
-    W.sips = (W.sips || 0) + 1;
+  lightStove(g) {
+    const S = g.S, R = g.refs, St = R.stove;
+    g.take('coal');
+    S.f.lit = true;
+    S.ach.add('forge');
+    g.audio.shovel();
+    // 打开炉门、倒煤、关上
+    g.tween(0.35, (k) => (St.door.rotation.y = -1.6 * k), { ease: easeOut });
+    g.after(0.4, () => { St.coalIn.visible = true; g.audio.clunk(); });
+    g.after(0.8, () => { g.audio.ignite(); this._litT = 0; g.fx.emit('spark', St.group.position.clone().add(V(0.35, 0.45, 0)), { count: 16, speed: 1, spread: 0.8, up: 1, gravity: -1, drag: 1.5, life: 1.2, size: 0.03, colors: ['#ffd080', '#ff8a30'] }); });
+    g.after(1.1, () => g.tween(0.4, (k) => (St.door.rotation.y = -1.6 * (1 - k)), { ease: easeInOut }));
+    g.after(1.3, () => { g.audio.startFire(); g.say('添煤……嚓——着了！', 2.2); });
+    // 蒸汽管"当当"地响起来，压力表的指针慢慢往上爬：镜头凑过去看
+    g.after(2.4, () => { g.audio.clank(4); g._cineTo(V(-0.95, 1.62, 2.45), R.gauge.group.position.clone(), 1.0); });
+    const G = R.gauge;
+    g.after(2.8, () => g.tween(3.0, (k) => { G.value = lerp(-1, S.digits[1], k); G.needle.rotation.z = G.angleOf(G.value) + Math.sin(k * 30) * 0.05 * (1 - k); }, { ease: easeOut }));
+    g.after(4.6, () => g.ui.subtitle(`压力表的指针爬上去了……停在了 ${S.digits[1]}！`, 3, S.name));
+    g.after(5.2, () => g.foundDigit(1, '暖炉烧起来后的压力表'));
+    g.after(6.4, () => g._cineTo(null, null, 1.0));
+  },
+  onSoup(g) {
+    const S = g.S;
+    if (!S.f.lit) { g.say('一锅汤冻成了冰坨子。旁边的法典告示上写着：第 19 条——汤里可加锯末，管饱。', 3.6); return; }
+    if (S.f.soup) { g.say('汤已经被我喝光了，锅底还剩一点锯末。', 2.6); return; }
+    S.f.soup = true; S.freeHints++; S.ach.add('soup');
     g.audio.slurp();
-    g.ch.setExpression('grin', 1.5);
-    const p = W.group.getWorldPosition(V());
-    g.fx.emit('drop', p, { count: 8, speed: 0.3, spread: 1, up: 0.3, gravity: 0, drag: 0.6, life: 2.5, size: 0.04, colors: ['#bfe8ff', '#ffffff'] });
-    const s0 = W.size;
-    if (W.sips < 3) {
-      const s1 = W.sips === 1 ? 0.74 : 0.5;
-      g.tween(0.6, (k) => (W.size = lerp(s0, s1, k)), { ease: easeOut });
-      g.say(W.sips === 1 ? '咕嘟——（在太空里喝水全靠嘬）……水球里泡着一张纸条！' : '咕嘟咕嘟……好撑……再来一口就能拿到纸条了！', 3);
+    g.fx.emit('steam', g.refs.stove.group.position.clone().add(V(0, 1.0, 0)), { count: 6, speed: 0.2, spread: 0.4, up: 0.8, gravity: 0.2, drag: 1, life: 2, size: 0.12, colors: ['#f0f4f8'], grow: 2.2 });
+    g.say('热乎乎的锯末汤……一股木头味，但是真暖和！（下一次提示免费）', 3.4);
+  },
+
+  // ---------- ⚙️ 老铁 ----------
+  _botThawed(g) { return g.refs.frost.heat.uHeatR.value > BOT_D + 0.25; },
+  onBot(g) {
+    const S = g.S, bot = g.refs.automaton;
+    if (bot.state !== 'frozen') {
+      if (bot.state === 'boot' || this._botBusy) return;
+      bot.talk(2.8); bot.after = 'idle'; g.audio.robotVoice(1.2);
+      const lines = S.found[2]
+        ? ['本机提醒：熄灯时间已过。', '法典第 211 条：打排位不得超过凌晨三点。……本机记得你昨晚打到了四点。', '我不冷。我是铁做的。……但我的发条冻住过。', '你的室友们去矿上了，他们让我看着你。——任务失败。', '暴风雪来了，记得往炉子里添煤。本机不负责添煤。']
+        : ['咔……哒……系统……预热中……'];
+      g.ui.subtitle(lines[(this._botN = (this._botN || 0) + 1) % lines.length], 3.2, '⚙️ 老铁（自动机）');
       return;
     }
-    // 最后一口：水球"啵"地破开，纸条飘了出来
-    g.tween(0.25, (k) => (W.size = lerp(s0, 0.001, k)), { ease: (t) => t * t, done: () => { W.ball.visible = false; } });
-    g.audio.pop(); g.audio.sparkle();
-    this.speedLines(g, 0.8);
-    g.fx.emit('drop', p, { count: 36, speed: 0.9, spread: 1.2, up: 0.6, gravity: 0, drag: 0.9, life: 3, size: 0.05, colors: ['#bfe8ff', '#9fe0ff', '#ffffff'] });
-    W.freed = true;
-    S.ach.add('water');
-    g.say('噗——！水球破了，纸条飘了出来！', 2.4);
-    g.after(1.0, () => this.showNote(g));
-  },
-  showNote(g) {
-    const S = g.S, [A, B] = S.mates;
-    const node = g.ui.doc({ title: '防水便签', html: `<div style="font-size:18px;line-height:1.8">气闸授权码<br><b style="font-size:26px">💧 = ${S.digits[1]}</b><br><span style="color:#888">——${B}（泡在水球里，谁也找不到 😎）</span></div>`, variant: 'note' });
-    g.openModal(node);
-    if (!S.found[1]) g.after(0.3, () => { g.foundDigit(1, `${B}泡在水球里的纸条`); this.eyecatch(g, '💧', S.digits[1]); });
-  },
-
-  // ---------- 🌍 ----------
-  toggleShutter(g) {
-    const S = g.S, C = g.refs.curtain;
-    const open = !S.f.curtainOpen;
-    S.f.curtainOpen = open;
-    g.audio.curtain(); g.audio.hiss();
-    const f0 = C.f, f1 = open ? 0.17 : 1;
-    g.tween(1.8, (k) => { C.f = lerp(f0, f1, k); C.layout(C.f); }, { ease: easeInOut });
-    if (open && !S.f.sawEarth) {
-      S.f.sawEarth = true;
-      g.after(1.4, () => { this.speedLines(g, 1.2); g.audio.sparkle(); g.say('哇……是地球！！我们真的在太空里！', 3.4); });
-      g.after(5.0, () => g.ui.subtitle('哇！外面的风景超——美的！地球每一百秒就会"关一次灯"哦！', 3.4, g.refs.robot.state === 'follow' ? '小圆（机器人）' : g.S.name));
-      g.clue('earth', '舷窗外是地球。太空舱每隔一会儿就会绕到地球背面，地球的这一面就"关灯"了。');
+    if (!S.inv.includes('windKey')) {
+      g.say('老铁冻得硬邦邦的，胸口的炉门里一点火星都没有。它背后……有个发条孔？', 3.6);
+      g.clue('bot', '自动机<b>老铁</b>冻住了。它背后有个<b>发条孔</b>——需要一把发条钥匙。');
+      return;
     }
-  },
-  lookEarth(g, auto = false) {
-    const S = g.S;
-    if (!S.f.curtainOpen) { g.say('遮光板挡着呢。'); return; }
-    if (this._lapse) return;
-    if (S.found[2]) { g.say(`地球还在那儿慢慢转着。城市灯光拼的 ${S.digits[2]} 已经看不清了。`, 3); return; }
-    const sky = g.refs.spaceSky;
-    // 镜头贴到舷窗前（两排上铺之间的过道里），对着地球
-    const eye = V(0.1, 1.72, -2.9);
-    const look = eye.clone().addScaledVector(sky.earthDir, 3);
-    g._cineTo(eye, look, 1.2);
-    g.audio.whoosh();
-    // 快进到地球背面（日食）：太阳躲到地球后面，整个地球变成夜景
-    const p0 = this._phase;
-    let target = Math.floor(p0) + 0.5;
-    if (target < p0 - 0.06) target += 1;
-    this._lapse = { p0, p1: target, t: 0, dur: auto ? 0.01 : 3.6 };
-    if (!auto) {
-      g.ui.subtitle('（轨道快进 ×600）', 3.2, '');
-      g.after(0.3, () => this.speedLines(g, 3.2));
-    }
-    g.after(auto ? 0.4 : 4.0, () => {
-      g.audio.sparkle(); g._shake(0.08);
-      g.say(`地球"关灯"了……城市的灯光拼出了一个数字：${S.digits[2]}？！`, 3.6);
-      g.foundDigit(2, '地球夜景里的城市灯光');
-      this.eyecatch(g, '🌍', S.digits[2]);
-      S.ach.add('earth');
+    if (!this._botThawed(g)) { g.say('发条孔里全是冰，钥匙插不进去……等暖炉把屋子再烘热一点。', 3.4); return; }
+    // 上发条 → 抖着醒过来 → 在打字机上敲出最后一位
+    g.take('windKey');
+    S.f.keyIn = true;
+    this._botBusy = true;
+    bot.insertKey();
+    g.audio.ratchet(10);
+    g.say('咔、咔、咔……发条上满了。', 2.2);
+    g._cineTo(V(0.2, 1.62, -0.55), V(1.05, 1.15, 0.28), 1.0);
+    g.after(1.3, () => { bot.setState('boot'); g.audio.automatonBoot(); g._shake(0.05); S.ach.add('laotie'); });
+    g.after(2.4, () => g.ui.subtitle('咔……哒……嗤——', 1.6, '⚙️ 老铁（自动机）'));
+    g.after(3.8, () => {
+      bot.setState('type');
+      const d = S.digits[2];
+      const lines = ['211 号住所', '住户：4 人', '自动机：老铁', '', '致 睡神：', `压力锁 ⚙ = ${d}`];
+      this._paper = lines.slice(0, 3);
+      const step = () => { this._paper = lines.slice(0, Math.min(lines.length, this._paper.length + 1)); this._drawPaper(g, true); if (this._paper.length < lines.length) g.after(0.45, step); else g.audio.typeDing(); };
+      g.after(0.3, step);
+      g._cineTo(V(0.95, 1.55, -0.3), V(1.43, 0.95, 0.26), 1.0);
     });
-    g.after(auto ? 3.6 : 7.8, () => g.ui.subtitle(`嘿嘿……🌍那一位……我用城市的灯光写的……zzz`, 3, `${S.mates[0]}（梦话）`));
-    g.after(auto ? 4.2 : 8.6, () => { g._cineTo(null, null, 1.2); this._lapse = null; });
+    g.after(7.2, () => {
+      bot.talk(3.6); bot.after = 'idle'; g.audio.robotVoice(2.4);
+      g.ui.subtitle(`早、早上好，室友。你的室友们让我转告你——压力锁第 ⚙️ 位：${S.digits[2]}。`, 4, '⚙️ 老铁（自动机）');
+      g._cineTo(V(0.25, 1.55, -0.45), V(0.95, 1.3, 0.25), 0.8);
+    });
+    g.after(7.8, () => g.foundDigit(2, '醒过来的老铁'));
+    g.after(10.8, () => { g._cineTo(null, null, 1.0); this._botBusy = false; });
+  },
+  _drawPaper(g, cursor = false) {
+    const T = g.refs.typewriter;
+    TF.drawTypewriterPaper(T.canvas, this._paper, { cursor });
+    T.tex.needsUpdate = true;
   },
 
-  // 室友的休眠舱：舱是空的，床头屏幕上留着一段语音留言（转成了文字）
-  podLog(g, i) {
-    const S = g.S, [A, B, C] = S.mates, name = S.mates[i];
-    const code = ['W-01', 'W-02', 'E-02'][i];
-    const msg = [
-      `🌍那一位我用<b>城市的灯光</b>写在地球上了——太空舱每一百秒绕地球一圈，等地球"关灯"了再看！`,
-      `💧那一位我泡进<b>水球</b>里了，就飘在驾驶舱（原来的洗手间）里。在太空里喝水全靠嘬 😎`,
-      `对不起……小圆的陀螺仪被我碰坏了，现在它在天花板那儿乱转。🤖那一位它记着呢，<b>飘上去抓住它</b>就行。`,
-    ][i];
-    g.audio.robotBeep(1, 900);
-    const node = g.ui.doc({ title: `休眠舱 ${code} · ${name}`, variant: 'plain', html: `<div style="line-height:1.8">状态：<b style="color:#ff6a7a">空</b>　·　乘员已于 06:52 乘返回舱离舱<br><br>留言（语音转文字）：<br>"${msg}"<div class="sig" style="text-align:right;color:#888">—— ${name}</div></div>` });
-    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
-    if (i === 1) S.f.talkedB = true;
-    if (!S.f[`pod${i}`]) {
-      S.f[`pod${i}`] = true;
-      g.clue(`pod${i}`, [`${A}的休眠舱留言：🌍那一位"用城市的灯光写在地球上"，要等地球"关灯"才看得见。`, `${B}的休眠舱留言：驾驶舱的<b>水球</b>里泡着纸条。`, `${C}的休眠舱留言：天花板附近乱转的机器人<b>小圆</b>记着🤖那一位。`][i]);
-      if ([0, 1, 2].every((k) => S.f[`pod${k}`])) g.after(0.6, () => g.say('三台休眠舱全是空的……整节舱里，真的只剩我一个人了。', 3.4));
-    }
-  },
-  // 我的休眠舱：舱盖开着，里面还冒着冷气；舱壁上贴着室友留的纸条（就像第一章显示器上那张便利贴）
-  myPod(g) {
-    const S = g.S;
-    if (S.f.readNote) { g.say('我的休眠舱……还冒着冷气。我就是从这里醒过来的吗？', 3); return; }
-    S.f.readNote = true;
-    g.audio.paper();
-    const node = g.ui.doc({
-      variant: 'sticky',
-      html: `睡神：<br>叫了你八百遍都不醒 😤 我们先坐返回舱回地球了。<br>气闸舱门的<span class="red">授权码</span>拆成了三份：<span class="red">🤖 💧 🌍</span><br>去我们的休眠舱看留言吧～<br>氧气够你用的，别慌！（大概）<div class="sig">—— 211 全体室友<br>${S.mates.join('、')}</div>`,
-    });
-    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
-    g.clue('note', '室友们坐返回舱先走了：气闸授权码 3 位（🤖 💧 🌍），线索在他们各自的<b>休眠舱留言</b>里。');
-    g.after(0.4, () => g.say('又是这一套……好，一个一个来！', 2.6));
-  },
-  // 信息接收站：返回舱发回来的消息（像第一章的宿舍群）；隐藏任务线解锁之后多一个"频道 211"
-  openStation(g) {
-    const S = g.S, [A, B, C] = S.mates;
-    if (this.secret.stationChannel()) return;
-    g.audio.robotBeep(2, 1200);
-    const node = g.ui.phone({
-      title: '返回舱通讯 · CH-01', time: '07:3x', battery: 88, members: 4, footer: '信号延迟 1.3 秒……发出去的消息没有回音 📡',
-      messages: [
-        { time: '06:52', who: A, text: '我们上返回舱了！他还没醒？' },
-        { who: B, text: '叫了八百遍，睡得跟死猪一样 🐷' },
-        { who: C, text: '算了算了，给他留点"惊喜" 😏' },
-        { time: '06:55', who: C, text: '气闸授权码拆成三份了：🤖💧🌍' },
-        { who: A, text: '留言都在我们的休眠舱里，自己去看～' },
-        { time: '07:10', who: '返回舱', text: '已脱离轨道，预计三小时后溅落。' },
-        { who: B, text: '别忘了喝水！驾驶舱那台饮水机漏水了哈哈哈' },
-      ],
-    });
-    g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
-    if (!S.f.station) { S.f.station = true; g.clue('station', '信息接收站：室友们坐<b>返回舱</b>先走了，授权码拆成 🤖💧🌍 三份，留言在他们的休眠舱里。'); }
-  },
-
-  toggleLights(g) {
-    const S = g.S;
-    S.f.lightsOn = !S.f.lightsOn;
-    g.audio.switchClick(); g.audio.fluoro();
-    if (S.f.lightsOn) g.after(0.4, () => g.ui.subtitle('照明模式已开启。……舱里亮堂堂的，更显得空荡荡了。', 2.6, '📢 舱内广播'));
-  },
-
+  // ---------- 门 ----------
   onDoor(g) {
     const S = g.S;
     if (S.f.unlocked) { g.win(); return; }
     if (!S.f.triedDoor) {
       S.f.triedDoor = true;
-      g.audio.robotBeep(2);
-      g.say('气闸舱门锁着。门边的面板上写着："请输入 3 位授权码 🤖💧🌍"。', 3.8);
-      g.clue('door', '<b>气闸舱门</b>：3 位授权码，分别对应 🤖 💧 🌍。');
-      g.after(1.8, () => this.openLock(g));
+      g.audio.lockedRattle();
+      g.say('门被一条结满冰碴的铁链拴住了，挂着一把黄铜压力锁……三个表盘上刻着🏭🔥⚙️？', 3.8);
+      g.clue('door', '门上的<b>蒸汽压力锁</b>：三个表盘分别刻着 🏭 🔥 ⚙️。');
+      g.after(1.6, () => this.openLock(g));
       return;
     }
     this.openLock(g);
@@ -523,204 +584,158 @@ export const CH4 = {
     const S = g.S;
     const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
     const box = g.ui.lock({
-      n: 3, title: '气闸舱门 · 授权码', variant: 'holo', labels: ['🤖', '💧', '🌍'],
-      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '三个数位旁边分别画着 🤖 💧 🌍……',
-      onTick: () => g.audio.robotBeep(1, 1800),
+      n: 3, title: '蒸汽压力锁', variant: 'steam', labels: ['🏭', '🔥', '⚙️'],
+      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '三个黄铜表盘上刻着熔炉、火苗和齿轮……',
+      onTick: () => g.audio.tick(),
       onSubmit: (code) => {
         if (code === S.digits.join('')) { g.audio.unlock(); g.ui.closeModal(); this.unlock(g); return true; }
-        g.audio.error(); this._drawKeypad(g, 'error'); g.after(0.8, () => this._drawKeypad(g, 'locked'));
-        return false;
+        g.audio.error(); return false;
       },
     });
     g.openModal(box);
   },
-  // 鉴赏模式：气闸舱门没有授权码，面板一开始就是绿的
-  removeLock(g) { this._drawKeypad(g, 'open'); },
+  // 鉴赏模式：开局就把锁整个拿掉
+  removeLock(g) { const H = g.refs.frostLock; H.group.visible = false; H.dropped.visible = false; },
   unlockVisual(g) {
+    const H = g.refs.frostLock;
     g.collision.setEnabled('lockCable', false);
-    this._drawKeypad(g, 'open');
+    H.group.visible = false; H.dropped.visible = true;
   },
   unlock(g) {
-    const S = g.S, H = g.refs.hatch;
+    const S = g.S, H = g.refs.frostLock;
     S.f.unlocked = true;
-    this.unlockVisual(g);
-    const w0 = H.wheel.rotation.z;
-    g.tween(1.2, (k) => (H.wheel.rotation.z = w0 + k * Math.PI * 3), { ease: easeInOut });
-    g.audio.hiss(); g.audio.clunk();
-    this.speedLines(g, 1.0);
-    g.fx.emit('dust', V(-1.62, 1.4, g.refs.door.z), { count: 30, speed: 0.6, spread: 1, up: 0.2, gravity: 0, drag: 1.2, life: 2, size: 0.08, colors: ['#e8e4dc', '#cfd6d2'], sway: 0.2 });
-    g.say('嗤——气闸舱门的转轮自己转了起来！', 2.4);
-    g.refs.robot.emote.show('star', 1.5);
+    H.lamp.emissive.set('#3aff6a');
+    const l = H.lock, y0 = l.position.y;
+    g.audio.hiss();
+    g.fx.emit('steam', l.getWorldPosition(V()).add(V(0.1, 0.05, 0)), { count: 16, speed: 0.6, spread: 0.8, up: 0.9, gravity: 0.2, drag: 1.3, life: 1.8, size: 0.14, colors: ['#f0f4f8', '#dce4ec'], grow: 2.2 });
+    g.after(0.3, () => { g.audio.iceBreak(); g.fx.emit('dust', l.getWorldPosition(V()), { count: 14, speed: 0.6, spread: 1, up: 0.5, gravity: -2.5, drag: 0.8, life: 1, size: 0.025, colors: ['#e8f0fa'] }); });
+    g.tween(0.5, (k) => { l.rotation.z = k * 1.5; l.position.y = y0 - k * 0.55; }, { ease: (t) => t * t, delay: 0.3, done: () => { this.unlockVisual(g); g.audio.chainDrop(); } });
+    g.say('嗤——压力锁放了气，"咔哒"一声开了！', 2.6);
     g.after(1.6, () => g.win());
   },
 
+  // ---------- 每帧（只在 play 时）----------
   update(g, dt) {
-    const S = g.S;
-    this.secret.update(dt);
-    if (g.ctrl.floatTarget > 1.08 && !S.ach.has('spacewalk')) { S.ach.add('spacewalk'); g.ui.toast('飘到了天花板！', '', '🧑‍🚀'); }
-    // 窗外正好是日食（地球全黑）的时候盯着地球看，也能自己发现
-    if (!S.found[2] && S.f.curtainOpen && !this._lapse && g.state === 'play' && !g.cine) {
-      const sky = g.refs.spaceSky;
-      g.camera.getWorldDirection(_p);
-      const dark = 1 - sky.sunVisible();
-      const aim = _p.angleTo(sky.earthDir) < 0.2 && g.camera.position.z < 0.5;
-      this._look = dark > 0.8 && aim ? this._look + dt : 0;
-      if (this._look > 1.2) this.lookEarth(g, true);
+    const S = g.S, R = g.refs;
+    // 冰柱化了：发条钥匙掉下来
+    const heatR = R.frost.heat.uHeatR.value;
+    if (this._keyState === 0 && heatR > KEY_D + 0.55) {
+      this._keyState = 1;
+      const K = R.keyIce;
+      g.tween(2.6, (k) => { K.ice.scale.set(0.06 * (1 - k * 0.7), 0.5 * (1 - k * 0.8), 0.06 * (1 - k * 0.7)); }, { ease: (t) => t });
+      for (let i = 0; i < 6; i++) g.after(i * 0.4, () => g.fx.emit('drop', K.group.position.clone().add(V(0, -0.3, 0)), { count: 1, speed: 0.05, spread: 0.1, up: 0, gravity: -6, drag: 0, life: 0.8, size: 0.025, colors: ['#d8ecff'] }));
+      g.after(2.6, () => {
+        this._keyState = 2;
+        S.f.keyFell = true;
+        const key = K.key;
+        g.refs.root.attach(key);
+        key.traverse((c) => { c.userData.iid = 'windKey'; });
+        const p0 = key.position.clone(), p1 = V(p0.x, 0.02, p0.z);
+        g.tween(0.55, (k) => { key.position.lerpVectors(p0, p1, k); key.rotation.z = 0.2 + k * 1.2; }, { ease: (t) => t * t, done: () => { key.rotation.set(Math.PI / 2, 0, 0.8); g.audio.tink(); } });
+        K.ice.visible = false;
+        g.audio.iceBreak();
+        g.after(0.7, () => g.say('叮——冰柱化了，有什么东西掉在了地上！', 2.6));
+      });
     }
   },
 
-  // ---------- 灯光、轨道、机器人 ----------
+  // ---------- 灯光、热区、冰柱、风雪（每帧都跑）----------
   world(g, dt, t) {
-    const S = g.S, R = g.refs, L = R.lights, SL = R.spaceLights, sky = R.spaceSky;
+    const S = g.S, R = g.refs, L = R.lights, FL = R.frostLights, F = R.frost;
     const kk = 1 - Math.exp(-dt * 3);
-    // 轨道
-    if (this._lapse) {
-      const lp = this._lapse;
-      lp.t += dt;
-      const k = clamp(lp.t / lp.dur, 0, 1);
-      this._phase = lerp(lp.p0, lp.p1, easeInOut(k));
-    } else this._phase += dt / ORBIT;
-    const th = thetaOf(this._phase % 1);
-    const drawH = g.gfx.bufferSize ? g.gfx.bufferSize.y : 800;
-    const nb = this._lapse ? 1.8 : 1.15;
-    sky.update(dt, t, { theta: th, drawH, nightBoost: nb });
-    const open = S && S.f.curtainOpen ? 1 : 0;
-    this._open = lerp(this._open || 0, (g.refs.curtain.f < 0.6 ? 1 : 0), kk);
-    const sunVis = sky.sunVisible();
-    const earthLit = 0.5 + 0.5 * -sky.sunDir.dot(sky.earthDir);
-    // 阳光：只有在没被地球挡住的时候
-    L.sun.position.copy(L.sun.target.position).addScaledVector(sky.sunDir, 12);
-    L.sun.intensity = sunVis * 3.4;
-    const earthGlow = this._open * (0.1 + earthLit * 0.9); // 打开遮光板：地球反射的蓝光（叠在环境光上，不另外加灯）
-    R.shafts.target = sunVis * this._open * clamp(-sky.sunDir.z * 2.2, 0, 1) * 0.035;
-    R.shafts.uniforms.intensity.value = lerp(R.shafts.uniforms.intensity.value, R.shafts.target, kk);
-    // 舱内照明：夜间模式（很暗：两盏暖色工作灯 + 屏幕光 + 驾驶舱的琥珀色）/ 照明模式（天花板的灯箱全开，偏冷的日光色）
+    // 暖炉：点着之后几秒火才旺起来；热区一圈圈往外扩
+    if (this._litT >= 0 && g.state !== 'end') this._litT += dt;
+    const lit = this._litT >= 0;
+    const fire = lit ? clamp(this._litT / 2.5, 0, 1) : 0;
+    const heatK = lit ? easeOut(clamp(this._litT / HEAT_T, 0, 1)) : 0;
+    const heatR = HEAT_MAX * heatK;
+    F.heat.uHeatR.value = heatR;
+    // 熔炉超载：14 秒后慢慢退回去
+    if (this._odT > 0) { this._odT -= dt; if (this._odT <= 0) this._od = 0; }
+    F.overdrive = lerp(F.overdrive || 0, this._od, 1 - Math.exp(-dt * 0.8));
+    const od = F.overdrive;
+    const fl = 0.85 + Math.sin(t * 11) * 0.06 + Math.sin(t * 23 + 1) * 0.05 + (Math.random() - 0.5) * 0.06;
+    FL.stoveSpot.intensity = fire * 5.5 * fl;
+    FL.stoveGlow.intensity = fire * 2.4 * fl;
+    const St = R.stove;
+    St.fireM.color.setRGB(0.08 + fire * 3.4 * fl, 0.03 + fire * 1.5 * fl, 0.01 + fire * 0.35);
+    St.bellyM.emissiveIntensity = heatK * 0.28 * fl;
+    // 屋里的灯
     const on = (S && S.f.lightsOn) || g.lightMode === 'end';
-    const spot = on ? 7 : 0;
-    g.light.spot = lerp(g.light.spot, spot, 1 - Math.exp(-dt * 6));
-    L.ceilSpots.forEach((s) => (s.intensity = g.light.spot));
-    L.tubeMats.forEach((m) => (m.emissiveIntensity = on ? 1.8 : 0.04));
-    R.ceilMat.emissiveIntensity = lerp(R.ceilMat.emissiveIntensity, on ? 0.5 : 0.05, kk);
-    let hemi = (on ? 0.55 : 0.2) + earthGlow * 0.25;
-    // 报警：红灯转起来
-    const alarm = this._alarm > 0 || (S && S.f.alarm);
-    if (this._alarm > 0) this._alarm -= dt;
-    const B = R.hatch.beacon;
-    B.light.intensity = lerp(B.light.intensity, alarm ? 7 : 0, 1 - Math.exp(-dt * 8));
-    if (B.light.intensity > 0.05) {
-      const a = t * 5;
-      B.light.target.position.set(-1.68 + Math.cos(a) * 3, 1.2, 3.36 + Math.sin(a) * 3);
+    g.light.spot = lerp(g.light.spot, on ? 6 : 0, 1 - Math.exp(-dt * 8));
+    let spotV = g.light.spot;
+    if (g.light.flicker > 0) { g.light.flicker -= dt; spotV *= Math.random() < 0.55 ? 1 : 0.1; }
+    L.ceilSpots.forEach((s) => (s.intensity = spotV));
+    FL.bulbM.emissiveIntensity = (spotV / 6) * 2.4;
+    L.hemi.intensity = lerp(L.hemi.intensity, 0.28 + heatK * 0.08 + (on ? 0.12 : 0) + od * 0.05, kk);
+    L.sun.intensity = (0.7 + od * 1.6) * (0.94 + Math.sin(t * 2.7) * 0.04);
+    L.winLight.intensity = 1.4 + od * 0.5;
+    g.scene.environmentIntensity = 0.07 + heatK * 0.05 + (on ? 0.04 : 0);
+    // 马灯
+    FL.lantern.intensity = 1.6 * fl;
+    FL.flame.scale.set(1, 2.2 * fl, 1);
+    FL.flameM.color.setRGB(2.4 * fl, 1.35 * fl, 0.5 * fl);
+    L.wc.intensity = 2.4 * (Math.sin(t * 17) > 0.97 ? 0.3 : 1);
+    // 老铁
+    const bot = R.automaton;
+    L.monLight.intensity = bot.eye * 0.9 + bot.fire * 0.4;
+    bot.update(dt, t, { kb: R.typewriter.kbLocal, look: g.camera.position });
+    // 热区里的东西：冰柱变短、镜子 / 压力表上的霜化掉、汤化开、挂钟重新走
+    if (Math.abs(heatR - this._iceHeat) > 0.02) {
+      this._iceHeat = heatR;
+      const I = R.icicles;
+      for (const ic of I.list) ic.k = clamp((ic.d - heatR + 0.9) / 1.0, 0.12, 1);
+      I.layout();
+      R.mirrorFrost.material.opacity = 0.94 * clamp((MIRROR_D - heatR + 0.4) / 0.8, 0, 1);
+      R.mirrorFrost.visible = R.mirrorFrost.material.opacity > 0.01;
+      R.gauge.frost.material.opacity = 0.85 * clamp((GAUGE_D - heatR + 0.4) / 0.6, 0, 1);
+      St.soupIce.visible = heatR < 0.5;
+      if (!this._clockThawed && heatR > CLOCK_D) this._clockThawed = true;
+      if (heatR > 1.9 && R.frostLock.crust.visible && R.frostLock.group.visible) R.frostLock.crust.scale.setScalar(clamp(1 - (heatR - 1.9) / 0.6, 0.001, 1));
     }
-    B.mat.emissiveIntensity = alarm ? 1.4 + Math.sin(t * 10) * 1.2 : 0.25;
-    SL.stripMat.color.set(alarm ? '#ff3a22' : on ? '#b8dccb' : '#5e7c70').multiplyScalar(alarm ? 0.55 + 0.45 * Math.sin(t * 10) : 1);
-    if (alarm) hemi *= 0.8;
-    L.hemi.intensity = lerp(L.hemi.intensity, hemi, kk);
-    L.hemi.color.lerp(_c.set(alarm ? '#7a4a44' : earthGlow > 0.3 ? '#5f7f98' : '#56706b'), kk);
-    // 两盏暖色工作灯：夜间模式的主光（其中一盏接触不良，偶尔闪一下）
-    const flick = Math.sin(t * 23) > 0.985 ? 0.35 : 1;
-    SL.cabinGlow.intensity = (on ? 0.5 : 1.8) * flick;
-    // 厨房那盏灯借的是走廊灯：出舱时门口的光门在用它，别抢
-    const GL = SL.galleyLamp, home = GL.userData.home;
-    if (!(R.doorLight && R.doorLight.power > 0.002)) {
-      GL.position.copy(home.pos); GL.color.set(home.color); GL.distance = home.distance; GL.decay = home.decay;
-      GL.intensity = on ? 0.35 : 1.2;
-    } else { GL.distance = 9; GL.decay = 1.6; }
-    // 镜头补光：只留一点点，别让人物背光时死黑
-    const cam = g.camera;
-    cam.getWorldDirection(_q);
-    SL.camFill.position.copy(cam.position).add(_p.set(0, 0.8, 0)).addScaledVector(_q, -0.5);
-    SL.camFill.target.position.copy(cam.position).addScaledVector(_q, 3);
-    SL.camFill.intensity = on ? 0.06 : 0.12;
-    g.scene.environmentIntensity = on ? 0.32 : 0.14;
-    L.wc.intensity = on ? 10 : 8.5;
-    g._updateDust(dt, 0.6);
-    // 信息接收站的大屏（10 帧/秒）
-    this._commsT -= dt;
-    if (this._commsT <= 0 && R.gear && this.secret) {
-      this._commsT = 0.1;
-      const st = R.gear.station.screen;
-      drawComms(st.canvas, { t, lines: this.secret.commsLines(this._comms), channel: this.secret.commsChannel(), anomaly: this.secret.anomaly(), alert: !!(S && S.f.alarm) });
-      st.tex.needsUpdate = true;
+    // 热区边上的冰柱在滴水
+    if (lit && heatR > 0.3 && heatR < HEAT_MAX - 0.05 && Math.random() < dt * 6) {
+      const I = R.icicles.list, ic = I[(Math.random() * I.length) | 0];
+      if (Math.abs(ic.d - heatR) < 0.8) g.fx.emit('drop', V(ic.x, ic.y - ic.len * ic.k, ic.z), { count: 1, speed: 0.02, spread: 0.1, up: 0, gravity: -6, drag: 0, life: 0.9, size: 0.02, colors: ['#d8ecff'] });
     }
-    // 我的休眠舱还在往外冒冷气
-    this._mistT -= dt;
-    if (this._mistT <= 0 && R.gear && this.secret && this.secret.stage < 5) {
-      this._mistT = 0.3;
-      const p = R.gear.pods.find((q) => q.who < 0);
-      g.fx.emit('dust', p.mistW, { count: 2, speed: 0.12, spread: 1, up: 0.25, gravity: 0.02, drag: 0.6, life: 3, size: 0.1, colors: ['#e8f7ff', '#bfe8ff'], grow: 1.6 });
+    // 窗外：暴风雪越来越大
+    const storm = this._storm || 0;
+    for (const s of R.snow.slice(0, 2)) { s.U.density.value = lerp(s.U.density.value, 0.7 + storm * 0.3, kk); }
+    R.snow[1].U.wind.value = 3.2 * (1 + storm * 0.9 + Math.sin(t * 0.3) * 0.25);
+    R.snow[0].U.wind.value = 1.8 * (1 + storm * 0.9 + Math.sin(t * 0.37) * 0.3);
+    g._updateDust(dt, 0.45);
+    const active = g.state === 'play' || g.state === 'cut' || g.state === 'intro';
+    if (!active) return;
+    // 呼出来的白气：屋里零度以下才有
+    this._breathT -= dt;
+    if (this._breathT <= 0) { this._breathT = 3 + Math.random() * 1.2; if (!S || this.temp(g) < 2) this._breath(g, 1); }
+    // 阵风：呼——窗户咯吱响，门缝里钻进来一股雪
+    this._gustT -= dt;
+    if (this._gustT <= 0) {
+      this._gustT = (storm ? 4 : 7) + Math.random() * (storm ? 5 : 9);
+      g.audio.gust(0.8 + storm * 0.6);
+      if (Math.random() < 0.6) g.after(0.8, () => g.audio.rattle());
+      g.fx.emit('dust', V(-1.72, 0.08, R.door.z + (Math.random() - 0.5) * 0.5), { count: 8, speed: 0.6, spread: 0.6, up: 0.2, gravity: -0.3, drag: 1.2, life: 1.8, size: 0.016, colors: ['#eef4fc'], sway: 0.3 });
+      g.fx.emit('steam', V(-1.65, 0.12, R.door.z), { count: 2, speed: 0.5, spread: 0.6, up: 0.1, gravity: 0, drag: 1.5, life: 1.8, size: 0.16, colors: ['#e0e8f2'], grow: 1.5 });
     }
-    if (this.secret) this.secret.world(dt, t);
-    // 机器人
-    this._robot(g, dt, t);
+    // 炉火噼啪、管子当当、东墙管子的接头漏着一点蒸汽
+    if (lit) {
+      this._crackT -= dt;
+      if (this._crackT <= 0) { this._crackT = 0.3 + Math.random() * 1.1; if (g.camera.position.distanceTo(St.pos) < 6) g.audio.crackle(fire); }
+      this._clankT -= dt;
+      if (this._clankT <= 0) { this._clankT = 12 + Math.random() * 14; g.audio.clank(2); }
+      this._leakT -= dt;
+      if (this._leakT <= 0) { this._leakT = 0.3; g.fx.emit('steam', V(1.66, 2.62, -0.62), { count: 1, speed: 0.15, spread: 0.5, up: 0.6, gravity: 0.1, drag: 1, life: 1.6, size: 0.1, colors: ['#eef2f6'], grow: 2.8 }); }
+      if (Math.random() < dt * 2) g.fx.emit('spark', St.group.position.clone().add(V(0, 2.62, -0.1)), { count: 1, speed: 0.1, spread: 0.2, up: 0.3, gravity: 0.1, drag: 1, life: 0.6, size: 0.01, colors: ['#ff9040'] });
+    }
   },
-  _robot(g, dt, t) {
-    const rb = g.refs.robot, r = rb.root;
-    rb.faceT = (rb.faceT || 0) - dt;
-    if (rb.talkT > 0) rb.talkT -= dt;
-    let mode = rb.mode;
-    if (rb.flashT > 0) rb.flashT -= dt;
-    if (rb.flashT > 0) mode = rb.flashMode;
-    else if (rb.state === 'follow' && rb.talkT > 0) mode = 'talk';
-    else if (rb.state === 'follow' && (t % 3.2) < 0.12) mode = 'blink';
-    else if (rb.state === 'follow' && mode === 'talk') mode = 'normal';
-    if (rb.faceT <= 0 || mode !== rb._drawn) {
-      rb.faceT = 0.08; rb._drawn = mode;
-      TS.drawRobotFace(rb.faceCanvas, mode, t);
-      rb.faceTex.needsUpdate = true;
-    }
-    // 两侧导风口里的小风扇：失控时狂转
-    for (const [i, e] of rb.ears.entries()) e.rotation.y += dt * (rb.state === 'tumble' ? 45 : 16) * (i ? -1 : 1);
-    rb.tipMat.color.set(Math.sin(t * (rb.state === 'tumble' ? 12 : 3)) > 0 ? (rb.state === 'tumble' ? '#ff3a26' : '#62ff8e') : '#2a0c08');
-    rb.ring.rotation.z += dt * (rb.state === 'tumble' ? 6 : 1.2);
-    rb.jet.scale.set(1, 0.5 + Math.random() * 0.3, 1);
-    if (rb.state === 'tumble') {
-      // 在天花板附近乱转、乱撞，隔一会儿冒火花
-      r.position.set(rb.home.x + Math.sin(t * 0.9) * 0.35, rb.home.y + Math.sin(t * 1.7) * 0.08, rb.home.z + Math.sin(t * 0.63) * 0.4);
-      rb.body.rotation.x += dt * rb.spin.x; rb.body.rotation.y += dt * rb.spin.y; rb.body.rotation.z += dt * rb.spin.z;
-      rb.sparkT = (rb.sparkT || 1) - dt;
-      if (rb.sparkT <= 0) {
-        rb.sparkT = 0.7 + Math.random() * 1.2;
-        g.fx.emit('spark', r.position.clone(), { count: 8, speed: 1.2, spread: 1, up: 0.5, gravity: 0, drag: 2, life: 0.5, size: 0.025, colors: ['#ffe0a0', '#ffffff', '#ffb04a'] });
-        if (g.state === 'play' && r.position.distanceTo(g.camera.position) < 5) g.audio.robotBeep(1, 600 + Math.random() * 900);
-      }
-    } else {
-      // 救下来之后：飘在主角右手边、肩膀高度，转过来看着镜头；别挡在镜头前面，也别钻进天花板
-      const C = g.ctrl;
-      const yaw = C.charYaw;
-      _p.set(C.pos.x - Math.cos(yaw) * 0.6 + Math.sin(yaw) * 0.3, clamp(C.pos.y + 1.5 + Math.sin(t * 1.6) * 0.05, 0.4, 2.7), C.pos.z + Math.sin(yaw) * 0.6 + Math.cos(yaw) * 0.3);
-      // 储藏室太窄：它在门外等着（不然会和人、门挤成一团，把门和货柜都挡住）
-      const inStorage = C.pos.x < -0.58 && C.pos.z > 4.7;
-      if (inStorage && rb.state === 'follow') _p.set(-0.22, clamp(C.pos.y + 1.55, 1.2, 2.3) + Math.sin(t * 1.6) * 0.04, 4.98);
-      const cp = g.camera.position;
-      if (_p.distanceTo(cp) < 0.7) { _q.subVectors(_p, cp).setY(0); if (_q.lengthSq() < 1e-4) _q.set(1, 0, 0); _p.addScaledVector(_q.normalize(), 0.7 - _p.distanceTo(cp)); }
-      // 挡在镜头和人之间：往旁边让开
-      if (rb.state === 'follow') {
-        _h.set(C.pos.x, C.pos.y + 1.35, C.pos.z);
-        _d.subVectors(_h, cp); const L2 = _d.lengthSq();
-        const u = L2 > 1e-6 ? clamp(_q.subVectors(_p, cp).dot(_d) / L2, 0, 1) : 0;
-        _q.copy(cp).addScaledVector(_d, u);
-        const off = _p.distanceTo(_q);
-        if (u > 0.05 && u < 0.98 && off < 0.42) {
-          _q.subVectors(_p, _q); if (_q.lengthSq() < 1e-4) _q.set(Math.cos(yaw), 0.4, -Math.sin(yaw));
-          _p.addScaledVector(_q.normalize(), 0.42 - off);
-        }
-      }
-      r.userData.soft = rb.state === 'follow';
-      if (rb.state === 'rescue') {
-        rb.rescueT += dt;
-        const k = clamp(rb.rescueT / 1.2, 0, 1);
-        rb.body.rotation.x *= 1 - k * 0.2; rb.body.rotation.z *= 1 - k * 0.2;
-        rb.body.rotation.y *= 1 - k * 0.1;
-        // 被抓住：往主角手边拉过来
-        _p.set(C.pos.x + Math.sin(yaw) * 0.45, C.pos.y + 1.45, C.pos.z + Math.cos(yaw) * 0.45);
-      } else {
-        rb.body.rotation.x = lerp(rb.body.rotation.x, 0, 1 - Math.exp(-dt * 4)); rb.body.rotation.z = lerp(rb.body.rotation.z, 0, 1 - Math.exp(-dt * 4));
-        rb.body.rotation.y = lerp(rb.body.rotation.y, 0, 1 - Math.exp(-dt * 4));
-      }
-      r.position.lerp(_p, 1 - Math.exp(-dt * (rb.state === 'rescue' ? 5 : 2.2)));
-      _q.copy(g.camera.position); _q.y = r.position.y + (_q.y - r.position.y) * 0.4;
-      r.lookAt(_q);
-    }
-    rb.emote.update(dt);
+  // 嘴边呼出一团白气（第一人称时往前一点，自己也看得见）
+  _breath(g, k = 1) {
+    const head = g.ch.J.head.getWorldPosition(_p);
+    const yaw = g.ctrl.charYaw;
+    _q.set(Math.sin(yaw), 0, Math.cos(yaw));
+    const fwd = g.ctrl.mode === 'first' ? 0.32 : 0.14;
+    head.addScaledVector(_q, fwd).add(V(0, -0.05, 0));
+    g.fx.emit('steam', head, { count: Math.round(3 * k), speed: 0.14, spread: 0.3, up: 0.15, gravity: 0.06, drag: 1.6, life: 1.6, size: 0.08, colors: ['#f4f8fc', '#e4ecf4'], grow: 3 });
   },
 };

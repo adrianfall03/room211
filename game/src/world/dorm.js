@@ -22,7 +22,7 @@ const WR = { x0: -1.8, x1: 1.8, z0: SZ + TW, z1: 6.3, h: 2.7 }; // 洗手间（�
 const WW = { x0: -0.45, x1: 0.45, y0: 1.0, y1: 2.42 }; // 洗手间后墙上的窗
 const CUB = { x: -0.6, dz0: 4.74, dz1: 5.44 }; // 厕所隔间：隔墙位置 + 隔间门的范围
 export const LAYOUT = { ROOM, SZ, TW, DOOR, WC, WR, WW, CUB };
-// 书架前地上那三本书的位置 / 姿态（x, y, z, rx, ry, rz, 颜色）：第一章就躺在那儿；第四章彩蛋里，它们正是从书架上被推下来的
+// 书架前地上那三本书的位置 / 姿态（x, y, z, rx, ry, rz, 颜色）：第一章就躺在那儿；第五章彩蛋里，它们正是从书架上被推下来的
 export const FALLEN_BOOKS = [
   [-1.18, 0.03, -1.2, 0, 0.5, 0, '#1d3f8a', 0.06],
   [-1.02, 0.028, -0.9, 0, -0.9, 0, '#8a2020', 0.055],
@@ -103,7 +103,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
     add(m); occl(m);
     return m;
   };
-  // 西墙：最里头留出宿舍门洞，再往南接着洗手间那一段（北边这一大段就在书架背后，第四章的彩蛋要"透"过它）
+  // 西墙：最里头留出宿舍门洞，再往南接着洗手间那一段（北边这一大段就在书架背后，第五章的彩蛋要"透"过它）
   refs.westWall = wall(-1.8 - TW, -1.8, 0, 3, -3.6 - TW, DOOR.z0);
   wall(-1.8 - TW, -1.8, DOOR.h, 3, DOOR.z0, DOOR.z1);
   wall(-1.8 - TW, -1.8, 0, 3, DOOR.z1, WR.z1 + TW);
@@ -352,7 +352,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const wPaint = lit({ color: '#ebe5c6', roughness: 0.9 }, 0.08); // 视频里洗手间上半截墙是淡黄色的
   const wFloor = lit({ map: TX.genTiles({ n: 2, base: '#b9b5ab', grout: '#8b8880', gap: 4, jitter: 14, seed: 9, speck: 500 }), roughness: 0.55 }, 0.06); // 0.6m 一张 → 30cm 地砖
   const wCeil = lit({ map: TX.genStripCeiling(), roughness: 0.35, metalness: 0.3 }, 0.12); // 铝扣板吊顶
-  refs.wcMats = { wTile, wPaint, wFloor, wCeil }; // 第四章把洗手间改成驾驶舱时要换掉
+  refs.wcMats = { wTile, wPaint, wFloor, wCeil }; // 第五章把洗手间改成驾驶舱时要换掉
   wcRoom.add(K.mesh(uvRect(new THREE.PlaneGeometry(WR.x1 - WR.x0, WR.z1 - SZ), WR.x0 / 0.6, WR.x1 / 0.6, 0, (WR.z1 - SZ) / 0.6), wFloor, { x: wcx, y: 0.001, z: (SZ + WR.z1) / 2, rx: -Math.PI / 2, cast: false }));
   wcRoom.add(K.mesh(uvRect(new THREE.PlaneGeometry(WR.x1 - WR.x0, WR.z1 - WR.z0), 0, 4.5, 0, 2), wCeil, { x: wcx, y: WR.h, z: wcz, rx: Math.PI / 2, cast: false }));
   // 墙面：1.6m 以下贴白砖，上面刷淡黄漆。at(u) 把墙面横坐标 u 换成世界 (x, z)
@@ -751,7 +751,7 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('shelf', shelf);
   refs.shelf = shelf;
   block(-1.8, -1.44, -1.3, -0.85, '', 1.7);
-  // 书架前的地上掉了三本书——昨晚打游戏时"自己"从书架上掉下来的（第四章的隐藏结局会揭晓是谁推的）
+  // 书架前的地上掉了三本书——昨晚打游戏时"自己"从书架上掉下来的（第五章的隐藏结局会揭晓是谁推的）
   refs.fallenBooks = FALLEN_BOOKS.map(([x, y, z, rx, ry, rz, c, th]) => {
     const b = K.book(0.2, th, 0.24, c);
     b.position.set(x, y, z); b.rotation.set(rx, ry, rz);

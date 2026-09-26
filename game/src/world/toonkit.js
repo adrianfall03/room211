@@ -97,7 +97,7 @@ export function outlineMat(color = '#3a2438', thickness = 2.2) {
     omats.set(key, new THREE.ShaderMaterial({
       uniforms: { resolution: outlineUniforms.resolution, thickness: { value: thickness }, color: { value: new THREE.Color(color) } },
       vertexShader: OUTLINE_VERT, fragmentShader: OUTLINE_FRAG, side: THREE.BackSide,
-      clipping: true, // 第四章的时空坍缩用全局裁剪面"切掉"整间舱，描边也要跟着被切掉
+      clipping: true, // 第五章的时空坍缩用全局裁剪面"切掉"整间舱，描边也要跟着被切掉
     }));
   }
   return omats.get(key);
@@ -182,7 +182,7 @@ export function toonifyScene(root, { skip = () => false, outline = true, minR = 
   return map;
 }
 
-// 换画风：已经卡通化的角色换一套色带 / 描边 / 边缘光（第三章 → 第四章）
+// 换画风：已经卡通化的角色换一套色带 / 描边 / 边缘光（第三章 → 第五章）
 export function restyleToon(root, style = 'anime', { rim = null } = {}) {
   const ST = STYLES[style] || STYLES.toon;
   const r = rim === null ? ST.rim : rim;

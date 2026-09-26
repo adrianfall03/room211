@@ -1,11 +1,13 @@
 // 洗手间窗外：楼下草地、一棵大树，树枝上吊着三只荡来荡去的猴子（彩蛋）
-//   废墟章：黄昏里的一棵枯树，树枝上站着一排乌鸦（数一数有几只）；雨林章：暴雨夜里的大树，三只猴子挤在树杈上躲雨打盹，闪电时才看得清
+//   废墟章：黄昏里的一棵枯树，树枝上站着一排乌鸦（数一数有几只）；雨林章：暴雨夜里的大树，三只猴子挤在树杈上躲雨打盹，闪电时才看得清；
+//   冰封章：暴风雪里一棵落满雪的枯树，三只雪猴挤成一团取暖，头顶上各顶着一小撮雪
 //   室外一律用 MeshBasicMaterial + 顶点色里“烘焙”好的明暗：白天的亮度不受屋里开关灯影响，也省灯光计算
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as TX from '../core/textures.js';
 import * as TR from '../core/tex_ruin.js';
 import * as TJ from '../core/tex_jungle.js';
+import * as TF from '../core/tex_frost.js';
 import { mulberry32, clamp, lerp, easeInOut } from '../core/util.js';
 
 const SUN = new THREE.Vector3(0.35, 0.8, -0.5).normalize(); // 阳光从楼这一侧的斜上方照过去，朝窗户的一面是亮的
@@ -16,6 +18,7 @@ const LIGHTS = {
   normal: { dir: SUN, tint: [1, 1, 1], lit: [1, 1, 1] },
   ruin: { dir: new THREE.Vector3(-0.6, 0.35, -0.7).normalize(), tint: [0.62, 0.52, 0.46], lit: [1.25, 0.82, 0.5] },
   jungle: { dir: new THREE.Vector3(-0.2, 0.8, -0.5).normalize(), tint: [0.14, 0.17, 0.18], lit: [0.36, 0.42, 0.5] },
+  frost: { dir: new THREE.Vector3(0.3, 0.85, -0.4).normalize(), tint: [0.26, 0.3, 0.38], lit: [0.52, 0.58, 0.7] },
 };
 let LIGHT = LIGHTS.normal;
 
@@ -162,19 +165,20 @@ function makeCrow(rnd) {
 
 export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
   LIGHT = LIGHTS[theme] || LIGHTS.normal;
-  const ruin = theme === 'ruin', night = theme === 'jungle';
+  const ruin = theme === 'ruin', night = theme === 'jungle', frost = theme === 'frost';
+  const bare = ruin || frost, sleepy = night || frost;
   const g = new THREE.Group(); g.name = 'outside';
   const rnd = mulberry32(2112);
   // 远景 + 楼下草地
-  const backTex = ruin ? TR.genParkViewRuin() : night ? TJ.genJungleBackdrop() : TX.genParkView();
-  const lawnTex = ruin ? TR.genLawnRuin() : night ? TJ.genJungleGround() : TX.genLawn();
+  const backTex = ruin ? TR.genParkViewRuin() : night ? TJ.genJungleBackdrop() : frost ? TF.genSnowBackdrop() : TX.genParkView();
+  const lawnTex = ruin ? TR.genLawnRuin() : night ? TJ.genJungleGround() : frost ? TF.genSnowGround() : TX.genLawn();
   const back = new THREE.Mesh(new THREE.PlaneGeometry(80, 34), new THREE.MeshBasicMaterial({ map: backTex, fog: false }));
   back.position.set(0, 7, 34); back.rotation.y = Math.PI; g.add(back);
   const lawn = new THREE.Mesh(new THREE.PlaneGeometry(80, 28), new THREE.MeshBasicMaterial({ map: lawnTex, fog: false }));
   lawn.rotation.x = -Math.PI / 2; lawn.position.set(0, ground, 6.5 + 14); g.add(lawn);
 
   // 大树：树干 + 树枝合成一个网格，树叶合成一个网格
-  const bark = ruin ? '#5a5048' : night ? '#3a2c20' : '#6a4a31';
+  const bark = ruin ? '#5a5048' : night ? '#3a2c20' : frost ? '#3a3430' : '#6a4a31';
   const T0 = new THREE.Vector3(1.9, ground, 9.9), T1 = new THREE.Vector3(1.75, 3.2, 9.75), T2 = new THREE.Vector3(1.6, 6.2, 9.9);
   const MB = { a: new THREE.Vector3(1.75, 2.36, 9.62), b: new THREE.Vector3(-1.95, 2.74, 8.62) }; // 猴子吊着的那根横枝
   const limbs = [
@@ -186,7 +190,7 @@ export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
     [new THREE.Vector3(-0.4, 2.52, 9.06), new THREE.Vector3(-0.9, 3.4, 9.9), 0.035, 0.015],
   ];
   const wood = limbs.map(([a, b, r0, r1, seg]) => limb(a, b, r0, r1, seg));
-  if (ruin) {
+  if (bare) {
     // 枯树：没有树冠，只剩一层层往外戳的细枝
     const grow = (a, dir, len, r, depth) => {
       const b = a.clone().addScaledVector(dir, len);
@@ -215,24 +219,29 @@ export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
     geo.translate(x, y, z);
     leaves.push(paint(geo, color, { shade: 0.5, jitter: 0.22, rnd, flat: true }));
   };
-  const greens = ruin ? ['#6d5a3a', '#5e4c33', '#7a6443', '#4f4a36'] : night ? ['#24402a', '#1c3822', '#2c4a2e', '#203a26'] : ['#4f8a2e', '#3f7a28', '#5f9a36', '#467f2f'];
+  const greens = ruin ? ['#6d5a3a', '#5e4c33', '#7a6443', '#4f4a36'] : night ? ['#24402a', '#1c3822', '#2c4a2e', '#203a26'] : frost ? ['#dfe6f0', '#cdd6e2', '#e8eef6', '#c4cedc'] : ['#4f8a2e', '#3f7a28', '#5f9a36', '#467f2f'];
   const crown = [[1.6, 6.3, 9.9, 1.5], [0.4, 5.7, 10.3, 1.2], [2.9, 5.6, 9.6, 1.25], [1.7, 5.0, 11.0, 1.3], [-0.7, 5.3, 10.9, 1.0],
     [3.7, 4.7, 8.9, 0.9], [-2.5, 3.6, 8.6, 0.7], [-1.2, 3.8, 9.9, 0.8], [3.3, 2.5, 11.0, 0.9], [0.2, 4.2, 11.4, 1.0], [2.6, 3.6, 10.8, 0.95]];
   // 雨林章不用这种多面体的树冠（闪电一亮就露馅），换成后面几层带透明的叶子贴片
-  if (!ruin && !night) crown.forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i % greens.length]));
+  if (!ruin && !night && !frost) crown.forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i % greens.length]));
+  else if (frost) {
+    // 枝头压着的一团团雪
+    for (const [a, b] of limbs.slice(2)) for (let k = 0; k < 4; k++) { const p = a.clone().lerp(b, 0.15 + k * 0.22); blob(p.x, p.y + 0.06, p.z, 0.12 + rnd() * 0.08, greens[k % 4], 0.45); }
+  }
   else [[3.5, 4.5, 8.95, 0.22], [-0.8, 5.4, 10.7, 0.25], [2.2, 6.4, 9.8, 0.3]].forEach(([x, y, z, r], i) => blob(x, y, z, r, greens[i]));
   // 远一点的几棵树
   const far = [[-6.5, 13, 1.5], [-3.2, 16, 1.9], [5.2, 14, 1.6], [8.5, 18, 2.2], [-9.5, 19, 2.0], [0.8, 20, 2.1]];
   for (const [x, z, r] of far) {
     if (night) continue;
-    if (!ruin) {
+    if (!bare) {
       blob(x, ground + 2.6 + r, z, r, greens[(x * 7) & 3]);
       blob(x + r * 0.6, ground + 2.1 + r * 0.6, z - 0.3, r * 0.7, greens[(z * 3) & 3]);
     }
-    leaves.push(paint(limb(new THREE.Vector3(x, ground, z), new THREE.Vector3(x, ground + (ruin ? 4.2 : 2.8), z), 0.18, ruin ? 0.04 : 0.12), bark, { shade: 0.5, flat: true }));
+    leaves.push(paint(limb(new THREE.Vector3(x, ground, z), new THREE.Vector3(x, ground + (bare ? 4.2 : 2.8), z), 0.18, bare ? 0.04 : 0.12), bark, { shade: 0.5, flat: true }));
+    if (frost) blob(x, ground + 0.1, z, 0.9, greens[(x * 7) & 3], 0.3);
   }
   // 楼脚下一排灌木（废墟章：枯黄的野草）
-  if (!night) for (let x = -7; x <= 7; x += 1.1) blob(x + (rnd() - 0.5) * 0.4, ground + 0.35, 7.2 + rnd() * 0.3, 0.55 + rnd() * 0.2, greens[(rnd() * 4) | 0], ruin ? 0.5 : 0.85);
+  if (!night) for (let x = -7; x <= 7; x += 1.1) blob(x + (rnd() - 0.5) * 0.4, ground + 0.35, 7.2 + rnd() * 0.3, 0.55 + rnd() * 0.2, greens[(rnd() * 4) | 0], bare ? 0.5 : 0.85);
   if (leaves.length) g.add(new THREE.Mesh(mergeGeometries(leaves), vcMat()));
   if (night) {
     // 大树后面、底下：几层芭蕉叶 / 龟背竹 / 藤蔓的剪影（平时一片黑，闪电时一层层亮出来）
@@ -244,7 +253,7 @@ export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
   }
 
   // 三只猴子（大、中、小），单手吊在横枝上荡（雨林章：挤在树枝上躲雨打盹）
-  const furs = [['#6d4a2b', '#e3c49a'], ['#7a5433', '#ead0a6'], ['#8a6040', '#f0d8b2']];
+  const furs = frost ? [['#8a7c6e', '#c8766a'], ['#9a8c7c', '#d08272'], ['#a89a8a', '#d88e7e']] : [['#6d4a2b', '#e3c49a'], ['#7a5433', '#ead0a6'], ['#8a6040', '#f0d8b2']];
   const scales = [1.12, 0.95, 0.78];
   const monkeys = ruin ? [] : [0.3, 0.5, 0.7].map((t, i) => {
     const mk = makeMonkey(furs[i][0], furs[i][1]);
@@ -252,6 +261,10 @@ export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
     mk.root.position.copy(grip);
     mk.root.rotation.y = (rnd() - 0.5) * 0.35;
     mk.root.scale.setScalar(scales[i]);
+    if (frost) { // 雪猴：头顶上一小撮雪
+      const cap = new THREE.SphereGeometry(0.07, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, 0.6, 1); cap.translate(0, 0.07, 0.01);
+      mk.head.add(new THREE.Mesh(paint(cap, '#e8eef6', { shade: 0.3 }), vcMat()));
+    }
     g.add(mk.root);
     return { ...mk, grip, phase: rnd() * 6.28, amp: 0.42 + rnd() * 0.18, w: 2.0 + rnd() * 0.5, idx: i };
   });
@@ -286,8 +299,8 @@ export function buildOutside({ ground = -3.3, theme = 'normal' } = {}) {
     const e = easeInOut(state.b);
     for (const m of monkeys) {
       const tt = t * m.w + m.phase;
-      if (night) {
-        // 打盹：缩在树枝上，脑袋一点一点的；被叫醒后摆“三不猴”
+      if (sleepy) {
+        // 打盹：缩在树枝上，脑袋一点一点的（冰封章：挤成一团取暖）；被叫醒后摆“三不猴”
         _hp.set(0, 0.36 + Math.sin(t * 1.4 + m.idx) * 0.006, -0.01);
         m.torso.position.copy(_hp);
         m.torso.rotation.set(lerp(0.32 + Math.sin(t * 1.4 + m.idx) * 0.04, 0.1, e), 0, lerp(Math.sin(t * 0.5 + m.idx) * 0.06, 0, e));

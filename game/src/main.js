@@ -18,6 +18,7 @@ import { nextFrame } from './core/util.js';
 import { buildDorm } from './world/dorm.js';
 import { buildRuinTextures, decorateRuin } from './world/ruin.js';
 import { buildJungleTextures, decorateJungle } from './world/jungle.js';
+import { buildFrostTextures, decorateFrost } from './world/frost.js';
 import { buildSpaceTextures, decorateSpace, buildSpaceOutside } from './world/space.js';
 import { buildFinale } from './world/finale.js';
 import { GradePass, CSS_GRADES } from './core/grade.js';
@@ -34,6 +35,8 @@ const faceUrl = import.meta.env.MODE === 'production' ? null
 const isMobile = matchMedia('(pointer: coarse)').matches;
 const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}')); } catch (e) { /* 忽略 */ }
+// 存档升级：原来的第四章（太空舱）挪到了第五章，中间插进来一章「冰封 211」——以前打到第四章的，第四、五章都算解锁
+if ((settings.v || 1) < 2) { if (settings.unlocked >= 4) settings.unlocked += 1; if (settings.chapter >= 4) settings.chapter += 1; settings.v = 2; }
 const saveSettings = () => { try { localStorage.setItem('dorm404', JSON.stringify(settings)); } catch (e) { /* 忽略 */ } };
 
 // ---------- 渲染 ----------
@@ -66,14 +69,17 @@ class HalfResGTAOPass extends GTAOPass {
   // 画法线 / 深度之前要藏起来的东西。GTAO 用覆盖材质把整个场景重画一遍，覆盖材质是写深度的，
   // 原本不写深度的透明物体（窗口的体积光柱切片、玻璃、雾……）也会被当成实心面画进去：
   // 光柱从窗口斜着伸进屋里四米多，等于半空里立起一排看不见的墙，墙两边被算成"墙角"一块块压黑，
-  // 真正的地板和家具反而被挡住、没有 AO——站在窗边往屋里回头看，光柱穿过的那一片屋子就发黑（第二章黄昏、第四章阳光照进舱里时最明显）。
+  // 真正的地板和家具反而被挡住、没有 AO——站在窗边往屋里回头看，光柱穿过的那一片屋子就发黑（第二章黄昏、第五章阳光照进舱里时最明显）。
   // 这里只留"主画面里会写深度的表面"：GTAOPass 原本就去掉的点、线，再加上所有不写深度的材质。
   // 用图层掩码只屏蔽物体自己（visible = false 会连它的子物体一起藏掉）
   _overrideVisibility() {
     const cache = this._maskCache || (this._maskCache = []);
     const noDepth = (m) => (Array.isArray(m) ? m.every((x) => !x || !x.depthWrite) : !m || !m.depthWrite);
+    const hideAll = (o) => { cache.push(o, o.layers.mask); o.layers.mask = 0; for (const c of o.children) hideAll(c); };
     const visit = (o) => {
       if (!o.visible) return;
+      // userData.noAO：整棵子树都不参与（第四章窗外的城市：隔着窗上半透明的冰花，AO 会把后面的房子"印"到冰花上）
+      if (o.userData.noAO) { hideAll(o); return; }
       if (o.isPoints || o.isLine || o.isLine2 || ((o.isMesh || o.isSprite) && noDepth(o.material))) { cache.push(o, o.layers.mask); o.layers.mask = 0; }
       const c = o.children;
       for (let i = 0; i < c.length; i++) visit(c[i]);
@@ -145,9 +151,9 @@ class Gfx {
   setTheme(theme, instant = false) {
     this.theme = theme;
     this.grade.set(theme, instant);
-    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], jungle: [0.3, 0.45, 0.86], space: [0.28, 0.42, 0.88], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
+    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], jungle: [0.3, 0.45, 0.86], frost: [0.34, 0.5, 0.85], space: [0.28, 0.42, 0.88], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
     this.bloom.strength = b[0]; this.bloom.radius = b[1]; this.bloom.threshold = b[2];
-    this.renderer.toneMappingExposure = { jungle: 1.15, space: 1.12, finale: 1.1 }[theme] || 1.05;
+    this.renderer.toneMappingExposure = { jungle: 1.15, frost: 1.12, space: 1.12, finale: 1.1 }[theme] || 1.05;
     this.setQuality(this.quality);
   }
   setQuality(q) {
@@ -186,7 +192,7 @@ class Gfx {
     this.grade.update(dt, t, this.width / Math.max(1, this.height));
     // 阴影：这一帧第一次画主场景时更新一次（灯灭着的不画、不动的东西用缓存），见 core/shadows.js
     this.shadows.arm();
-    // viewScene：第四章彩蛋里有几个镜头直接拍"那天晚上的 211"（另一个场景）；那边不受太空舱的裁剪面影响
+    // viewScene：第五章彩蛋里有几个镜头直接拍"那天晚上的 211"（另一个场景）；那边不受太空舱的裁剪面影响
     const sc = this.viewScene || this.scene;
     if (this.renderPass.scene !== sc) { this.renderPass.scene = sc; this.gtao.scene = sc; }
     const planes = this.renderer.clippingPlanes;
@@ -291,11 +297,12 @@ async function boot() {
       m.post = (v) => { ch.J.neck.visible = v; };
     }
   };
-  // 四个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
+  // 五个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
   const THEMES = {
     normal: { tex: () => T, decorate: null },
     ruin: { tex: () => buildRuinTextures(T), decorate: decorateRuin },
     jungle: { tex: () => buildJungleTextures(T), decorate: decorateJungle },
+    frost: { tex: () => buildFrostTextures(T), decorate: decorateFrost },
     space: { tex: () => buildSpaceTextures(T), decorate: decorateSpace, outside: buildSpaceOutside },
   };
   const buildWorld = (theme) => {
@@ -308,7 +315,7 @@ async function boot() {
     return refs;
   };
   const refs = buildWorld('normal');
-  // 第四章彩蛋：书架背后"那天晚上的 211"——另搭一间写实画风的宿舍，放在单独的场景里（不动主场景的碰撞和灯光）
+  // 第五章彩蛋：书架背后"那天晚上的 211"——另搭一间写实画风的宿舍，放在单独的场景里（不动主场景的碰撞和灯光）
   const buildPast = () => {
     const sc = new THREE.Scene();
     sc.background = new THREE.Color('#050608');

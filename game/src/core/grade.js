@@ -1,4 +1,4 @@
-// 调色 + 转场后处理：每一章有自己的"滤镜"（废墟：泛黄老胶片；卡通：高饱和暖色），
+// 调色 + 转场后处理：每一章有自己的"滤镜"（废墟：泛黄老胶片；冰封：冷蓝暗部 + 橘色高光），
 // 章节之间的"时空穿越"转场也在这里做：画面旋涡扭曲 + 色散 + 径向模糊 + 闪白。
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
@@ -114,6 +114,8 @@ export const GRADES = {
   ruin: { saturation: 0.72, contrast: 1.08, brightness: -0.015, tint: [1.04, 0.97, 0.86], sepia: 0.32, vignette: 0.55, grain: 0.07, scratch: 1, aberration: 0.0025 },
   // 雨林：暴雨夜——暗部偏青绿、亮部（钨丝灯、马灯）偏琥珀，压饱和，胶片颗粒 + 较重的暗角
   jungle: { saturation: 0.86, contrast: 1.12, brightness: -0.01, tint: [1, 1, 1], sepia: 0, vignette: 0.58, grain: 0.055, scratch: 0, aberration: 0.0012, lowTint: [0.88, 1.03, 1.0], highTint: [1.08, 1.0, 0.86] },
+  // 冰封 211：暴风雪夜——暗部压成冷蓝、亮部（炉火、熔炉的光）偏橘，压饱和，胶片颗粒 + 重暗角（《冰汽时代》那种冷暖对撞）
+  frost: { saturation: 0.8, contrast: 1.13, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.6, grain: 0.05, scratch: 0, aberration: 0.0013, lowTint: [0.85, 0.96, 1.12], highTint: [1.07, 1.0, 0.92] },
   // 太空舱：写实电影感——暗部偏青、亮部偏暖，压一点饱和，胶片颗粒 + 暗角 + 一丝镜头色散
   space: { saturation: 0.88, contrast: 1.1, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.52, grain: 0.05, scratch: 0, aberration: 0.0014, lowTint: [0.9, 1.02, 1.05], highTint: [1.06, 1.0, 0.9] },
   // 书架背后"那天晚上的 211"：深夜里只有屏幕和台灯——暗部偏冷蓝、亮部偏暖，胶片颗粒，和太空舱那边是一套调子
@@ -128,6 +130,7 @@ export const CSS_GRADES = {
   normal: '',
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
   jungle: 'saturate(0.86) contrast(1.12) brightness(0.96)',
+  frost: 'saturate(0.78) contrast(1.13) brightness(0.95) hue-rotate(-6deg)',
   space: 'saturate(0.88) contrast(1.1) brightness(0.97)',
   past: 'saturate(0.9) contrast(1.1) brightness(0.97)',
   finale: 'saturate(0.92) contrast(1.08)',

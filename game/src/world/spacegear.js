@@ -1,4 +1,4 @@
-// 第四章：太空舱里的"家具"——布局和宿舍一模一样，只是每一样东西都换成了舱里的设备：
+// 第五章：太空舱里的"家具"——布局和宿舍一模一样，只是每一样东西都换成了舱里的设备：
 //   四张上下铺 → 四台封闭的休眠舱（上层是冷却机组）；书架 → 资料库（彩蛋要用的那本书就在这里）；
 //   我的书桌 / 电脑 → 信息接收站；隔壁书桌 → 生命维持控制台；窗前书桌 → 观测台（望远镜）；
 //   鞋架 → 氧气瓶架；收纳箱 → 补给货箱；门边杂物桌 → 太空厨房；门边折叠桌 → 舱外宇航服；
@@ -56,7 +56,7 @@ const sign = (lines, w, h, o = {}, so = {}) => {
   return mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: TS.genSign(lines, { W: 512, H: Math.round((512 * h) / w), ...so2 }), roughness: 0.7 }), { ...o, cast: false });
 };
 
-// ---------------- 画在屏幕上的东西（名字每局随机，开局时由第四章来画）----------------
+// ---------------- 画在屏幕上的东西（名字每局随机，开局时由第五章来画）----------------
 const MONO = '"SF Mono","Menlo","Consolas","PingFang SC",monospace';
 // 休眠舱床头的状态屏
 export function drawPodScreen(c, { code, name, status, ok = false, warn = false }) {
@@ -71,7 +71,7 @@ export function drawPodScreen(c, { code, name, status, ok = false, warn = false 
   x.globalAlpha = 0.35; for (let i = 0; i < 6; i++) x.fillRect(W - 36, 24 + i * 22, 14, 14); x.globalAlpha = 1;
   TS.crtFinish(x, W, H);
 }
-// 信息接收站的大屏：标题、实时波形、最近几条消息（第四章每 0.1 秒重画一次）
+// 信息接收站的大屏：标题、实时波形、最近几条消息（第五章每 0.1 秒重画一次）
 export function drawComms(c, { t = 0, lines = [], channel = 'CH-01 · 返回舱', alert = false, anomaly = 0 }) {
   const x = c.getContext('2d'), W = c.width, H = c.height;
   x.fillStyle = '#060908'; x.fillRect(0, 0, W, H);
@@ -294,7 +294,7 @@ function makeArchive() {
   card.position.set(-1.6, 2.09, -0.96); card.rotation.set(0, Math.PI / 2, 0);
   card.visible = false;
   g.add(card);
-  // 彩蛋的"窗口"：那本书被抽出来之后，背板上这块地方就能看到另一个时空（第四章再把画面接上）
+  // 彩蛋的"窗口"：那本书被抽出来之后，背板上这块地方就能看到另一个时空（第五章再把画面接上）
   // 整个第五层（两块层板之间）：书被抽走以后，这一格的背板后面就是另一个时空
   const cell = { x: X0 + 0.03, y0: shelfY[4] + 0.013, y1: shelfY[5] - 0.013, z0: Z0 + 0.02, z1: Z1 - 0.02 }; // 背板前面一点点，别和背板打架
   return { group: g, books, target, card, cardBox, cell, back, straps, level: 4 };

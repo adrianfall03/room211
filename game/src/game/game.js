@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import * as TX from '../core/textures.js';
 import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
 import { FX } from '../world/fx.js';
-import { CHAPTERS } from './chapters.js';
+import { CHAPTERS, LAST_CHAPTER } from './chapters.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight } from './doorway.js';
@@ -89,6 +89,9 @@ const ACH = [
   ['feather', '🪶 鸡飞狗跳', '让两只鸡的游戏掉线'],
   ['fashion', '🪖 时尚猴王', '把头盔送给爱照镜子的猴子'],
   ['chick', '🐣 撸鸡', '摸了摸小黄的脑袋'],
+  ['forge', '🔥 熔炉不灭', '让冰封 211 的暖炉重新烧起来'],
+  ['laotie', '⚙️ 老铁没毛病', '给冻住的自动机「老铁」上了发条'],
+  ['soup', '🥣 锯末汤', '在零下七十度喝了一碗热乎乎的锯末汤'],
   ['robot', '🤖 机器人救星', '救下失控的机器人小圆'],
   ['water', '💧 太空饮水机', '一口一口喝光了一整颗水球'],
   ['earth', '🌍 地球夜景', '看到城市灯光拼出的数字'],
@@ -96,7 +99,7 @@ const ACH = [
   ['gargantua', '🕳️ 卡冈图雅', '不小心放出了货柜 G 里的微型黑洞'],
   ['stay', '📚 书架背后的幽灵', '隐藏结局：从书缝里看到了那天晚上的自己'],
   ['enlist', '🎖️ 新兵报到', '接过少校递来的军帽，回敬一个军礼'],
-  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部四个 211'],
+  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部五个 211'],
 ];
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -396,7 +399,7 @@ export class Game {
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
     if (this.S.view) {
-      this.ui.toast(`鉴赏模式：随便逛，走到${this._doorName()}口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < 4 ? '去下一关' : '看结局'}`, '', '🎬');
+      this.ui.toast(`鉴赏模式：随便逛，走到${this._doorName()}口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < LAST_CHAPTER ? '去下一关' : '看结局'}`, '', '🎬');
       if (this.CH && this.CH.onViewPlay) this.CH.onViewPlay(this);
     } else if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
     else {
@@ -407,7 +410,7 @@ export class Game {
   }
 
   // ================== 每帧 ==================
-  // 主画面渲染之前的额外渲染（第四章彩蛋：书架背后的另一个时空）
+  // 主画面渲染之前的额外渲染（第五章彩蛋：书架背后的另一个时空）
   beforeRender() { if (this.CH && this.CH.secret) this.CH.secret.beforeRender(); }
   update(dt) {
     this.time += dt;
@@ -662,7 +665,7 @@ export class Game {
   _handlers() {
     const H = this._handlersBase();
     // 鉴赏模式：门上没有锁，直接出门去下一关
-    if (this.S && this.S.view) H.door = { label: this._doorName(), verb: () => (this.chapter < 4 ? '去下一关' : '出门（结局）'), act: () => this.win() };
+    if (this.S && this.S.view) H.door = { label: this._doorName(), verb: () => (this.chapter < LAST_CHAPTER ? '去下一关' : '出门（结局）'), act: () => this.win() };
     return H;
   }
   _doorName() { return (this.CH && this.CH.doorName) || '宿舍门'; }
@@ -1361,7 +1364,7 @@ export class Game {
     this._afterReach = openDoorAt;
   }
 
-  // 进门（二、三、四章的进门过场前半段）：人从门口的光里走出来——镜头和上一间屋子出门时一模一样——
+  // 进门（二、三、四、五章的进门过场前半段）：人从门口的光里走出来——镜头和上一间屋子出门时一模一样——
   // 门在身后"砰"地自己关上，门锁又"咔哒"锁上了。prepare 时返回 undefined，否则返回这段过场用了几秒
   enterRoom({ prepare }) {
     const R = this.refs, D = R.door, CH = this.CH, S = this.S, dz = D.z;
@@ -1422,7 +1425,7 @@ export class Game {
   _chapterDone({ throughDoor = false } = {}) {
     const S = this.S;
     S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints });
-    if (this.chapter < 4) this.goChapter(this.chapter + 1, { throughDoor });
+    if (this.chapter < LAST_CHAPTER) this.goChapter(this.chapter + 1, { throughDoor });
     else this.finale();
   }
   _tweenP(dur, fn, opts = {}) { return new Promise((r) => this.tween(dur, fn, { ease: (t) => t, ...opts, done: r })); }
@@ -1476,7 +1479,7 @@ export class Game {
   }
   _switchWorld(theme) {
     const old = this.refs;
-    // 第四章彩蛋里另搭的"那天晚上的 211"也一起释放
+    // 第五章彩蛋里另搭的"那天晚上的 211"也一起释放
     if (this.CH && this.CH.secret && this.CH.secret.past) { this.CH.secret.past.dispose(); this.CH.secret.past = null; this.CH.secret.needPast = false; }
     if (this.CH && this.CH.secret) this.CH.secret.dispose();
     this.gfx.viewScene = null;
@@ -1485,7 +1488,9 @@ export class Game {
     this.scene.remove(old.root);
     disposeTree(old.root);
     if (old.helmet) disposeTree(old.helmet);
-    this.uvLight.visible = true; // 第四章会把它藏起来
+    // 这一章给主角穿戴上的东西（第四章的毛线帽、围巾）一起摘掉
+    if (old.wear) for (const o of old.wear) { if (o.parent) o.parent.remove(o); disposeTree(o); }
+    this.uvLight.visible = true; // 第五章会把它藏起来
     this.refs = this.buildWorld(theme);
     this.ctrl.camBoxes = this.refs.camBoxes;
     this.ctrl.bounds = this.refs.bounds;
@@ -1502,7 +1507,7 @@ export class Game {
     this._mirrorN = 0;
     // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来；失重只在太空舱里
     this.auto = null; this._afterReach = null; this.cine = null; this._cutPose = null;
-    // 第四章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
+    // 第五章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
     this.gfx.renderer.clippingPlanes = [];
     this._clipZ = Infinity;
     this.ctrl.float = 0; this.ctrl.pos.y = 0;
@@ -1568,11 +1573,11 @@ export class Game {
     const admireBtn = fin ? '<button class="btn" data-a="admire">🎖️ 留下来欣赏</button>' : '';
     let node;
     if (secret) {
-      const chName = ['', '211 宿舍', '废弃的 211', '动物园 211', '太空舱 211'];
+      const chName = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
       const [A] = S.mates;
       node = this.ui.panel(`
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
@@ -1583,26 +1588,26 @@ export class Game {
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button><button class="btn" data-a="admire">📚 再看一会儿</button></div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload(S.view ? 'view' : 'game'));
     } else if (S.view) {
-      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>四个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>五个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      const chName = ['', '211 宿舍', '废弃的 211', '动物园 211', '太空舱 211'];
+      const chName = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
       if (hints === 0) S.ach.add('nohint');
       let rank, text;
-      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。四个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
+      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。五个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
       else if (hints <= 4) { rank = 'A'; text = '你戴上军帽，回敬了一个标准的军礼，看台上的欢呼声响成一片。教官小声嘀咕：“刚才还在椅子上打呼噜呢，这会儿倒挺精神。”'; }
       else if (hints <= 8) { rank = 'B'; text = '军帽有点大，戴歪了。少校笑着帮你扶正：“欢迎入伍，新兵。”'; }
       else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
       node = this.ui.panel(`
-        <h2>四个 211，全部逃脱！</h2>
+        <h2>五个 211，全部逃脱！</h2>
         <div style="color:var(--muted)">一场梦醒来，${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>
         <div class="rank">${rank}</div>
         <p>${text}</p>
@@ -1813,13 +1818,14 @@ export class Game {
     this.uvLight.castShadow = false;
     this.scene.add(this.uvLight, this.uvLight.target);
   }
-  // 空气里飘的东西：第一章是窗边阳光里的灰尘，废墟里满屋都是灰，雨林里是潮湿空气里的细小水汽和飞虫
+  // 空气里飘的东西：第一章是窗边阳光里的灰尘，废墟里满屋都是灰，雨林里是潮湿空气里的细小水汽和飞虫，冰封 211 里是亮晶晶的冰晶
   _buildDust(theme = 'normal') {
     if (this.dust) { this.scene.remove(this.dust); this.dust.geometry.dispose(); }
     const cfg = {
       normal: { n: 420, x: [-1.3, 1.3], y: [0.3, 2.7], z: [-3.4, -0.6], color: '#fff2d8', size: 0.014 },
       ruin: { n: 900, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#e8c89a', size: 0.012 },
       jungle: { n: 320, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#d6dccb', size: 0.011 },
+      frost: { n: 520, x: [-1.7, 1.7], y: [0.1, 2.8], z: [-3.4, 4.3], color: '#dde8ff', size: 0.011 },
       space: { n: 260, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfefff', size: 0.02 },
       finale: { n: 160, x: [-5, 5], y: [0.3, 4], z: [-3, 7], color: '#fff6d8', size: 0.025 },
     }[theme] || { n: 1, x: [0, 0], y: [0, 0], z: [0, 0], color: '#ffffff', size: 0.01 };
