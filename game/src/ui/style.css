@@ -349,3 +349,53 @@ body.theme-finale { --accent: #e8b830; }
 #lids .lid.t { top: -6%; border-radius: 0 0 50% 50% / 0 0 30% 30%; }
 #lids .lid.b { bottom: -6%; border-radius: 50% 50% 0 0 / 30% 30% 0 0; }
 #lids .lid-blur { position: absolute; inset: 0; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); opacity: 1; }
+
+/* 第三章：船舱 211 —— 写实电影感：深青色的磨砂底、黄铜色的字（和冰封、太空舱一个路子） */
+body.theme-ship { --accent: #d4a45a; --panel: rgba(8,13,15,0.72); --line: rgba(190,210,214,0.14); --warn: #e88a4a; }
+body.theme-ship #hud-tl, body.theme-ship #hud-tr, body.theme-ship .slot { border-radius: 3px; box-shadow: none; }
+body.theme-ship #hud-tr .ct { color: #e8e0cc; text-shadow: 0 0 10px rgba(212,164,90,0.28); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+body.theme-ship #subtitle { border-radius: 3px; background: rgba(6,10,12,0.68); border: 1px solid rgba(190,210,214,0.12); box-shadow: none; }
+body.theme-ship #crosshair.active { border-color: #d4a45a; box-shadow: 0 0 8px rgba(212,164,90,0.45); }
+/* 水密门上的转盘锁：刷漆的钢板、黄铜转盘 */
+.lockbox.ship { background: linear-gradient(165deg, #26302c, #111615); border: 1px solid rgba(200,210,200,0.14); color: #e2e0d4; border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,0.25), inset 0 0 40px rgba(120,160,150,0.06), 0 30px 80px rgba(0,0,0,0.75); }
+.lockbox.ship .hint { color: #a4aca6; }
+.lockbox.ship .wheels { background: linear-gradient(180deg, #14100a, #3a2c16 50%, #14100a); box-shadow: inset 0 4px 14px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(210,180,110,0.2); border-radius: 50px; }
+.lockbox.ship .wheel button { background: #2e3632; color: #e8d6a8; border-radius: 50%; box-shadow: inset 0 1px 0 rgba(255,240,200,0.08), 0 2px 0 #0a0c0b; }
+.lockbox.ship .wheel .face { background: linear-gradient(180deg, #2a2010 0%, #a07a3c 30%, #dcb870 50%, #a07a3c 70%, #2a2010 100%); }
+.lockbox.ship .wheel .strip div { color: #20160a; text-shadow: 0 1px 0 rgba(255,236,190,0.4); font-family: Georgia, "Times New Roman", serif; }
+.lockbox.ship .btn.primary { background: #a8783a; color: #100c06; }
+/* 航海日志：泛黄的横格本 */
+.paper.log { background: #d8cca8; background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(90,110,140,0.25) 31px 32px), radial-gradient(circle at 80% 15%, rgba(120,90,40,0.22), transparent 45%), radial-gradient(circle at 15% 85%, rgba(60,70,60,0.25), transparent 50%); color: #2a2a34; font-size: 19px; transform: rotate(-0.4deg); box-shadow: 0 30px 80px rgba(0,0,0,0.75), inset 0 0 80px rgba(80,70,40,0.35); }
+.paper.log .date { font-family: var(--font); font-size: 13px; color: #5a5a4a; letter-spacing: 0.08em; margin-bottom: 8px; }
+
+/* 第四章：地铁 211 —— 写实电影感：发黑的底、脏橙色的字（《地铁》系列的调子） */
+body.theme-metro { --accent: #d89a4a; --panel: rgba(10,10,8,0.74); --line: rgba(214,200,170,0.13); --warn: #e8603a; }
+body.theme-metro #hud-tl, body.theme-metro #hud-tr, body.theme-metro .slot { border-radius: 2px; box-shadow: none; }
+body.theme-metro #hud-tr .ct { color: #e6d6b4; text-shadow: 0 0 10px rgba(216,154,74,0.3); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+body.theme-metro #subtitle { border-radius: 2px; background: rgba(8,8,6,0.72); border: 1px solid rgba(214,200,170,0.12); box-shadow: none; }
+body.theme-metro #crosshair.active { border-color: #d89a4a; box-shadow: 0 0 8px rgba(216,154,74,0.45); }
+/* 气密门的数字密码盘：旧铁皮、红色数码管 */
+.lockbox.metro { background: linear-gradient(170deg, #2a2c26, #121310); border: 1px solid rgba(220,210,180,0.1); color: #d8d0bc; border-radius: 4px; box-shadow: inset 0 0 0 4px rgba(0,0,0,0.3), inset 0 0 50px rgba(0,0,0,0.5), 0 30px 80px rgba(0,0,0,0.8); }
+.lockbox.metro h3 { font-family: "PT Sans Narrow", "Arial Narrow", sans-serif; letter-spacing: 0.08em; }
+.lockbox.metro .hint { color: #a09880; }
+.lockbox.metro .wheels { background: #0a0504; box-shadow: inset 0 0 16px rgba(0,0,0,0.9), inset 0 0 0 2px #1a1210; border-radius: 3px; }
+.lockbox.metro .wheel button { background: #3a3a34; color: #d8d0bc; border-radius: 2px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 2px 0 #0c0c0a; }
+.lockbox.metro .wheel .face { background: linear-gradient(180deg, #060202 0%, #140604 45%, #140604 55%, #060202 100%); box-shadow: inset 0 0 8px rgba(0,0,0,0.9); }
+.lockbox.metro .wheel .strip div { color: #ff4a2a; text-shadow: 0 0 10px rgba(255,70,40,0.7); font-family: "DIN Condensed", "Arial Narrow", monospace; }
+.lockbox.metro .wheel .face::after { border-color: rgba(255,74,42,0.3); }
+.lockbox.metro .btn.primary { background: #8a3a1a; color: #f0e0c8; }
+/* 盖革计数器的读数：右边一小块，像一只旧表头 */
+#geiger { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); z-index: 20; display: none; width: 112px; padding: 10px 12px 12px; background: rgba(12,11,8,0.72); border: 1px solid rgba(214,200,170,0.16); border-radius: 3px; color: #e6d6b4; font: 12px/1.2 "SF Mono", Menlo, Consolas, monospace; pointer-events: none; }
+#geiger.on { display: block; }
+#geiger .gk { display: block; letter-spacing: 0.18em; color: #c8a060; font-size: 11px; }
+#geiger b { display: inline-block; margin-top: 6px; font-size: 26px; font-weight: 300; letter-spacing: 0.02em; }
+#geiger .gu { margin-left: 4px; color: #9a8e74; }
+#geiger i { display: block; height: 4px; margin-top: 8px; background: rgba(255,255,255,0.08); }
+#geiger i s { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #6a8a3a, #d8a03a, #e8502a); transition: width 0.12s; }
+#geiger.hot b { color: #ff8a4a; text-shadow: 0 0 10px rgba(255,100,40,0.5); }
+/* 戴上防毒面具：四周一圈黑、面罩的边、呼吸时镜片上起一层雾 */
+#gasmask { position: fixed; inset: 0; z-index: 15; pointer-events: none; opacity: 0; transition: opacity 0.6s; background: radial-gradient(ellipse 58% 64% at 50% 46%, transparent 0, transparent 70%, rgba(0,0,0,0.55) 84%, rgba(0,0,0,0.96) 100%); }
+#gasmask::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse 60% 66% at 50% 46%, transparent 76%, rgba(40,44,40,0.5) 80%, transparent 84%), linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.035) 34%, transparent 38%); }
+#gasmask .fog { position: absolute; inset: 0; background: radial-gradient(ellipse 40% 30% at 50% 80%, rgba(200,210,200,0.22), transparent 70%); animation: maskFog 3.4s ease-in-out infinite; }
+#gasmask.on { opacity: 1; }
+@keyframes maskFog { 0%, 100% { opacity: 0.1; } 45% { opacity: 0.9; } 70% { opacity: 0.25; } }

@@ -1,6 +1,7 @@
 // 门口的"光门"：出门时门外不再是走廊，而是一整片光——人走进光里，下一间 211 的门口也亮着同一片光，
 // 人从光里走出来，门在身后自己关上、又锁上了。
-//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'light' 第三章（暖白色的一片雾光）/ 'forge' 第四章（熔炉一样的橘红色暖光）/ 'space' 第五章（淡蓝色光门）
+//   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'sea' 第三章（海面下往上看的一片蓝绿色的光）/ 'tunnel' 第四章（迎面开来的列车大灯）
+//         / 'light' 第五章（暖白色的一片雾光）/ 'forge' 第六章（熔炉一样的橘红色暖光）/ 'space' 第七章（淡蓝色光门）
 import * as THREE from 'three';
 
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }';
@@ -55,6 +56,45 @@ const FRAG = {
       float alpha = smoothstep(1.05, 0.25, r) + rays * smoothstep(1.2, 0.35, r);
       gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
     }`,
+  // 第三章：门外像是从海面底下往上看——一片蓝绿色的光，水面的光斑一道道晃，气泡往上冒
+  sea: /* glsl */ `
+    uniform float time, power; varying vec2 vUv;
+    float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    void main() {
+      vec2 c = vUv - 0.5; c.x *= 0.5;
+      float r = length(c) * 2.0;
+      // 水面焦散：两层扭来扭去的亮纹
+      vec2 q = vUv * vec2(6.0, 10.0);
+      float ca = sin(q.x * 2.1 + sin(q.y * 1.7 + time * 1.3) * 1.5 + time) * sin(q.y * 1.9 + sin(q.x * 1.3 - time) * 1.4 - time * 0.8);
+      float caust = pow(abs(ca), 6.0) * 0.8;
+      vec3 col = mix(vec3(0.1, 0.45, 0.55), vec3(0.8, 1.0, 0.98), smoothstep(0.85, 0.0, r));
+      col += vec3(0.7, 0.95, 1.0) * caust * smoothstep(1.0, 0.2, r);
+      // 气泡
+      vec2 bp = vec2(vUv.x * 24.0, vUv.y * 10.0 - time * 1.2);
+      float bub = step(0.965, h(floor(bp))) * smoothstep(0.1, 0.8, r);
+      col += vec3(0.8, 1.0, 1.0) * bub * 0.8;
+      float alpha = smoothstep(1.05, 0.25, r) + caust * 0.3 * smoothstep(1.2, 0.35, r);
+      gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
+    }`,
+  // 第四章：隧道里迎面开来一列车——两盏大灯的强光，铁轨反着光，灰尘在光里飘
+  tunnel: /* glsl */ `
+    uniform float time, power; varying vec2 vUv;
+    float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    void main() {
+      vec2 c = vUv - vec2(0.5, 0.42); c.x *= 0.5;
+      float r = length(c) * 2.0;
+      vec2 l1 = vUv - vec2(0.36, 0.44), l2 = vUv - vec2(0.64, 0.44);
+      l1.x *= 0.5; l2.x *= 0.5;
+      float lamps = 0.02 / (dot(l1, l1) + 0.004) + 0.02 / (dot(l2, l2) + 0.004);
+      float flare = pow(max(0.0, 1.0 - abs(vUv.y - 0.44) * 18.0), 3.0) * 0.6;
+      vec3 col = mix(vec3(0.9, 0.85, 0.7), vec3(1.0), smoothstep(0.8, 0.0, r));
+      col += vec3(1.0, 0.95, 0.85) * (lamps * 0.08 + flare);
+      vec2 dp = vec2(vUv.x * 40.0, vUv.y * 30.0 + time * 0.5);
+      float dust = step(0.985, h(floor(dp))) * 0.6;
+      col += vec3(1.0, 0.9, 0.75) * dust;
+      float alpha = smoothstep(1.1, 0.2, r) + flare * 0.5;
+      gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
+    }`,
   space: /* glsl */ `
     uniform float time, power; varying vec2 vUv;
     void main() {
@@ -68,7 +108,7 @@ const FRAG = {
 };
 // 光门后面那层不透明的底色（挡住门外的走廊），和照进屋里的灯光颜色
 const TINT = {
-  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], light: ['#fff2dc', '#ffe2b8'], forge: ['#ffd8a8', '#ffb070'], space: ['#e2f4ff', '#cfe8ff'],
+  warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], sea: ['#bfeaea', '#7ad0d8'], tunnel: ['#fff4e0', '#ffe6c0'], light: ['#fff2dc', '#ffe2b8'], forge: ['#ffd8a8', '#ffb070'], space: ['#e2f4ff', '#cfe8ff'],
 };
 // 贴着门洞往屋里撒的一片光（墙上的光晕、地上的光斑）
 const HALO_FRAG = /* glsl */ `

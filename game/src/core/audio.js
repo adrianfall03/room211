@@ -70,7 +70,7 @@ export class Audio {
     o.frequency.setValueAtTime(f, t0);
     if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), t0 + attack); // 指数曲线的目标值不能是 0（会直接抛异常）
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g);
     if (dest) g.connect(dest); else this._out(g, rev);
@@ -93,7 +93,7 @@ export class Audio {
       curve.forEach(([tt, v]) => g.gain.linearRampToValueAtTime(v * gain, t0 + tt * dur));
     } else {
       g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(gain, t0 + attack);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, gain), t0 + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     }
     s.connect(f).connect(g);
@@ -104,6 +104,22 @@ export class Audio {
   // ----- 具体音效 -----
   footstep(run = false) {
     const p = 0.85 + Math.random() * 0.3;
+    // 各章的地面：stepKind = 'water'（船舱里没过脚背的积水）/ 'metal'（船舱的花纹钢板）/ 'grit'（地铁里满地的碎石子）
+    if (this.stepKind === 'water') {
+      this.noise({ dur: 0.22, gain: run ? 0.2 : 0.14, type: 'bandpass', freq: 900 * p, freq2: 2400 * p, Q: 1.2, rev: false, curve: [[0.1, 1], [1, 0]] });
+      this.noise({ dur: 0.12, gain: 0.08, type: 'lowpass', freq: 380, brown: true, rev: false });
+      return;
+    }
+    if (this.stepKind === 'metal') {
+      this.noise({ dur: 0.05, gain: run ? 0.2 : 0.13, type: 'bandpass', freq: 2200 * p, Q: 2.5, rev: false });
+      this.tone({ f: 180 * p, f2: 120, dur: 0.12, gain: run ? 0.12 : 0.08, type: 'triangle', rev: false });
+      return;
+    }
+    if (this.stepKind === 'grit') {
+      for (let i = 0; i < 3; i++) this.noise({ dur: 0.04, gain: (run ? 0.14 : 0.09) * (1 - i * 0.25), type: 'highpass', freq: 2600 + Math.random() * 1800, delay: i * 0.018, rev: false });
+      this.tone({ f: 90 * p, f2: 55, dur: 0.08, gain: run ? 0.16 : 0.1, type: 'sine', rev: false });
+      return;
+    }
     this.noise({ dur: 0.07, gain: run ? 0.22 : 0.14, type: 'bandpass', freq: 1400 * p, Q: 0.9, rev: false });
     this.tone({ f: 95 * p, f2: 60, dur: 0.08, gain: run ? 0.2 : 0.13, type: 'sine', rev: false });
   }
@@ -524,6 +540,8 @@ export class Audio {
   startMusic(theme = 'normal') {
     if (!this.ctx || this._musicTimer) return;
     if (theme === 'ruin') return this._musicRuin();
+    if (theme === 'ship') return this._musicShip();
+    if (theme === 'metro') return this._musicMetro();
     if (theme === 'jungle') return this._musicJungle();
     if (theme === 'frost') return this._musicFrost();
     if (theme === 'space') return this._musicSpace();
@@ -660,6 +678,209 @@ export class Audio {
     };
     play();
     this._musicTimer = setInterval(play, 9000);
+  }
+  // ----- 第三章：船舱 211 -----
+  // 海：船壳外面一直在响的低沉的浪声 + 一层细碎的水声
+  startSea(gain = 1) {
+    this.startLoop('sea', { type: 'lowpass', freq: 260, Q: 0.5, gain: 0.1 * gain, brown: true });
+    this.startLoop('seaHi', { type: 'bandpass', freq: 1300, Q: 0.4, gain: 0.018 * gain, brown: false });
+  }
+  // 地上的积水晃到另一边："哗——啦"
+  slosh(k = 1) {
+    const d = 0.9 + Math.random() * 0.5;
+    this.noise({ dur: d, gain: 0.07 * k, type: 'bandpass', freq: 500, freq2: 1600 + Math.random() * 600, Q: 1.1, curve: [[0.3, 1], [0.7, 0.6], [1, 0]] });
+    this.noise({ dur: d * 0.7, gain: 0.05 * k, type: 'lowpass', freq: 300, brown: true, delay: 0.1 });
+  }
+  // 浪拍在船头上："咚——"
+  hullBoom(k = 0.5) {
+    this.noise({ dur: 1.4, gain: 0.35 * k, type: 'lowpass', freq: 160, brown: true, curve: [[0.05, 1], [0.4, 0.5], [1, 0]] });
+    this.tone({ f: 48, f2: 34, dur: 1.2, type: 'sine', gain: 0.25 * k, attack: 0.02 });
+  }
+  // 大浪：轰一声 + 浪花砸在舷窗上的一片"哗"
+  waveCrash(k = 1) {
+    this.hullBoom(0.8 * k);
+    this.noise({ dur: 1.8, gain: 0.16 * k, type: 'highpass', freq: 1500, delay: 0.15, curve: [[0.08, 1], [0.5, 0.4], [1, 0]] });
+    this.noise({ dur: 2.4, gain: 0.12 * k, type: 'bandpass', freq: 700, freq2: 300, Q: 0.7, delay: 0.2, curve: [[0.2, 1], [1, 0]] });
+  }
+  // 船上的铜钟：清脆的"当"，两下一组
+  shipBell(n = 2) {
+    for (let i = 0; i < n; i++) {
+      const d = Math.floor(i / 2) * 1.1 + (i % 2) * 0.32;
+      this.tone({ f: 1180, dur: 1.8, type: 'triangle', gain: 0.07, delay: d });
+      this.tone({ f: 1180 * 2.76, dur: 0.9, type: 'sine', gain: 0.02, delay: d });
+      this.tone({ f: 1180 * 0.5, dur: 1.4, type: 'sine', gain: 0.03, delay: d });
+    }
+  }
+  // 远处的雾笛
+  foghorn() {
+    for (const [f, g] of [[98, 0.05], [147, 0.025], [196, 0.012]]) this.tone({ f, dur: 3.2, type: 'sawtooth', gain: g, attack: 0.4 });
+    this.noise({ dur: 3.2, gain: 0.03, type: 'lowpass', freq: 400, brown: true, curve: [[0.15, 1], [0.85, 1], [1, 0]] });
+  }
+  // 传声筒上的哨子："嘘——"
+  pipeWhistle() {
+    this.tone({ f: 1650, f2: 1720, dur: 0.7, type: 'sine', gain: 0.06, attack: 0.05 });
+    this.noise({ dur: 0.7, gain: 0.05, type: 'bandpass', freq: 1700, Q: 6 });
+  }
+  // 手摇泵压一下：铁摇把"哐"，水在管子里"咕噜"
+  pumpStroke() {
+    this.noise({ dur: 0.12, gain: 0.3, type: 'bandpass', freq: 900, Q: 2 });
+    this.tone({ f: 140, f2: 90, dur: 0.15, type: 'square', gain: 0.05 });
+    for (let i = 0; i < 4; i++) this.tone({ f: 260 + Math.random() * 120, f2: 520 + Math.random() * 200, dur: 0.1, type: 'sine', gain: 0.05, delay: 0.25 + i * 0.09 });
+    this.noise({ dur: 0.5, gain: 0.1, type: 'lowpass', freq: 500, brown: true, delay: 0.3 });
+  }
+  // 扳手撞在桌子一头："当"
+  clankMetal(k = 1) {
+    this.tone({ f: 1650 + Math.random() * 300, dur: 0.35, type: 'sine', gain: 0.05 * k });
+    this.tone({ f: 2900, dur: 0.18, type: 'sine', gain: 0.02 * k });
+    this.noise({ dur: 0.04, gain: 0.2 * k, type: 'highpass', freq: 2500 });
+  }
+  // 电子管收音机：开机"啪"，然后一直有交流声和沙沙的杂音
+  radioOn() {
+    this.noise({ dur: 0.05, gain: 0.3, type: 'bandpass', freq: 1800, Q: 2, rev: false });
+    this.startLoop('radioHum', { osc: 'sine', freq: 100, gain: 0.012 });
+    this.startLoop('radioStatic', { type: 'bandpass', freq: 2600, Q: 0.8, gain: 0.02, brown: false });
+  }
+  radioOff() { this.stopLoop('radioHum', 0.3); this.stopLoop('radioStatic', 0.3); }
+  // 鲸歌：很低、很长、拐着弯的"呜——"
+  whaleSong() {
+    const c = this.ctx; if (!c) return;
+    for (const [d, f0, f1, f2, dur] of [[0, 180, 320, 150, 3.2], [2.6, 420, 260, 380, 2.4], [4.4, 140, 110, 160, 3.0]]) {
+      const t0 = this.t + d, o = c.createOscillator(), g = c.createGain(), v = c.createOscillator(), vg = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f1, t0 + dur * 0.5); o.frequency.linearRampToValueAtTime(f2, t0 + dur);
+      v.frequency.value = 5.5; vg.gain.value = 6; v.connect(vg).connect(o.frequency);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.06, t0 + dur * 0.3); g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(g); g.connect(this.reverb); this._out(g);
+      o.start(t0); v.start(t0); o.stop(t0 + dur + 0.1); v.stop(t0 + dur + 0.1);
+    }
+  }
+  // 船舱：海上的夜——D 多利亚调式的弦乐铺底，隔一阵手风琴似的一句旋律（老水手的歌），远处一声雾笛；紧张起来底下多一层慢慢的鼓
+  _musicShip() {
+    const prog = [[73.4, 110, 146.8, 174.6], [65.4, 98, 130.8, 164.8], [58.3, 87.3, 116.5, 146.8], [65.4, 98, 123.5, 164.8]];
+    const tunes = [
+      [[293.7, 0.6], [329.6, 0.3], [349.2, 0.6], [329.6, 0.3], [293.7, 0.9], [261.6, 0.9], [293.7, 1.8]],
+      [[349.2, 0.6], [392, 0.3], [440, 0.9], [392, 0.6], [349.2, 0.3], [329.6, 1.8]],
+      [[440, 0.9], [392, 0.6], [349.2, 0.3], [329.6, 0.6], [293.7, 0.3], [261.6, 0.9], [293.7, 1.8]],
+    ];
+    let i = 0;
+    const reed = (f, d, len, gain) => { // 手风琴：两个略微走调的方波叠在一起，滤掉高音
+      const c = this.ctx, t0 = this.t + d;
+      for (const det of [-8, 7]) {
+        const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+        o.type = 'square'; o.frequency.value = f; o.detune.value = det;
+        fl.type = 'lowpass'; fl.frequency.value = 1400; fl.Q.value = 0.7;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(gain, t0 + 0.06); g.gain.linearRampToValueAtTime(gain * 0.7, t0 + len * 0.8); g.gain.linearRampToValueAtTime(0.0001, t0 + len + 0.05);
+        o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+        o.start(t0); o.stop(t0 + len + 0.1);
+      }
+    };
+    const play = () => {
+      const ch = prog[i % prog.length], c = this.ctx, t0 = this.t, T = 9.4;
+      ch.forEach((f) => {
+        for (const det of [-6, 6]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          fl.type = 'lowpass'; fl.Q.value = 0.6;
+          fl.frequency.setValueAtTime(240 + this.tension * 400, t0);
+          fl.frequency.linearRampToValueAtTime(460 + this.tension * 700, t0 + T * 0.5);
+          fl.frequency.linearRampToValueAtTime(240 + this.tension * 300, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.022, t0 + 3); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); o.stop(t0 + T + 0.1);
+        }
+      });
+      if (i % 2 === 1) { let d = 1.2; for (const [f, len] of tunes[((i - 1) / 2) % tunes.length]) { reed(f, d, len, 0.011 + this.tension * 0.004); d += len; } }
+      if (i % 4 === 2) { const d = 2 + Math.random() * 4; this.tone({ f: 98, dur: 2.6, type: 'sawtooth', gain: 0.012, attack: 0.5, delay: d, dest: this.mus }); }
+      if (this.tension > 0.3) for (let n = 0; n < 6; n++) this.tone({ f: 62, f2: 48, dur: 0.6, type: 'sine', gain: 0.035 * this.tension, delay: n * 1.55, dest: this.mus });
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 9200);
+  }
+  // ----- 第四章：地铁 211 -----
+  // 隧道里的底噪：很低的风声（通风井）+ 远处隐隐约约的滴水
+  startTunnel(gain = 1) {
+    this.startLoop('tunnel', { type: 'lowpass', freq: 140, Q: 0.6, gain: 0.1 * gain, brown: true });
+    this.startLoop('tunnelHi', { type: 'bandpass', freq: 420, Q: 1.2, gain: 0.012 * gain, brown: false });
+  }
+  // 盖革计数器的一声"咔"
+  geiger() { this.noise({ dur: 0.012, gain: 0.3, type: 'highpass', freq: 3000, rev: false }); this.tone({ f: 2200, dur: 0.01, type: 'square', gain: 0.03, rev: false }); }
+  // 手摇发电机转一圈："呜——咔哒"
+  crank(k = 1) {
+    this.tone({ f: 90 + k * 140, f2: 140 + k * 220, dur: 0.45, type: 'sawtooth', gain: 0.035 });
+    this.noise({ dur: 0.45, gain: 0.08, type: 'bandpass', freq: 600 + k * 900, Q: 3 });
+    this.noise({ dur: 0.03, gain: 0.25, type: 'highpass', freq: 3000, delay: 0.4 });
+  }
+  // 站台的灯：继电器"咔"一声，高压钠灯"嗡"地一盏盏亮起来
+  floodOn() {
+    this.clunk();
+    for (let i = 0; i < 5; i++) { this.noise({ dur: 0.04, gain: 0.25, type: 'highpass', freq: 2500, delay: 0.3 + i * 0.35 }); this.tone({ f: 100, dur: 0.8, type: 'sawtooth', gain: 0.012, delay: 0.3 + i * 0.35 }); }
+  }
+  // 野战电话的铃："铃铃铃——"
+  phoneRing(n = 2) {
+    for (let k = 0; k < n; k++) for (let i = 0; i < 16; i++) { const d = k * 1.6 + i * 0.05; this.tone({ f: 880, dur: 0.04, type: 'square', gain: 0.03, delay: d, rev: false }); this.tone({ f: 1320, dur: 0.04, type: 'square', gain: 0.015, delay: d + 0.025, rev: false }); }
+  }
+  // 防毒面具里的呼吸：吸——（过滤罐"嘶"一声）呼——（呼气阀"啪嗒"）
+  maskBreath() {
+    this.noise({ dur: 1.1, gain: 0.12, type: 'bandpass', freq: 700, freq2: 1100, Q: 1.4, rev: false, curve: [[0.3, 1], [1, 0]] });
+    this.noise({ dur: 0.9, gain: 0.1, type: 'bandpass', freq: 500, freq2: 300, Q: 1.2, delay: 1.4, rev: false, curve: [[0.2, 1], [1, 0]] });
+    this.noise({ dur: 0.02, gain: 0.12, type: 'highpass', freq: 3000, delay: 1.4, rev: false });
+  }
+  cough() { for (let i = 0; i < 3; i++) { this.noise({ dur: 0.16, gain: 0.3, type: 'bandpass', freq: 500 + i * 60, Q: 1.3, delay: i * 0.28, rev: false }); this.tone({ f: 160, f2: 110, dur: 0.14, type: 'sawtooth', gain: 0.04, delay: i * 0.28, rev: false }); } }
+  gasHiss() { this.noise({ dur: 1.6, gain: 0.08, type: 'highpass', freq: 2200, curve: [[0.1, 1], [0.8, 0.8], [1, 0]] }); }
+  // 影子们：很远的耳语 + 一声拉长的低音
+  whispers(sec = 5) {
+    for (let i = 0; i < 14; i++) this.noise({ dur: 0.2 + Math.random() * 0.4, gain: 0.05, type: 'bandpass', freq: 1400 + Math.random() * 2400, Q: 5, delay: Math.random() * sec });
+    this.tone({ f: 55, f2: 52, dur: sec, type: 'sine', gain: 0.12, attack: 1.2 });
+    this.tone({ f: 233, f2: 220, dur: sec, type: 'sine', gain: 0.012, attack: 1.5 });
+  }
+  // 幽灵列车：由远到近的轰隆声 + 铁轨"咔哒咔哒" + 呼啸而过
+  ghostTrain(sec = 7) {
+    this.noise({ dur: sec, gain: 0.35, type: 'lowpass', freq: 140, freq2: 320, brown: true, curve: [[0.55, 1], [0.7, 0.6], [1, 0]] });
+    for (let t = sec * 0.25 + 0.11; t < sec * 0.75; t += 0.22) this.noise({ dur: 0.05, gain: 0.12 * Math.sin(((t - sec * 0.25) / (sec * 0.5)) * Math.PI), type: 'bandpass', freq: 1200, Q: 2, delay: t });
+    this.noise({ dur: 1.4, gain: 0.2, type: 'bandpass', freq: 400, freq2: 2600, Q: 0.7, delay: sec * 0.45, curve: [[0.4, 1], [1, 0]] });
+  }
+  // 吉他：拨弦（快速衰减的三角波 + 泛音），一个和弦从低到高扫一遍
+  pluck(f, delay = 0, gain = 0.05) {
+    this.tone({ f, dur: 2.2, type: 'triangle', gain, delay, attack: 0.003 });
+    this.tone({ f: f * 2, dur: 0.9, type: 'sine', gain: gain * 0.35, delay, attack: 0.003 });
+    this.tone({ f: f * 3.01, dur: 0.4, type: 'sine', gain: gain * 0.15, delay, attack: 0.002 });
+  }
+  guitar() {
+    // 地下的那首歌：Am - F - C - E，慢慢地分解
+    const chords = [[110, 164.8, 220, 261.6, 329.6], [87.3, 130.8, 174.6, 220, 261.6], [130.8, 164.8, 196, 261.6, 329.6], [82.4, 123.5, 164.8, 207.7, 246.9]];
+    let d = 0;
+    chords.forEach((ch) => { for (const i of [0, 2, 3, 4, 3, 2]) { this.pluck(ch[i], d, 0.045); d += 0.26; } });
+    return d;
+  }
+  // 地铁：隧道里一把孤零零的吉他在回响，底下一层低沉的弦乐和很远的铁轨声；紧张起来是慢慢的心跳
+  _musicMetro() {
+    const prog = [[55, 82.4, 110, 130.8], [43.7, 65.4, 87.3, 110], [65.4, 98, 130.8, 164.8], [41.2, 61.7, 82.4, 103.8]];
+    const arp = [[220, 261.6, 329.6, 440], [174.6, 220, 261.6, 349.2], [196, 261.6, 329.6, 392], [164.8, 207.7, 246.9, 329.6]];
+    let i = 0;
+    const play = () => {
+      const k = i % prog.length, ch = prog[k], c = this.ctx, t0 = this.t, T = 8.8;
+      ch.forEach((f) => {
+        for (const det of [-5, 5]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          fl.type = 'lowpass'; fl.Q.value = 0.5;
+          fl.frequency.setValueAtTime(180 + this.tension * 300, t0);
+          fl.frequency.linearRampToValueAtTime(320 + this.tension * 600, t0 + T * 0.5);
+          fl.frequency.linearRampToValueAtTime(180 + this.tension * 250, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.02, t0 + 3); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); o.stop(t0 + T + 0.1);
+        }
+      });
+      // 吉他：每个和弦分解两遍，拨得很轻
+      if (i % 2 === 0) { const a = arp[k]; let d = 0.4; for (let r = 0; r < 2; r++) for (const n of [0, 1, 2, 3, 2, 1]) { this.tone({ f: a[n], dur: 1.6, type: 'triangle', gain: 0.016, delay: d, attack: 0.003, dest: this.mus }); d += 0.62; } }
+      // 很远的铁轨"咔哒"一声、滴水
+      if (i % 3 === 1) { const d = 2 + Math.random() * 5; this.noise({ dur: 0.05, gain: 0.04, type: 'bandpass', freq: 1800, Q: 3, delay: d }); this.noise({ dur: 0.05, gain: 0.03, type: 'bandpass', freq: 1700, Q: 3, delay: d + 0.2 }); }
+      if (this.tension > 0.3) for (let n = 0; n < 8; n++) { this.tone({ f: 52, dur: 0.22, type: 'sine', gain: 0.03 * this.tension, delay: n * 1.1, dest: this.mus }); this.tone({ f: 49, dur: 0.18, type: 'sine', gain: 0.02 * this.tension, delay: n * 1.1 + 0.28, dest: this.mus }); }
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 8600);
   }
   // 暴雨：两层噪声——高频的雨点 + 低频的雨声轰鸣
   startRain(gain = 1) {

@@ -89,6 +89,11 @@ const ACH = [
   ['feather', '🪶 鸡飞狗跳', '让两只鸡的游戏掉线'],
   ['fashion', '🪖 时尚猴王', '把头盔送给爱照镜子的猴子'],
   ['chick', '🐣 撸鸡', '摸了摸小黄的脑袋'],
+  ['whale', '🐋 深海来客', '在船舱的舷窗外看见了跃出海面的鲸'],
+  ['leak', '🔧 老水手', '拧紧了船舱里漏水的法兰'],
+  ['mask', '😷 呼吸管制', '戴上防毒面具，走进毒气里'],
+  ['guitar', '🎸 地下的吉他', '在地铁 211 里弹了一段吉他'],
+  ['bullet', '💰 硬通货', '在地铁 211 里翻到了军用子弹'],
   ['forge', '🔥 熔炉不灭', '让冰封 211 的暖炉重新烧起来'],
   ['laotie', '⚙️ 老铁没毛病', '给冻住的自动机「老铁」上了发条'],
   ['soup', '🥣 锯末汤', '在零下七十度喝了一碗热乎乎的锯末汤'],
@@ -99,7 +104,7 @@ const ACH = [
   ['gargantua', '🕳️ 卡冈图雅', '不小心放出了货柜 G 里的微型黑洞'],
   ['stay', '📚 书架背后的幽灵', '隐藏结局：从书缝里看到了那天晚上的自己'],
   ['enlist', '🎖️ 新兵报到', '接过少校递来的军帽，回敬一个军礼'],
-  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部五个 211'],
+  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部七个 211'],
 ];
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -410,8 +415,11 @@ export class Game {
   }
 
   // ================== 每帧 ==================
-  // 主画面渲染之前的额外渲染（第五章彩蛋：书架背后的另一个时空）
-  beforeRender() { if (this.CH && this.CH.secret) this.CH.secret.beforeRender(); }
+  // 主画面渲染之前的额外渲染（第七章彩蛋：书架背后的另一个时空）
+  beforeRender() {
+    if (this.CH && this.CH.secret) this.CH.secret.beforeRender();
+    if (this.CH && this.CH.preRender) this.CH.preRender(this); // 第三章：镜头跟着船歪一点
+  }
   update(dt) {
     this.time += dt;
     const S = this.S;
@@ -1179,7 +1187,8 @@ export class Game {
     this.audio.uvOn();
     this.ch.torch.visible = S.uvOn;
     this._invDirty = true;
-    if (S.uvOn && !S.f.uvTried) { S.f.uvTried = true; this.say('紫光……照照看哪里有荧光？', 2.6); }
+    if (this.CH && this.CH.onTorch) this.CH.onTorch(this, S.uvOn); // 第四章：普通手电
+    else if (S.uvOn && !S.f.uvTried) { S.f.uvTried = true; this.say('紫光……照照看哪里有荧光？', 2.6); }
   }
 
   onDoor() {
@@ -1364,7 +1373,7 @@ export class Game {
     this._afterReach = openDoorAt;
   }
 
-  // 进门（二、三、四、五章的进门过场前半段）：人从门口的光里走出来——镜头和上一间屋子出门时一模一样——
+  // 进门（第二章以后每一章的进门过场前半段）：人从门口的光里走出来——镜头和上一间屋子出门时一模一样——
   // 门在身后"砰"地自己关上，门锁又"咔哒"锁上了。prepare 时返回 undefined，否则返回这段过场用了几秒
   enterRoom({ prepare }) {
     const R = this.refs, D = R.door, CH = this.CH, S = this.S, dz = D.z;
@@ -1479,7 +1488,8 @@ export class Game {
   }
   _switchWorld(theme) {
     const old = this.refs;
-    // 第五章彩蛋里另搭的"那天晚上的 211"也一起释放
+    if (this.CH && this.CH.leave) this.CH.leave(this); // 这一章自己加的界面（盖革计数器读数、防毒面具遮罩……）
+    // 第七章彩蛋里另搭的"那天晚上的 211"也一起释放
     if (this.CH && this.CH.secret && this.CH.secret.past) { this.CH.secret.past.dispose(); this.CH.secret.past = null; this.CH.secret.needPast = false; }
     if (this.CH && this.CH.secret) this.CH.secret.dispose();
     this.gfx.viewScene = null;
@@ -1490,7 +1500,7 @@ export class Game {
     if (old.helmet) disposeTree(old.helmet);
     // 这一章给主角穿戴上的东西（第四章的毛线帽、围巾）一起摘掉
     if (old.wear) for (const o of old.wear) { if (o.parent) o.parent.remove(o); disposeTree(o); }
-    this.uvLight.visible = true; // 第五章会把它藏起来
+    this.uvLight.visible = true; // 有的章节会把它藏起来
     this.refs = this.buildWorld(theme);
     this.ctrl.camBoxes = this.refs.camBoxes;
     this.ctrl.bounds = this.refs.bounds;
@@ -1507,10 +1517,12 @@ export class Game {
     this._mirrorN = 0;
     // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来；失重只在太空舱里
     this.auto = null; this._afterReach = null; this.cine = null; this._cutPose = null;
-    // 第五章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
+    // 第七章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
     this.gfx.renderer.clippingPlanes = [];
     this._clipZ = Infinity;
     this.ctrl.float = 0; this.ctrl.pos.y = 0;
+    this.audio.stepKind = null; // 船舱的积水、地铁的碎石子：脚步声换回普通的
+    this.camera.up.set(0, 1, 0);
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
@@ -1573,11 +1585,11 @@ export class Game {
     const admireBtn = fin ? '<button class="btn" data-a="admire">🎖️ 留下来欣赏</button>' : '';
     let node;
     if (secret) {
-      const chName = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
+      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
       const [A] = S.mates;
       node = this.ui.panel(`
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
@@ -1588,26 +1600,26 @@ export class Game {
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button><button class="btn" data-a="admire">📚 再看一会儿</button></div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload(S.view ? 'view' : 'game'));
     } else if (S.view) {
-      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>五个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>七个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      const chName = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
+      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
       if (hints === 0) S.ach.add('nohint');
       let rank, text;
-      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。五个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
+      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。七个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
       else if (hints <= 4) { rank = 'A'; text = '你戴上军帽，回敬了一个标准的军礼，看台上的欢呼声响成一片。教官小声嘀咕：“刚才还在椅子上打呼噜呢，这会儿倒挺精神。”'; }
       else if (hints <= 8) { rank = 'B'; text = '军帽有点大，戴歪了。少校笑着帮你扶正：“欢迎入伍，新兵。”'; }
       else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
       node = this.ui.panel(`
-        <h2>五个 211，全部逃脱！</h2>
+        <h2>七个 211，全部逃脱！</h2>
         <div style="color:var(--muted)">一场梦醒来，${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>
         <div class="rank">${rank}</div>
         <p>${text}</p>
@@ -1824,6 +1836,8 @@ export class Game {
     const cfg = {
       normal: { n: 420, x: [-1.3, 1.3], y: [0.3, 2.7], z: [-3.4, -0.6], color: '#fff2d8', size: 0.014 },
       ruin: { n: 900, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#e8c89a', size: 0.012 },
+      ship: { n: 300, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfdde4', size: 0.01 },
+      metro: { n: 1100, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#d8c8a8', size: 0.011 },
       jungle: { n: 320, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#d6dccb', size: 0.011 },
       frost: { n: 520, x: [-1.7, 1.7], y: [0.1, 2.8], z: [-3.4, 4.3], color: '#dde8ff', size: 0.011 },
       space: { n: 260, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfefff', size: 0.02 },
@@ -1895,7 +1909,7 @@ export class Game {
     const uvOn = S && S.uvOn && this.state === 'play';
     const U = R.uvUniforms;
     U.on.value = lerp(U.on.value, uvOn ? 1 : 0, 1 - Math.exp(-dt * 10));
-    this.uvLight.intensity = lerp(this.uvLight.intensity, uvOn ? 1.6 : 0, 1 - Math.exp(-dt * 10));
+    this.uvLight.intensity = lerp(this.uvLight.intensity, uvOn ? (this.CH && this.CH.torchPower) || 1.6 : 0, 1 - Math.exp(-dt * 10));
     if (U.on.value > 0.01) {
       const origin = _v1;
       if (this.ctrl.mode === 'first') {
