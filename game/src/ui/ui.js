@@ -19,7 +19,7 @@ export class UI {
     const root = h('div');
     root.id = 'ui';
     root.innerHTML = `
-      <div id="loading"><div class="ld-logo">逃离211</div><div class="ld-bar"><i></i></div><div class="ld-text">正在布置宿舍……</div></div>
+      <div id="loading"><div class="ld-logo">逃离 211 宿舍</div><div class="ld-bar"><i></i></div><div class="ld-text">正在布置宿舍……</div></div>
       <div id="vignette"></div>
       <div id="letterbox" class="off"></div>
       <div id="hud" class="hidden">
@@ -66,72 +66,42 @@ export class UI {
 
   // ---------- 标题 ----------
   // mode：'game' 游戏模式（解谜开锁，通关一章解锁一章）/ 'view' 鉴赏模式（没有任务和门锁，章节随便选）
-  showTitle({ onStart, defaultName = '', defaultMode = 'game', quality = 'high', onQuality, unlocked = 1, defaultChapter = 1 }) {
+  // 标题：只有"游戏模式""鉴赏模式"两个按钮，都从第一章开始；
+  // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩
+  showTitle({ onStart, lastChapter = 1 }) {
+    const chNames = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
     const t = h('div');
     t.id = 'title';
     t.innerHTML = `
       <div class="t-left">
-        <div class="t-kicker">3D 宿舍密室逃脱</div>
-        <div class="t-logo"><span>逃离</span><span class="num">211</span><span>宿舍</span></div>
-        <div class="t-sub">期末考试当天早上，你通宵打完排位后在电脑前睡着了……醒来发现<b>门被自己的车锁锁上了</b>，准考证也不见了。<b>8:00</b> 高数开考，快逃！<br><span class="t-more">逃出这间 211 之后……门外还有<b>四个</b> 211。</span></div>
-        <div><label>主角名字</label><input type="text" id="t-name" maxlength="8" placeholder="给自己起个名字（选填）" value="${esc(defaultName)}"></div>
-        <div><label>模式（都不限时）</label>
-          <div class="seg mode" id="t-mode">
-            <button data-v="game">🎮 游戏模式<small>找线索、解谜题、开门锁</small></button>
-            <button data-v="view">🎬 鉴赏模式<small>没有任务和门锁，自由穿行</small></button>
-          </div></div>
-        <div><label id="t-ch-label"></label>
-          <div class="seg" id="t-ch">
-            <button data-v="1">第一章<small></small></button>
-            <button data-v="2">第二章<small></small></button>
-            <button data-v="3">第三章<small></small></button>
-            <button data-v="4">第四章<small></small></button>
-            <button data-v="5">第五章<small></small></button>
-          </div></div>
-        <div><label>画质</label>
-          <div class="seg" id="t-q">
-            <button data-v="low">流畅</button><button data-v="medium">均衡</button><button data-v="high">精美</button>
-          </div></div>
-        <button class="btn-main" id="t-start">开 始 逃 脱</button>
-        <div class="t-help">鼠标控制视角 · WASD 移动 · E 互动 · F 手电 · V 第一/第三人称 · H 提示 · 失重时空格上浮 / C 下沉 · 鉴赏模式按 N 跳关<br>建议使用电脑浏览器游玩，戴上耳机体验更佳 🎧</div>
-      </div>
-      <div class="t-hero"><div class="nm">主角 · 211 峡谷之神</div><div class="tg">通宵 <span>高数</span><span>夜猫子</span><span>牛仔夹克</span></div></div>`;
+        <h1 class="t-logo">逃离 211 宿舍</h1>
+        <div class="t-menu">
+          <button data-a="game">游戏模式</button>
+          <button data-a="view">鉴赏模式</button>
+        </div>
+        <div class="t-menu t-resume hidden">
+          <p>上次玩到第${'一二三四五'[lastChapter - 1] || lastChapter}章 · ${chNames[lastChapter] || ''}</p>
+          <button data-a="resume">从第${'一二三四五'[lastChapter - 1] || lastChapter}章继续</button>
+          <button data-a="restart">从第一章开始</button>
+          <button data-a="back" class="t-back">返回</button>
+        </div>
+      </div>`;
     document.body.appendChild(t);
     this.titleEl = t;
-    let mode = defaultMode === 'view' ? 'view' : 'game', q = quality, chapter = defaultChapter;
-    const seg = (id, val, cb) => {
-      const el = $(id, t);
-      const btns = [...el.querySelectorAll('button')];
-      const sync = () => btns.forEach((b) => b.classList.toggle('on', b.dataset.v === val));
-      btns.forEach((b) => b.addEventListener('click', () => { val = b.dataset.v; sync(); this.audio.click(); cb(val); }));
-      sync();
+    const [main, resume] = t.querySelectorAll('.t-menu');
+    const show = (el) => { main.classList.toggle('hidden', el !== main); resume.classList.toggle('hidden', el !== resume); };
+    const act = {
+      game: () => { if (lastChapter > 1) show(resume); else onStart({ mode: 'game', chapter: 1 }); },
+      view: () => onStart({ mode: 'view', chapter: 1 }),
+      resume: () => onStart({ mode: 'game', chapter: lastChapter }),
+      restart: () => onStart({ mode: 'game', chapter: 1 }),
+      back: () => show(main),
     };
-    seg('#t-q', q, (v) => { q = v; onQuality && onQuality(v); });
-    // 章节：游戏模式里没通关的章节锁着；鉴赏模式随便选
-    const chNames = ['211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
-    const chBtns = [...$('#t-ch', t).querySelectorAll('button')];
-    const startBtn = $('#t-start', t);
-    const syncCh = () => {
-      if (mode === 'game') chapter = Math.min(chapter, unlocked);
-      chBtns.forEach((b, i) => {
-        const locked = mode === 'game' && i + 1 > unlocked;
-        b.classList.toggle('on', i + 1 === chapter);
-        b.classList.toggle('locked', locked);
-        $('small', b).textContent = locked ? '🔒 未解锁' : chNames[i];
-      });
-      $('#t-ch-label', t).textContent = mode === 'game' ? '章节（通关一章解锁一章）' : '章节（鉴赏模式随便选）';
-      startBtn.textContent = mode === 'game' ? '开 始 逃 脱' : '开 始 鉴 赏';
-    };
-    seg('#t-mode', mode, (v) => { mode = v; syncCh(); });
-    chBtns.forEach((b) => b.addEventListener('click', () => {
-      if (b.classList.contains('locked')) { this.audio.error(); return; }
-      chapter = Number(b.dataset.v); this.audio.click(); syncCh();
+    t.querySelectorAll('button[data-a]').forEach((b) => b.addEventListener('click', () => {
+      if (!this.titleEl) return; // 已经点过开始了
+      this.audio.click();
+      act[b.dataset.a]();
     }));
-    syncCh();
-    startBtn.addEventListener('click', () => {
-      const name = $('#t-name', t).value.trim();
-      onStart({ name, mode, quality: q, chapter });
-    });
   }
   hideTitle() {
     if (!this.titleEl) return;
