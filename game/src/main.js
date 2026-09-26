@@ -10,6 +10,7 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { ShadowCache } from './core/shadows.js';
+import { patchLightSkip } from './core/lightskip.js';
 import * as TX from './core/textures.js';
 import { audio } from './core/audio.js';
 import { Input } from './core/input.js';
@@ -40,6 +41,7 @@ if ((settings.v || 1) < 2) { if (settings.unlocked >= 4) settings.unlocked += 1;
 const saveSettings = () => { try { localStorage.setItem('dorm404', JSON.stringify(settings)); } catch (e) { /* 忽略 */ } };
 
 // ---------- 渲染 ----------
+patchLightSkip(); // 关着的灯 / 照不到的像素不算光照，必须在任何材质编译之前（见 core/lightskip.js）
 // 场景本身照旧用 4×MSAA 画，画完解析成普通贴图，后面的 GTAO / 描边 / Bloom / 调色都在普通缓冲里做。
 // 以前整条后处理链的缓冲全是 4×MSAA 半浮点，每个全屏 pass 都要多读写 4 倍的数据、再 resolve 一次，白白发热。
 class MSAARenderPass extends RenderPass {
@@ -187,8 +189,10 @@ class Gfx {
     this.composer.setPixelRatio(pr);
     this.composer.setSize(w, h);
     this.renderer.getDrawingBufferSize(this.bufferSize || (this.bufferSize = new THREE.Vector2()));
+    this.dirty = true; // 改了尺寸，画布被清空了：暂停中也要补画一帧
   }
   render(dt = 0, t = 0) {
+    this.dirty = false;
     this.grade.update(dt, t, this.width / Math.max(1, this.height));
     // 阴影：这一帧第一次画主场景时更新一次（灯灭着的不画、不动的东西用缓存），见 core/shadows.js
     this.shadows.arm();
@@ -376,7 +380,11 @@ async function boot() {
 
   // 主循环：最多约 60 帧/秒。高刷屏（MacBook 的 120Hz ProMotion 等）上 rAF 一秒来 120 次，
   // 每次都画的话 GPU 的活直接翻倍；这里按屏幕刷新间隔隔几次画一次（120Hz → 60，144Hz → 72），节奏均匀不抖
-  const MAX_FPS = 60;
+  //   · 弹窗（线索本、密码锁、纸条……）打开时：后面的场景压暗又糊着，30 帧就够了；
+  //   · 窗口不在前台时的标题画面：30 帧（镜头慢慢飘，没人盯着看）；
+  //   · 暂停菜单：画面定格，不推进也不重画——切到别的窗口时会自动暂停，以前暂停着也一直满帧在画。
+  //     窗口大小 / 画质变了才补画一帧（gfx.dirty）
+  const MAX_FPS = 60, CALM_FPS = 30;
   const timer = new THREE.Timer();
   timer.connect(document);
   let rafAvg = 1000 / MAX_FPS, rafLast = 0, rafSkip = 0;
@@ -385,11 +393,17 @@ async function boot() {
     const d = ts - rafLast;
     rafLast = ts;
     if (d > 2 && d < 50) rafAvg += (d - rafAvg) * 0.05;
-    if (++rafSkip < Math.max(1, Math.floor(1000 / MAX_FPS / rafAvg + 0.2))) return;
+    const calm = ui.modalOpen || (game.state === 'title' && !document.hasFocus());
+    if (++rafSkip < Math.max(1, Math.floor(1000 / (calm ? CALM_FPS : MAX_FPS) / rafAvg + 0.2))) return;
     rafSkip = 0;
     timer.update(ts);
     const dt = Math.min(timer.getDelta(), 0.05);
     if (window.__hold) return; // 自动化测试：暂停主循环，用 ff() 推进、render() 手动画一帧
+    if (game.paused) {
+      input.endFrame(); // 暂停时按过的键不留到继续游戏以后
+      if (gfx.dirty) { game.beforeRender(); gfx.render(0, game.time); }
+      return;
+    }
     game.update(dt);
     game.beforeRender();
     gfx.render(dt, game.time);
