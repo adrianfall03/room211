@@ -46,6 +46,9 @@ export const CH3 = {
     TS.drawDeckStencil(R.stencil.canvas, S.digits[1]);
     R.stencil.tex.needsUpdate = true;
     R.ship.h = DRAIN[0];
+    // 舱顶灯一开始就亮着（第一次试玩觉得太暗）：开关还能关掉，只剩马灯
+    S.f.lightsOn = true; S.f.bulbSeen = true;
+    R.switchRocker.rotation.x = -0.12;
     // 状态
     this.roll = 0; this.pitch = 0; this._kick = 0; this._kickV = 0; this._rollK = 1;
     this._lhT = 3; this._flash = 0; this._look = false; this._whale = 0; this._whaleT = -1;
@@ -352,8 +355,11 @@ export const CH3 = {
     const cam = g.camera, fov0 = 62;
     const eye = V(P.px, 1.74, -2.94);
     if (this._whale === 1) { this.whaleShow(g, P, eye); return; }
-    g._cineTo(eye, LIGHTHOUSE.clone(), 1.2);
-    g.tween(1.2, (k) => { cam.fov = lerp(fov0, 44, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    // 看的方向：舷窗正前方和灯塔之间（竖屏手机视野窄，直接对着灯塔会把舷窗挤到画面角落里）
+    const toLh = LIGHTHOUSE.clone().sub(eye).normalize(), look = eye.clone().add(toLh.lerp(V(0, 0, -1), cam.aspect < 1 ? 0.55 : 0.2).normalize().multiplyScalar(20));
+    const zf = g.zoomFov(44);
+    g._cineTo(eye, look, 1.2);
+    g.tween(1.2, (k) => { cam.fov = lerp(fov0, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     const N = S.digits[0];
     if (first || !S.found[0]) {
       g.after(0.9, () => g.ui.subtitle('月光下的海……北边的海上有一座灯塔！', 2.6, S.name));
@@ -368,7 +374,8 @@ export const CH3 = {
   },
   _endLook(g) {
     const cam = g.camera;
-    g.tween(0.9, (k) => { cam.fov = lerp(44, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
+    const f0 = cam.fov;
+    g.tween(0.9, (k) => { cam.fov = lerp(f0, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
     g._cineTo(null, null, 1.0);
     g.after(1.0, () => { this._look = false; });
   },
@@ -379,7 +386,8 @@ export const CH3 = {
     // 鲸从舷窗正前方偏右冲出来，往左边砸下去（舷窗能看见的只有正前方二十几度，弧线不能太高）
     const base = V(P.px + 2.2, -1.25, -19);
     g._cineTo(eye, V(P.px + 0.2, 2.3, -19), 1.0);
-    g.tween(1.0, (k) => { cam.fov = lerp(62, 50, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    const zf = g.zoomFov(50);
+    g.tween(1.0, (k) => { cam.fov = lerp(62, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     W.root.visible = true;
     const T = 6.2;
     g.audio.whaleSong();
@@ -670,7 +678,7 @@ export const CH3 = {
     }
     Ln.piv.rotation.set(Ln.ang.x, 0, Ln.ang.z);
     const fl = 0.86 + Math.sin(t * 11) * 0.05 + Math.sin(t * 23 + 1) * 0.04 + (Math.random() - 0.5) * 0.05;
-    Ln.light.intensity = 1.7 * fl;
+    Ln.light.intensity = 2.4 * fl;
     Ln.flame.scale.set(1, 2.2 * fl, 1);
     Ln.flameM.color.setRGB(2.4 * fl, 1.35 * fl, 0.5 * fl);
     // ---- 海图桌上的扳手：歪到一定程度就滑，撞到桌子两头"当"一声 ----
@@ -703,14 +711,14 @@ export const CH3 = {
     L.winLight.intensity = nOpen * (0.25 + flash * 0.6);
     // ---- 舱顶灯（开关）----
     const on = (S && S.f.lightsOn) || g.lightMode === 'end';
-    g.light.spot = lerp(g.light.spot, on ? 5 : 0, 1 - Math.exp(-dt * 8));
+    g.light.spot = lerp(g.light.spot, on ? 4.6 : 0, 1 - Math.exp(-dt * 8));
     let spotV = g.light.spot;
     if (g.light.flicker > 0) { g.light.flicker -= dt; spotV *= Math.random() < 0.55 ? 1 : 0.1; }
-    else if (on && Math.random() < dt * 0.25) g.light.flicker = 0.15; // 发电机不太稳，偶尔闪一下
+    else if (on && Math.random() < dt * 0.08) g.light.flicker = 0.12; // 发电机不太稳，偶尔闪一下
     L.ceilSpots.forEach((s) => (s.intensity = spotV));
-    R.shipLights.bulbM.emissiveIntensity = (spotV / 5) * 2.2;
-    L.hemi.intensity = lerp(L.hemi.intensity, 0.2 + (on ? 0.1 : 0) + nOpen * 0.03 + dawn * 0.05, kk);
-    g.scene.environmentIntensity = 0.06 + (on ? 0.05 : 0) + nOpen * 0.015;
+    R.shipLights.bulbM.emissiveIntensity = (spotV / 4.6) * 2.2;
+    L.hemi.intensity = lerp(L.hemi.intensity, 0.25 + (on ? 0.1 : 0) + nOpen * 0.03 + dawn * 0.05, kk);
+    g.scene.environmentIntensity = 0.08 + (on ? 0.05 : 0) + nOpen * 0.015;
     L.wc.intensity = 2.2 * (Math.sin(t * 13) > 0.96 ? 0.35 : 1);
     // ---- 电报台 ----
     const Rd = R.radio;

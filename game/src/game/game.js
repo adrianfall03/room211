@@ -4,6 +4,7 @@ import * as TX from '../core/textures.js';
 import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
 import { FX } from '../world/fx.js';
 import { CHAPTERS, LAST_CHAPTER } from './chapters.js';
+import { chapterLabel } from './chapternames.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight } from './doorway.js';
@@ -400,6 +401,7 @@ export class Game {
     this.ui.letterbox(false);
     this.ui.showHUD(true);
     if (this.input.isTouch) this.ui.showTouch(true);
+    this._touchUI = this.input.isTouch;
     this.auto = null;
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
@@ -465,6 +467,9 @@ export class Game {
     if (this.cine) this._updateCine(dt);
     this._updateHover();
     this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine);
+    // 触屏：游戏里播小过场（凑到舷窗前、看望远镜……）的时候，摇杆和按钮先收起来，不挡画面
+    const touchUI = inp.isTouch && !this.cine;
+    if (touchUI !== this._touchUI) { this._touchUI = touchUI; this.ui.showTouch(touchUI); }
     this._refreshHUD();
     this._storyEvents();
     if (this.CH && this.CH.update && !this.paused) this.CH.update(this, dt);
@@ -495,6 +500,8 @@ export class Game {
     }
     if (force || this._invDirty) {
       this._invDirty = false;
+      // 触屏的"手电"按钮只在身上真有手电的时候出现（第一章找到紫光手电以后、第四章的手电筒）
+      document.body.classList.toggle('has-torch', S.inv.includes('uv'));
       const IT = this._items();
       const items = S.inv.map((id) => ({ id, ...IT[id], desc: this._fill(IT[id].desc) }));
       this.ui.setInventory(items, { onClick: (it) => this.useItem(it.id), activeId: S.uvOn ? 'uv' : null, newId: S.newItem });
@@ -1523,6 +1530,8 @@ export class Game {
     this.ctrl.float = 0; this.ctrl.pos.y = 0;
     this.audio.stepKind = null; // 船舱的积水、地铁的碎石子：脚步声换回普通的
     this.camera.up.set(0, 1, 0);
+    // 船舱里人跟着船歪（绕 x / z 轴的倾斜），控制器每帧只重设朝向（y），歪的那一点不清掉就会一直带到后面几章
+    this.ch.root.rotation.set(0, this.ch.root.rotation.y, 0);
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
@@ -1585,11 +1594,10 @@ export class Game {
     const admireBtn = fin ? '<button class="btn" data-a="admire">🎖️ 留下来欣赏</button>' : '';
     let node;
     if (secret) {
-      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>${chapterLabel(r.n)}</span></div>`).join('');
       const [A] = S.mates;
       node = this.ui.panel(`
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
@@ -1605,7 +1613,6 @@ export class Game {
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
     } else {
-      const chName = ['', '211 宿舍', '废弃的 211', '船舱 211', '地铁 211', '雨林 211', '冰封 211', '太空舱 211'];
       const runs = S.done;
       const hints = runs.reduce((a, r) => a + r.hints, 0);
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
@@ -1617,7 +1624,7 @@ export class Game {
       else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
       const achHtml = ACH.map(([k, n, d]) => `<span class="${S.ach.has(k) ? '' : 'off'}" title="${d}">${n}</span>`).join('');
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
-      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>第${'一二三四五六七'[r.n - 1]}章 · ${chName[r.n]}</span></div>`).join('');
+      const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>${chapterLabel(r.n)}</span></div>`).join('');
       node = this.ui.panel(`
         <h2>七个 211，全部逃脱！</h2>
         <div style="color:var(--muted)">一场梦醒来，${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>
@@ -1817,6 +1824,12 @@ export class Game {
     if (!c.to && c.t >= c.dur) this.cine = null;
   }
   _shake(a) { this._shakeT = 0.5; this._shakeA = a; }
+  // 特写镜头的视野：横屏照原样；竖屏手机上水平方向太窄，按"水平方向至少看到这么多度"反推竖直的 fov
+  zoomFov(deg) {
+    const a = this.camera.aspect;
+    if (a >= 1) return deg;
+    return Math.min(90, (2 * Math.atan(Math.tan((deg * Math.PI) / 360) / a) * 180) / Math.PI);
+  }
   _saveGameCam() {
     if (!this._gameCamPos) { this._gameCamPos = new THREE.Vector3(); this._gameCamLook = new THREE.Vector3(); }
     this._gameCamPos.copy(this.camera.position);

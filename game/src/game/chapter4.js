@@ -25,7 +25,7 @@ export const CH4 = {
   big: ['crate0', 'crate1', 'crate2', 'crate3', 'crate4', 'sandbags', 'dynamo', 'guitar', 'anomaly', 'metroMap'],
   torchPower: 3.4, // 手电筒比紫光手电亮得多
   items: {
-    uv: { icon: '🔦', name: '手电筒', desc: '一支老式手电筒，灯泡发黄。按 F 开关' },
+    uv: { icon: '🔦', name: '手电筒', desc: '一支老式手电筒，灯泡发黄。按 F（手机上点「手电」）开关' },
     geiger: { icon: '☢️', name: '盖革计数器', desc: '离"热"东西越近，咔哒声越密。点一下开关' },
     mask: { icon: '😷', name: '防毒面具', desc: '一只旧防毒面具。点一下戴上 / 摘下（得先装上新滤罐）' },
     filter: { icon: '🥫', name: '滤毒罐', desc: '一只新的滤毒罐，封条还没撕。拧到防毒面具上' },
@@ -71,6 +71,9 @@ export const CH4 = {
     this._vision = null; this._blackout = 0; this._ring = 0; this._ringT = 0; this._calls = []; this._callNew = null;
     this._ghostT = -1; this._alarmT = 0; this._arcT = 0; this._ratSeen = false; this._dropT = 6;
     g.give('uv', true);
+    // 两只灯泡一开始就亮着（一闪一闪的）：第一次试玩几乎全黑，开关还能关掉
+    S.f.lightsOn = true; S.f.bulbSeen = true;
+    R.switchRocker.rotation.x = -0.12;
     g.audio.stepKind = 'grit';
     g.audio.startTunnel();
     this._makeHud(g);
@@ -143,7 +146,7 @@ export const CH4 = {
   onPlay(g) {
     g.ui.toast('第四章 · 在滤网失效之前，逃出地铁 211', '', '🚇');
     this._ring = 1; this._ringT = 0.5;
-    g.after(1.2, () => g.ui.subtitle('电话还在响……先接电话。（手电筒在身上，按 F 打开）', 3.6, g.S.name));
+    g.after(1.2, () => g.ui.subtitle(`电话还在响……先接电话。（手电筒在身上，${g.input.isTouch ? '点右下角的「手电」' : '按 F'}打开）`, 3.6, g.S.name));
   },
   exitLine: () => '走！趁着列车还没开过来……',
   onDoorOpen(g) { g.audio.ghostTrain(4); },
@@ -418,7 +421,8 @@ export const CH4 = {
     this._look = true;
     const cam = g.camera, tp = R.platform.tally.mesh.getWorldPosition(V());
     g._cineTo(V(tp.x * 0.5, 1.62, -3.05), tp, 1.2);
-    g.tween(1.2, (k) => { cam.fov = lerp(62, 34, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    const zf = g.zoomFov(34);
+    g.tween(1.2, (k) => { cam.fov = lerp(62, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     const n = S.digits[1];
     if (first || !S.found[1]) {
       g.after(1.0, () => g.ui.subtitle('站台的灯亮了……那节老车厢的车身上，有人用粉笔画了"正"字！', 3.2, S.name));
@@ -434,7 +438,8 @@ export const CH4 = {
   },
   _endLook(g) {
     const cam = g.camera;
-    g.tween(0.9, (k) => { cam.fov = lerp(34, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
+    const f0 = cam.fov;
+    g.tween(0.9, (k) => { cam.fov = lerp(f0, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
     g._cineTo(null, null, 1.0);
     g.after(1.0, () => { this._look = false; });
   },
@@ -580,6 +585,13 @@ export const CH4 = {
     }
     // 毒气间：不戴面具进不去（咳嗽、退出来）
     const inGas = pos.z > LAYOUT_SZ + 0.14;
+    // 鉴赏模式没有谜题：走进毒气间时顺手把门边的面具戴上（不然这就又成了一把"锁"）
+    if (inGas && !this._masked && S.view) {
+      if (!S.inv.includes('mask')) { g.give('mask', true); R.gasmaskObj.visible = false; }
+      S.f.maskReady = true;
+      this.toggleMask(g);
+      g.say('（顺手戴上了门边那只防毒面具）', 2.4);
+    }
     if (inGas && !this._masked) {
       this._coughT -= dt;
       if (this._coughT <= 0) {
@@ -629,25 +641,25 @@ export const CH4 = {
     L.winLight.intensity = 0.06 + K * 0.7 + gpass * 1.2;
     // ---- 屋里的灯：开关控制，电压不稳 ----
     const on = (S && S.f.lightsOn) || g.lightMode === 'end';
-    g.light.spot = lerp(g.light.spot, on ? 3.2 : 0, 1 - Math.exp(-dt * 8));
+    g.light.spot = lerp(g.light.spot, on ? 3.6 : 0, 1 - Math.exp(-dt * 8));
     let spotV = g.light.spot * dark;
     if (g.light.flicker > 0) { g.light.flicker -= dt; spotV *= Math.random() < 0.5 ? 1 : 0.08; }
-    else if (on && Math.random() < dt * 0.4) g.light.flicker = 0.2;
+    else if (on && Math.random() < dt * 0.12) g.light.flicker = 0.18;
     L.ceilSpots.forEach((s) => (s.intensity = spotV));
-    ML.bulbM.emissiveIntensity = (spotV / 3.2) * 2.4;
+    ML.bulbM.emissiveIntensity = (spotV / 3.6) * 2.4;
     // 红色应急灯（报警的时候一闪一闪）
     if (this._alarmT > 0) this._alarmT -= dt;
-    const red = this._alarmT > 0 ? (Math.sin(t * 12) > 0 ? 1.8 : 0.1) : 0.9 + Math.sin(t * 1.3) * 0.05;
+    const red = this._alarmT > 0 ? (Math.sin(t * 12) > 0 ? 2.2 : 0.1) : 1.25 + Math.sin(t * 1.3) * 0.06;
     ML.redLight.intensity = red * dark;
     ML.redM.emissiveIntensity = 2.2 * red * (0.3 + dark * 0.7);
     // 蜡烛、煤油灯
     const fl = 0.85 + Math.sin(t * 11) * 0.06 + Math.sin(t * 23 + 1) * 0.05 + (Math.random() - 0.5) * 0.06;
-    R.shrine.light.intensity = 1.0 * fl * dark;
+    R.shrine.light.intensity = 1.6 * fl * dark;
     R.shrine.candles.forEach((c, i) => c.scale.set(1, (2.2 + Math.sin(t * 13 + i * 1.7) * 0.3) * dark + 0.01, 1));
-    L.monLight.intensity = 1.0 * fl * dark;
+    L.monLight.intensity = 1.5 * fl * dark;
     ML.klFlame.scale.set(1, 2.2 * fl * dark + 0.01, 1);
-    L.hemi.intensity = lerp(L.hemi.intensity, (0.16 + K * 0.08 + (on ? 0.06 : 0)) * (0.3 + dark * 0.7), kk);
-    g.scene.environmentIntensity = 0.05 + K * 0.03 + (on ? 0.03 : 0);
+    L.hemi.intensity = lerp(L.hemi.intensity, (0.24 + K * 0.08 + (on ? 0.08 : 0)) * (0.3 + dark * 0.7), kk);
+    g.scene.environmentIntensity = (0.07 + K * 0.03 + (on ? 0.04 : 0)) * (0.4 + dark * 0.6);
     // ---- 毒气间：绿雾慢慢飘，灯发绿、一闪一闪；"异常"噼啪放电 ----
     const A = R.anomaly;
     A.fogs.forEach((s, i) => { const b = s.userData.base; s.position.set(b.x + Math.sin(t * 0.2 + s.userData.ph) * 0.3, b.y + Math.sin(t * 0.13 + i) * 0.1, b.z + Math.cos(t * 0.17 + s.userData.ph) * 0.2); s.material.rotation = t * 0.05 * (i % 2 ? 1 : -1); });

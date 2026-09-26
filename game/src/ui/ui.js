@@ -1,4 +1,5 @@
 // HUD 与各种弹窗界面
+import { chapterLabel, chapterNum } from '../game/chapternames.js';
 import './style.css';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -69,7 +70,6 @@ export class UI {
   // 标题：只有"游戏模式""鉴赏模式"两个按钮，都从第一章开始；
   // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩
   showTitle({ onStart, lastChapter = 1 }) {
-    const chNames = ['', '211 宿舍', '废弃的 211', '雨林 211', '冰封 211', '太空舱 211'];
     const t = h('div');
     t.id = 'title';
     t.innerHTML = `
@@ -80,8 +80,8 @@ export class UI {
           <button data-a="view">鉴赏模式</button>
         </div>
         <div class="t-menu t-resume hidden">
-          <p>上次玩到第${'一二三四五'[lastChapter - 1] || lastChapter}章 · ${chNames[lastChapter] || ''}</p>
-          <button data-a="resume">从第${'一二三四五'[lastChapter - 1] || lastChapter}章继续</button>
+          <p>上次玩到${chapterLabel(lastChapter)}</p>
+          <button data-a="resume">从${chapterNum(lastChapter)}继续</button>
           <button data-a="restart">从第一章开始</button>
           <button data-a="back" class="t-back">返回</button>
         </div>
