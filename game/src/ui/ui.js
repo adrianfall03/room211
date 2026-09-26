@@ -130,7 +130,7 @@ export class UI {
       b.addEventListener('mousedown', on); b.addEventListener('mouseup', off); b.addEventListener('mouseleave', off);
     });
   }
-  // 失重（第五章）：触屏按钮和键位提示换成上浮 / 下沉
+  // 失重（第七章）：触屏按钮和键位提示换成上浮 / 下沉
   setZeroG(v) { document.body.classList.toggle('zero-g', !!v); }
   setClock(time, sub) {
     this.el.ct.textContent = time;
@@ -141,7 +141,7 @@ export class UI {
   setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
-    document.body.classList.remove('theme-ruin', 'theme-jungle', 'theme-frost', 'theme-space', 'theme-finale');
+    document.body.classList.remove('theme-ruin', 'theme-ship', 'theme-metro', 'theme-jungle', 'theme-frost', 'theme-space', 'theme-finale');
     if (theme !== 'normal') document.body.classList.add(`theme-${theme}`);
   }
   setCodes(digits, found, icons = null) {

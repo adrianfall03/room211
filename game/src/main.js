@@ -18,6 +18,8 @@ import { CollisionWorld } from './core/collision.js';
 import { nextFrame } from './core/util.js';
 import { buildDorm } from './world/dorm.js';
 import { buildRuinTextures, decorateRuin } from './world/ruin.js';
+import { buildShipTextures, decorateShip, buildShipOutside } from './world/ship.js';
+import { buildMetroTextures, decorateMetro, buildMetroOutside } from './world/metro.js';
 import { buildJungleTextures, decorateJungle } from './world/jungle.js';
 import { buildFrostTextures, decorateFrost } from './world/frost.js';
 import { buildSpaceTextures, decorateSpace, buildSpaceOutside } from './world/space.js';
@@ -38,6 +40,8 @@ const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invert
 try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}')); } catch (e) { /* 忽略 */ }
 // 存档升级：原来的第四章（太空舱）挪到了第五章，中间插进来一章「冰封 211」——以前打到第四章的，第四、五章都算解锁
 if ((settings.v || 1) < 2) { if (settings.unlocked >= 4) settings.unlocked += 1; if (settings.chapter >= 4) settings.chapter += 1; settings.v = 2; }
+// 第二次升级：第二章和雨林之间又插进来两章（船舱 211、地铁 211）——雨林 / 冰封 / 太空舱各往后挪两章，解锁进度跟着挪
+if (settings.v < 3) { if (settings.unlocked >= 3) settings.unlocked += 2; if (settings.chapter >= 3) settings.chapter += 2; settings.v = 3; }
 const saveSettings = () => { try { localStorage.setItem('dorm404', JSON.stringify(settings)); } catch (e) { /* 忽略 */ } };
 
 // ---------- 渲染 ----------
@@ -153,9 +157,9 @@ class Gfx {
   setTheme(theme, instant = false) {
     this.theme = theme;
     this.grade.set(theme, instant);
-    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], jungle: [0.3, 0.45, 0.86], frost: [0.34, 0.5, 0.85], space: [0.28, 0.42, 0.88], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
+    const b = { normal: [0.22, 0.45, 0.93], ruin: [0.3, 0.5, 0.88], ship: [0.3, 0.45, 0.86], metro: [0.36, 0.5, 0.84], jungle: [0.3, 0.45, 0.86], frost: [0.34, 0.5, 0.85], space: [0.28, 0.42, 0.88], finale: [0.28, 0.5, 0.9] }[theme] || [0.22, 0.45, 0.93];
     this.bloom.strength = b[0]; this.bloom.radius = b[1]; this.bloom.threshold = b[2];
-    this.renderer.toneMappingExposure = { jungle: 1.15, frost: 1.12, space: 1.12, finale: 1.1 }[theme] || 1.05;
+    this.renderer.toneMappingExposure = { ship: 1.12, metro: 1.14, jungle: 1.15, frost: 1.12, space: 1.12, finale: 1.1 }[theme] || 1.05;
     this.setQuality(this.quality);
   }
   setQuality(q) {
@@ -301,10 +305,12 @@ async function boot() {
       m.post = (v) => { ch.J.neck.visible = v; };
     }
   };
-  // 五个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
+  // 七个章节共用一套布局，换章时整个宿舍拆掉重建成另一种画风
   const THEMES = {
     normal: { tex: () => T, decorate: null },
     ruin: { tex: () => buildRuinTextures(T), decorate: decorateRuin },
+    ship: { tex: () => buildShipTextures(T), decorate: decorateShip, outside: buildShipOutside },
+    metro: { tex: () => buildMetroTextures(T), decorate: decorateMetro, outside: buildMetroOutside },
     jungle: { tex: () => buildJungleTextures(T), decorate: decorateJungle },
     frost: { tex: () => buildFrostTextures(T), decorate: decorateFrost },
     space: { tex: () => buildSpaceTextures(T), decorate: decorateSpace, outside: buildSpaceOutside },

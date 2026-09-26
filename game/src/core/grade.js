@@ -112,6 +112,10 @@ const GradeShader = {
 export const GRADES = {
   normal: { saturation: 1, contrast: 1, brightness: 0, tint: [1, 1, 1], sepia: 0, vignette: 0, grain: 0, scratch: 0, aberration: 0 },
   ruin: { saturation: 0.72, contrast: 1.08, brightness: -0.015, tint: [1.04, 0.97, 0.86], sepia: 0.32, vignette: 0.55, grain: 0.07, scratch: 1, aberration: 0.0025 },
+  // 船舱：凌晨的海上——暗部压成深青、亮部（马灯、电子管）偏琥珀，压饱和，胶片颗粒 + 重暗角
+  ship: { saturation: 0.82, contrast: 1.12, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.6, grain: 0.05, scratch: 0, aberration: 0.0012, lowTint: [0.84, 0.98, 1.06], highTint: [1.08, 1.0, 0.86] },
+  // 地铁：地下六十米——暗部发绿发黑、亮部（钠灯、烛光）偏脏橙，饱和压得很低，颗粒重、暗角重（《地铁》那种调子）
+  metro: { saturation: 0.72, contrast: 1.16, brightness: -0.015, tint: [1, 1, 1], sepia: 0, vignette: 0.66, grain: 0.065, scratch: 0, aberration: 0.0016, lowTint: [0.9, 1.02, 0.94], highTint: [1.1, 0.98, 0.82] },
   // 雨林：暴雨夜——暗部偏青绿、亮部（钨丝灯、马灯）偏琥珀，压饱和，胶片颗粒 + 较重的暗角
   jungle: { saturation: 0.86, contrast: 1.12, brightness: -0.01, tint: [1, 1, 1], sepia: 0, vignette: 0.58, grain: 0.055, scratch: 0, aberration: 0.0012, lowTint: [0.88, 1.03, 1.0], highTint: [1.08, 1.0, 0.86] },
   // 冰封 211：暴风雪夜——暗部压成冷蓝、亮部（炉火、熔炉的光）偏橘，压饱和，胶片颗粒 + 重暗角（《冰汽时代》那种冷暖对撞）
@@ -129,6 +133,8 @@ const NEUTRAL3 = [1, 1, 1];
 export const CSS_GRADES = {
   normal: '',
   ruin: 'sepia(0.38) saturate(0.8) contrast(1.08)',
+  ship: 'saturate(0.82) contrast(1.12) brightness(0.95)',
+  metro: 'saturate(0.72) contrast(1.16) brightness(0.94) sepia(0.12)',
   jungle: 'saturate(0.86) contrast(1.12) brightness(0.96)',
   frost: 'saturate(0.78) contrast(1.13) brightness(0.95) hue-rotate(-6deg)',
   space: 'saturate(0.88) contrast(1.1) brightness(0.97)',

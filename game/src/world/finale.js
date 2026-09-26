@@ -4,7 +4,7 @@
 //   · 树是一根根树枝 + 几千片会随风轻轻晃的叶片贴片；远处一圈林带被晨雾染淡
 //   · 看台是铝合金的；观众是实例化的人（衣服、帽子、墨镜、小旗子），挥手、鼓掌、跳起来欢呼
 //   · 红毯两边是金色立柱和天鹅绒拦绳，尽头两名仪仗兵立正；场景里所有的字都是英文
-//   主角在红毯另一头的新兵候场区里坐着睡着了——五个 211 全是一场梦，被教官一嗓子喊醒。
+//   主角在红毯另一头的新兵候场区里坐着睡着了——七个 211 全是一场梦，被教官一嗓子喊醒。
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
