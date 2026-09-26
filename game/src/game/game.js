@@ -1523,6 +1523,8 @@ export class Game {
     this.ctrl.float = 0; this.ctrl.pos.y = 0;
     this.audio.stepKind = null; // 船舱的积水、地铁的碎石子：脚步声换回普通的
     this.camera.up.set(0, 1, 0);
+    // 船舱里人跟着船歪（绕 x / z 轴的倾斜），控制器每帧只重设朝向（y），歪的那一点不清掉就会一直带到后面几章
+    this.ch.root.rotation.set(0, this.ch.root.rotation.y, 0);
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
