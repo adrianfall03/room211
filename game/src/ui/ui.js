@@ -117,7 +117,7 @@ export class UI {
         const locked = mode === 'game' && i + 1 > unlocked;
         b.classList.toggle('on', i + 1 === chapter);
         b.classList.toggle('locked', locked);
-        $('small', b).textContent = locked ? '🔒 通关上一章解锁' : chNames[i];
+        $('small', b).textContent = locked ? '🔒 未解锁' : chNames[i];
       });
       $('#t-ch-label', t).textContent = mode === 'game' ? '章节（通关一章解锁一章）' : '章节（鉴赏模式随便选）';
       startBtn.textContent = mode === 'game' ? '开 始 逃 脱' : '开 始 鉴 赏';
