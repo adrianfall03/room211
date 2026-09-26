@@ -25,7 +25,7 @@ export const CH4 = {
   big: ['crate0', 'crate1', 'crate2', 'crate3', 'crate4', 'sandbags', 'dynamo', 'guitar', 'anomaly', 'metroMap'],
   torchPower: 3.4, // 手电筒比紫光手电亮得多
   items: {
-    uv: { icon: '🔦', name: '手电筒', desc: '一支老式手电筒，灯泡发黄。按 F 开关' },
+    uv: { icon: '🔦', name: '手电筒', desc: '一支老式手电筒，灯泡发黄。按 F（手机上点「手电」）开关' },
     geiger: { icon: '☢️', name: '盖革计数器', desc: '离"热"东西越近，咔哒声越密。点一下开关' },
     mask: { icon: '😷', name: '防毒面具', desc: '一只旧防毒面具。点一下戴上 / 摘下（得先装上新滤罐）' },
     filter: { icon: '🥫', name: '滤毒罐', desc: '一只新的滤毒罐，封条还没撕。拧到防毒面具上' },
@@ -146,7 +146,7 @@ export const CH4 = {
   onPlay(g) {
     g.ui.toast('第四章 · 在滤网失效之前，逃出地铁 211', '', '🚇');
     this._ring = 1; this._ringT = 0.5;
-    g.after(1.2, () => g.ui.subtitle('电话还在响……先接电话。（手电筒在身上，按 F 打开）', 3.6, g.S.name));
+    g.after(1.2, () => g.ui.subtitle(`电话还在响……先接电话。（手电筒在身上，${g.input.isTouch ? '点右下角的「手电」' : '按 F'}打开）`, 3.6, g.S.name));
   },
   exitLine: () => '走！趁着列车还没开过来……',
   onDoorOpen(g) { g.audio.ghostTrain(4); },
@@ -421,7 +421,8 @@ export const CH4 = {
     this._look = true;
     const cam = g.camera, tp = R.platform.tally.mesh.getWorldPosition(V());
     g._cineTo(V(tp.x * 0.5, 1.62, -3.05), tp, 1.2);
-    g.tween(1.2, (k) => { cam.fov = lerp(62, 34, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    const zf = g.zoomFov(34);
+    g.tween(1.2, (k) => { cam.fov = lerp(62, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     const n = S.digits[1];
     if (first || !S.found[1]) {
       g.after(1.0, () => g.ui.subtitle('站台的灯亮了……那节老车厢的车身上，有人用粉笔画了"正"字！', 3.2, S.name));
@@ -437,7 +438,8 @@ export const CH4 = {
   },
   _endLook(g) {
     const cam = g.camera;
-    g.tween(0.9, (k) => { cam.fov = lerp(34, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
+    const f0 = cam.fov;
+    g.tween(0.9, (k) => { cam.fov = lerp(f0, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
     g._cineTo(null, null, 1.0);
     g.after(1.0, () => { this._look = false; });
   },

@@ -363,7 +363,7 @@ async function boot() {
   } catch (e) { /* 忽略 */ }
   gfx.render();
 
-  if (input.isTouch) { input.bindTouch(document.getElementById('stick'), document.querySelector('#stick i')); ui.bindTouchButtons(input); }
+  if (input.isTouch) { input.bindTouch(document.getElementById('stick'), document.querySelector('#stick i')); ui.bindTouchButtons(input); document.body.classList.add('is-touch'); }
 
   ui.loading(1, '准备就绪');
   await nextFrame();

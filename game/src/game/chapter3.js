@@ -355,8 +355,11 @@ export const CH3 = {
     const cam = g.camera, fov0 = 62;
     const eye = V(P.px, 1.74, -2.94);
     if (this._whale === 1) { this.whaleShow(g, P, eye); return; }
-    g._cineTo(eye, LIGHTHOUSE.clone(), 1.2);
-    g.tween(1.2, (k) => { cam.fov = lerp(fov0, 44, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    // 看的方向：舷窗正前方和灯塔之间（竖屏手机视野窄，直接对着灯塔会把舷窗挤到画面角落里）
+    const toLh = LIGHTHOUSE.clone().sub(eye).normalize(), look = eye.clone().add(toLh.lerp(V(0, 0, -1), cam.aspect < 1 ? 0.55 : 0.2).normalize().multiplyScalar(20));
+    const zf = g.zoomFov(44);
+    g._cineTo(eye, look, 1.2);
+    g.tween(1.2, (k) => { cam.fov = lerp(fov0, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     const N = S.digits[0];
     if (first || !S.found[0]) {
       g.after(0.9, () => g.ui.subtitle('月光下的海……北边的海上有一座灯塔！', 2.6, S.name));
@@ -371,7 +374,8 @@ export const CH3 = {
   },
   _endLook(g) {
     const cam = g.camera;
-    g.tween(0.9, (k) => { cam.fov = lerp(44, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
+    const f0 = cam.fov;
+    g.tween(0.9, (k) => { cam.fov = lerp(f0, 62, k); cam.updateProjectionMatrix(); }, { ease: easeInOut, done: () => { cam.fov = 62; cam.updateProjectionMatrix(); } });
     g._cineTo(null, null, 1.0);
     g.after(1.0, () => { this._look = false; });
   },
@@ -382,7 +386,8 @@ export const CH3 = {
     // 鲸从舷窗正前方偏右冲出来，往左边砸下去（舷窗能看见的只有正前方二十几度，弧线不能太高）
     const base = V(P.px + 2.2, -1.25, -19);
     g._cineTo(eye, V(P.px + 0.2, 2.3, -19), 1.0);
-    g.tween(1.0, (k) => { cam.fov = lerp(62, 50, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
+    const zf = g.zoomFov(50);
+    g.tween(1.0, (k) => { cam.fov = lerp(62, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
     W.root.visible = true;
     const T = 6.2;
     g.audio.whaleSong();

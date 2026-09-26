@@ -401,6 +401,7 @@ export class Game {
     this.ui.letterbox(false);
     this.ui.showHUD(true);
     if (this.input.isTouch) this.ui.showTouch(true);
+    this._touchUI = this.input.isTouch;
     this.auto = null;
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
@@ -466,6 +467,9 @@ export class Game {
     if (this.cine) this._updateCine(dt);
     this._updateHover();
     this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine);
+    // 触屏：游戏里播小过场（凑到舷窗前、看望远镜……）的时候，摇杆和按钮先收起来，不挡画面
+    const touchUI = inp.isTouch && !this.cine;
+    if (touchUI !== this._touchUI) { this._touchUI = touchUI; this.ui.showTouch(touchUI); }
     this._refreshHUD();
     this._storyEvents();
     if (this.CH && this.CH.update && !this.paused) this.CH.update(this, dt);
@@ -496,6 +500,8 @@ export class Game {
     }
     if (force || this._invDirty) {
       this._invDirty = false;
+      // 触屏的"手电"按钮只在身上真有手电的时候出现（第一章找到紫光手电以后、第四章的手电筒）
+      document.body.classList.toggle('has-torch', S.inv.includes('uv'));
       const IT = this._items();
       const items = S.inv.map((id) => ({ id, ...IT[id], desc: this._fill(IT[id].desc) }));
       this.ui.setInventory(items, { onClick: (it) => this.useItem(it.id), activeId: S.uvOn ? 'uv' : null, newId: S.newItem });
@@ -1818,6 +1824,12 @@ export class Game {
     if (!c.to && c.t >= c.dur) this.cine = null;
   }
   _shake(a) { this._shakeT = 0.5; this._shakeA = a; }
+  // 特写镜头的视野：横屏照原样；竖屏手机上水平方向太窄，按"水平方向至少看到这么多度"反推竖直的 fov
+  zoomFov(deg) {
+    const a = this.camera.aspect;
+    if (a >= 1) return deg;
+    return Math.min(90, (2 * Math.atan(Math.tan((deg * Math.PI) / 360) / a) * 180) / Math.PI);
+  }
   _saveGameCam() {
     if (!this._gameCamPos) { this._gameCamPos = new THREE.Vector3(); this._gameCamLook = new THREE.Vector3(); }
     this._gameCamPos.copy(this.camera.position);
