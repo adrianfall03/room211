@@ -467,6 +467,10 @@ export function decorateRuin(ctx) {
     radio.add(mesh(new THREE.PlaneGeometry(0.3, 0.17), new THREE.MeshStandardMaterial({ map: grille, roughness: 0.8 }), { y: 0.095, z: 0.061, cast: false }));
     for (const x of [0.08, 0.13]) radio.add(mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.012, 12), std('#2a1a10', 0.5), { x, y: 0.04, z: 0.064, rx: Math.PI / 2 }));
     radio.add(mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.3, 5), std('#aaa', 0.3, 0.8), { x: 0.12, y: 0.32, rz: -0.4 }));
+    // 刻度盘后面的小灯：通了电才亮（第二章要用它收整点报时）
+    const dial = new THREE.MeshBasicMaterial({ color: '#ffb45a', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    radio.add(mesh(new THREE.PlaneGeometry(0.094, 0.05), dial, { x: 0.084, y: 0.103, z: 0.0625, cast: false, recv: false }));
+    radio.userData.dial = dial;
     ADD(radio);
     mark('radio', radio);
     refs.radio = radio;

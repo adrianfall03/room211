@@ -220,6 +220,7 @@ function buildCity(P, rnd) {
       const th = (i / n) * Math.PI * 2 + k * 0.37 + (rnd() - 0.5) * 0.04;
       const p = V(GEN.x + Math.sin(th) * (R + (rnd() - 0.5) * 0.8), y, GEN.z + Math.cos(th) * (R + (rnd() - 0.5) * 0.8));
       if (p.z > -6 || p.distanceTo(cam) > 57) continue;
+      if (Math.abs(p.x - GEN.x) < 2.6 && p.z > GEN.z + 6) continue; // 正对着窗户留出一条通到熔炉脚下的大路（第六章"领路"的路灯就排在路两边）
       huts.push({ p, ry: th + (rnd() - 0.5) * 0.3, s: 0.8 + rnd() * 0.5 });
       if (rnd() < 0.72) {
         const to = cam.clone().sub(p).setY(0).normalize();
@@ -329,7 +330,8 @@ function buildCity(P, rnd) {
       pivot.rotation.x = Math.PI / 2 - 0.3;
     }
     addGlow(V(x, y0 + 8.1, z), 2.4, '#fff0d0', 0.9);
-    beams.push({ head, ph });
+    // 对着我们这栋楼（窗户在 z≈-3.6）的方向：第六章请熔炉"亮一条路"之后，两道光柱都转过来照着楼下
+    beams.push({ head, ph, toHouse: Math.atan2(x, z + 3.6) });
   }
   // 我们楼外面：一根裹着雪的大蒸汽管、窗外的路灯
   const pipeM = basic({ color: new THREE.Color(0.14, 0.13, 0.13) });
@@ -338,6 +340,23 @@ function buildCity(P, rnd) {
   city.add(mesh(new THREE.CylinderGeometry(0.36, 0.36, 30, 16, 1, false, -Math.PI / 2 + 0.6, Math.PI - 1.2), snowTopM, { x: 0, y: -3.18, z: -7.5, rz: Math.PI / 2, cast: false, recv: false }));
   city.add(mesh(new THREE.CylinderGeometry(0.07, 0.09, 6, 8), pipeM, { x: -3.2, y: -3.6, z: -9.5, cast: false, recv: false }));
   addGlow(V(-3.2, -0.5, -9.4), 2.6, '#ffc890', 0.9);
+  // 第六章"领路"：顺着大坑一层层的台地，从熔炉脚下一直排到我们楼下的两列路灯——平时是灭的，
+  // 熔炉调度批了领路申请以后，从熔炉那头一对一对地亮到楼下
+  const pathLamps = [];
+  const poleM = basic({ color: new THREE.Color(0.08, 0.08, 0.09) });
+  const poolM = new THREE.MeshBasicMaterial({ map: glowTex, color: new THREE.Color(1.0, 0.72, 0.42), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false });
+  for (let k = 0; k <= 4; k++) {
+    const { R, y } = RING(k);
+    for (const s of [-1, 1]) {
+      const r = R - 0.4, x = GEN.x + s * 1.35, z = GEN.z + Math.sqrt(r * r - 1.35 * 1.35);
+      city.add(mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.5, 6), poleM, { x, y: y + 0.75, z, cast: false, recv: false }));
+      const glow = addGlow(V(x, y + 1.55, z), 1.3 + k * 0.1, '#ffc890', 0);
+      const pool = mesh(new THREE.PlaneGeometry(2.6, 2.6), poolM.clone(), { x, y: y + 0.04, z, rx: -Math.PI / 2, cast: false, recv: false });
+      city.add(pool);
+      pathLamps.push({ glow, pool, k, ph: k * 1.7 + s });
+    }
+  }
+  let pathT = 0;
   // 几层风雪的"雾墙"：离得越远越被吞掉
   const hazeTex = (() => { const c = TX.makeCanvas(8, 128), x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 0, 128); g.addColorStop(0, 'rgba(60,70,88,0.0)'); g.addColorStop(0.4, 'rgba(70,80,98,0.5)'); g.addColorStop(1, 'rgba(40,46,58,0.75)'); x.fillStyle = g; x.fillRect(0, 0, 8, 128); return TX.toTex(c, { wrap: false }); })();
   const hazes = [];
@@ -349,8 +368,8 @@ function buildCity(P, rnd) {
   P(city);
   return {
     city, setLamps, coreGlow, crownGlow, vents, hotM, smoke, beams, crownLamps, hazes,
-    // 城市的呼吸：烟、探照灯、护栏灯；overdrive 0..1 熔炉超载
-    update(dt, t, overdrive = 0) {
+    // 城市的呼吸：烟、探照灯、护栏灯；overdrive 0..1 熔炉超载；guide 0..1 探照灯转过来给 211 照路
+    update(dt, t, overdrive = 0, guide = 0) {
       const flick = 0.92 + Math.sin(t * 3.1) * 0.04 + Math.sin(t * 7.3) * 0.03;
       coreGlow.material.opacity = (0.5 + overdrive * 0.5) * flick;
       coreGlow.scale.setScalar(15 + overdrive * 6);
@@ -365,7 +384,20 @@ function buildCity(P, rnd) {
         s.s.material.opacity = Math.sin(Math.min(1, k * 4) * Math.PI / 2) * (1 - k) * (0.75 + overdrive * 0.2);
         s.s.material.color.setRGB(0.22 + (1 - k) * 0.2 * (1 + overdrive), 0.2 + (1 - k) * 0.12, 0.22);
       }
-      for (const b of beams) b.head.rotation.y = Math.sin(t * 0.23 + b.ph) * 1.1 + b.ph;
+      // 领路的路灯：从熔炉那头往我们这边，一盏接一盏地亮
+      if (guide > 0.05) pathT += dt; else pathT = 0;
+      for (const [i, L] of pathLamps.entries()) {
+        const on = Math.min(1, Math.max(0, (pathT - L.k * 0.55) / 0.3));
+        const fl = 0.9 + Math.sin(t * 5 + L.ph) * 0.05;
+        L.glow.material.opacity = on * 0.95 * fl;
+        L.pool.material.opacity = on * 0.55 * fl;
+      }
+      for (const b of beams) {
+        const sweep = Math.sin(t * 0.23 + b.ph) * 1.1 + b.ph;
+        let d = (b.toHouse + Math.sin(t * 0.4 + b.ph) * 0.05 - sweep) % (Math.PI * 2);
+        if (d > Math.PI) d -= Math.PI * 2; else if (d < -Math.PI) d += Math.PI * 2;
+        b.head.rotation.y = sweep + d * guide;
+      }
       crownMat.opacity = 0.8 + Math.sin(t * 2) * 0.1 + overdrive * 0.2;
     },
   };
@@ -894,7 +926,7 @@ export function decorateFrost(ctx) {
   // ===== 16. 每帧：窗外的城市、雪、冰花背后的光、冰柱化、炉火 =====
   refs.updaters.push((dt, t) => {
     for (const s of refs.snow) s.U.time.value = t;
-    city.update(dt, t, F.overdrive || 0);
+    city.update(dt, t, F.overdrive || 0, F.guide || 0);
     // 冰花背后透过来的熔炉光：窗户擦干净之后就没有了（不然隔着玻璃看出去一片橘红）
     backGlow.material.opacity = (0.4 + (F.overdrive || 0) * 0.4) * (0.92 + Math.sin(t * 3) * 0.05) * refs.windowFrost.glowK;
     backGlow.visible = refs.windowFrost.glowK > 0.01;

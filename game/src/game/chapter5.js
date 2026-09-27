@@ -1,8 +1,9 @@
 // 第五章（原第三章）：雨林 211（晚上 22:30，外面下着大暴雨，宿舍像是长在一棵大树的树洞底下；宿管阿姨时不时广播催熄灯）
-//   门上缠着藤的铁链挂着一把老铜锁，三个转轮分别刻着 🐔🐴🐵：
-//   🐔 两只鸡沉迷打游戏 → 关掉桌下的插线板，鸡毛满天飞，气急败坏地报出数字
-//   🐴 三匹马躺床上刷手机 → 打开大灯，“啊我的眼睛！”
-//   🐵 照镜子的猴子想要个时尚单品 → 把凳子上的红白头盔送给它
+//   任务：熄灯前，让全宿舍都睡着。宿管阿姨发话了："哪个宿舍还有人没睡，整栋楼谁也别想出这个门"——
+//   有人没睡就推门出去，只会从洗手间的门里走回来。在梦里睡着，才能去下一层梦：
+//   🐔 两只鸡沉迷打游戏 → 关掉桌下的插线板，鸡毛满天飞，骂够了趴在键盘上睡着
+//   🐴 三匹马躺床上刷手机 → 打开大灯晃它们一下，"啊我的眼睛！"，手机放下了 → 再把灯关掉，睡着了
+//   🐵 照镜子的猴子想要个时尚单品 → 把凳子上的红白头盔送给它，心满意足，站着就睡着了
 import * as THREE from 'three';
 import { lerp, easeOutBack } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -13,7 +14,8 @@ const _p = V(), _c = new THREE.Color();
 export const CH5 = {
   n: 5, theme: 'jungle',
   title: '第五章 · 雨林 211', sub: '22:30 · 暴雨夜', tag: '第五章 · 雨林 211',
-  clock: [22, 30], lockName: '老铜锁', codeLen: 3, codeIcons: ['🐔', '🐴', '🐵'],
+  clock: [22, 30], lockName: '睡着了', codeLen: 3, codeIcons: ['🐔', '🐴', '🐵'],
+  taskName: '熄灯前，让全宿舍都睡着',
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['horseA', 'horseB', 'horseC'],
   items: {
@@ -21,7 +23,7 @@ export const CH5 = {
   },
 
   init(g) {
-    const R = g.refs, A = R.animals;
+    const R = g.refs, A = R.animals, S = g.S;
     for (const a of R.animalList) { a.fx = g.fx; a.audio = g.audio; }
     // 两只鸡的键盘 / 鼠标在它们自己坐标系里的位置
     const setHands = (ch, kbW, msW) => { ch.root.updateWorldMatrix(true, false); ch.kbLocal = ch.root.worldToLocal(kbW.clone()); ch.mouseLocal = ch.root.worldToLocal(msW.clone()); };
@@ -35,17 +37,16 @@ export const CH5 = {
     // 潮湿的空气：一层很淡的青绿色雾
     g.scene.fog = new THREE.FogExp2('#0f1613', 0.034);
     g.lightMode = 'game';
-    this._paT = 0;
+    this._paT = 0; this._snoreT = 3;
+    S.digits = ['💤', '💤', '💤']; // HUD 上三个格子：睡着一拨，亮一个
     // 暴雨声一直在；闪电之后按距离滚过一声雷；天花板的根上滴水
     g.audio.startRain();
     R.storm.onThunder = (dist, delay) => g.audio.thunder(dist, delay);
     R.drip.onDrip = () => { if (g.camera.position.distanceTo(_p.set(R.drip.x, 1.4, R.drip.z)) < 3.2) g.audio.drip(); };
   },
 
-  // 进门：人从门口的光里走进来，门在身后关上，铁链一节一节自己缠回门把手上，老铜锁"咔"地扣上；窗外一道闪电
+  // 进门：人从门口的光里走进来，门在身后关上；窗外一道闪电
   portal: 'light',
-  lockView: { cam: V(-0.9, 1.1, 3.25), look: V(-1.6, 0.68, 3.68) },
-  relockLine: '……锁链自己缠回去了？！又锁上了！',
   intro(g, { prepare }) {
     const A = g.refs.animals;
     if (prepare) { g.enterRoom({ prepare: true }); return; }
@@ -69,60 +70,60 @@ export const CH5 = {
     g.after(T + 13.8, () => g.beginPlay());
   },
   onSlam(g) { g.audio.thunder(0.6, 0.15); },
-  // 门锁：'hide' / 'anim'（铁链一节一节缠回去，铜锁弹出来）/ 'show'
-  relock(g, mode) {
-    const H = g.refs.vineLock, l = H.lock;
-    const vine = H.group.children.filter((c) => c !== H.links && c !== l);
-    H.dropped.visible = false;
-    l.scale.setScalar(1);
-    H.links.count = H.N;
-    for (const c of vine) c.visible = true;
-    if (mode === 'hide') { H.group.visible = false; g.collision.setEnabled('lockCable', false); return; }
-    H.group.visible = true; g.collision.setEnabled('lockCable', true);
-    if (mode !== 'anim') return;
-    l.scale.setScalar(0.001);
-    for (const c of vine) c.visible = false;
-    H.links.count = 1;
-    g.tween(0.5, (k) => { H.links.count = Math.max(1, Math.round(k * H.N)); }, { ease: (t) => t, done: () => { for (const c of vine) c.visible = true; } }).cut = true;
-    g.after(0.35, () => g.audio.chainDrop());
-    g.after(0.5, () => {
-      g.audio.clunk();
-      g.tween(0.3, (k) => l.scale.setScalar(Math.max(0.001, easeOutBack(k))), { ease: (t) => t }).cut = true;
-      g.fx.emit('dust', l.getWorldPosition(V()).add(V(0.1, 0.05, 0)), { count: 6, speed: 0.3, spread: 0.6, up: 0.4, gravity: -0.4, drag: 1, life: 1.2, size: 0.03, colors: ['#6a5238', '#8a7048'] });
-    });
-  },
   onPlay(g) {
-    g.ui.toast('第五章 · 趁着还没熄灯，逃出雨林 211', '', '🌧');
-    g.after(1.4, () => g.ui.subtitle('门上缠着一条长满藤的铁链，挂着一把老铜锁……先去门口看看。', 3.6, g.S.name));
+    g.ui.toast('第五章 · 熄灯前，让全宿舍都睡着', '', '🌧');
+    g.after(1.2, () => { g.audio.pa(); g.S.f.paRule = true; });
+    g.after(2.3, () => g.ui.subtitle('【宿管阿姨】23 点熄灯检查！哪个宿舍还有人没睡——整栋楼，谁也别想出这个门！', 4.6, '📢 宿管阿姨'));
+    g.after(7.3, () => g.ui.subtitle('……谁也别想出门？那得先把这一屋子鸡、马、猴哄睡着。', 3.4, g.S.name));
+    g.clue('pa', '宿管阿姨：23 点熄灯检查，<b>有人没睡</b>，整栋楼谁也别想出门。——得让打游戏的🐔、刷手机的🐴、照镜子的🐵都睡着。');
   },
-  exitLine: () => '谢谢大家！我先走一步啦！',
-  onDoorOpen(g) {
-    for (const a of g.refs.animalList) a.setState('cheer');
-    g.refs.storm.strike(1.2, 0.1);
-  },
-  onEnd(g) { for (const a of g.refs.animalList) a.setState('cheer'); },
+  exitLine: (g) => (g.S.f.taskDone ? '（小声）晚安，大家。' : '谢谢大家！我先走一步啦！'),
+  // 出门的时候别吵醒它们：只有窗外又一道闪电
+  onDoorOpen(g) { g.refs.storm.strike(1.2, 0.1); },
+  onEnd(g) { for (const a of g.refs.animalList) if (a.state !== 'sleep') a.setState('cheer'); },
 
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.triedDoor) return [{ text: '看看门上挂着的老铜锁', done: false }];
     return [
-      { text: '让打游戏的🐔停下来', done: F[0] },
-      { text: '让刷手机的🐴抬起头', done: F[1] },
-      { text: '让照镜子的🐵满意', done: F[2] },
-      { text: f.unlocked ? '出门！' : `打开老铜锁（${n}/3）`, done: false },
+      { text: `任务：熄灯前，让全宿舍都睡着 ${n}/3`, done: !!f.taskDone },
+      { text: '让打游戏的🐔睡觉', done: F[0] },
+      { text: '让刷手机的🐴睡觉', done: F[1] },
+      { text: '让照镜子的🐵睡觉', done: F[2] },
+      ...(f.taskDone ? [{ text: '出门（轻一点）', done: false }] : S.loops ? [{ text: '有人没睡，出门只会从洗手间走回来', done: false }] : []),
     ];
   },
   hint(g) {
     const S = g.S, f = S.f, F = S.found;
-    if (!f.triedDoor) return '去门口看看那把老铜锁，三个转轮上刻着鸡、马、猴。';
     if (!F[0]) return f.talkedChick ? '两只鸡的电脑插在书桌底下的插线板上……关掉它试试？' : '先去跟书桌前打游戏的两只鸡聊聊。';
-    if (!F[1]) return f.talkedHorse ? '屋里黑黢黢的，只有手机屏幕亮着……门边墙上有电灯开关。' : '床上躺着三匹刷手机的马，去跟它们说说话。';
+    if (!F[1]) {
+      if (f.horsesDown) return '马们把手机放下了——再把灯关掉，它们就能睡了。';
+      return f.talkedHorse ? '屋里黑黢黢的，只有手机屏幕亮着……门边墙上有电灯开关，开灯晃它们一下？' : '床上躺着三匹刷手机的马，去跟它们说说话。';
+    }
     if (!F[2]) {
       if (!f.talkedMonkey) return '穿衣镜前有只猴子在摆造型，跟它聊聊。';
       if (!S.inv.includes('helmet') && !f.gaveHelmet) return '猴子想要个酷炫的头盔——门边凳子上就有一顶红白头盔。';
       return '把红白头盔送给穿衣镜前的猴子。';
     }
-    return `密码凑齐了！去门口，按🐔🐴🐵的顺序输入：${S.digits.join('')}`;
+    return '全都睡着了！轻手轻脚地出门吧。';
+  },
+  loopLines(g, n) {
+    const S = g.S, left = ['🐔', '🐴', '🐵'].filter((_, i) => !S.found[i]).join('');
+    if (n === 1) return [['……又从洗手间走出来了？', 2.2], [`宿管阿姨说到做到：还有人没睡（${left}），谁也出不去。`, 3.4]];
+    if (n === 2) return [['在梦里……得先让它们都睡着？', 2.6]];
+    return [[`第 ${n} 次了……${left}还醒着。`, 2.6]];
+  },
+  // 一拨室友睡着了：HUD 上亮一格；三拨都睡着，宿管阿姨查完房，这一层梦就松开了
+  settle(g, i, text) {
+    const S = g.S;
+    if (S.found[i]) return;
+    S.found[i] = true;
+    g.audio.snore(0.8, [1.3, 0.8, 1.1][i]);
+    g.ui.toast(`${['🐔', '🐴', '🐵'][i]} 睡着了 · ${S.found.filter(Boolean).length}/3`, 'clue', '💤');
+    g.clue(`sleep${i}`, text);
+    if (S.found.every(Boolean)) {
+      g.after(2.4, () => { g.audio.pa(); g.after(1.1, () => g.ui.subtitle('……211？都睡了？好，熄灯检查通过。', 3.4, '📢 宿管阿姨')); });
+      g.completeTask('都睡着了……嘘。这一回，门外那片光应该会放我走了。', 6.2);
+    }
   },
   story(g, p) {
     const S = g.S;
@@ -204,17 +205,12 @@ export const CH5 = {
     // ---- 🐔 ----
     const talkChick = (a) => () => {
       const s = S();
-      a.talk(2.8);
-      g.audio.cluck(a === g.refs.animals.chickB ? 1.15 : 1);
-      if (s.found[0]) {
-        if (s.f.powerCut) g.ui.subtitle('咯咯咯！还不快把电插回去！！', 2.6, `${a.name}（鸡）`);
-        else g.ui.subtitle('咯咯哒！这把稳了！', 2.4, `${a.name}（鸡）`);
-        return;
-      }
+      if (!s.found[0]) { a.talk(2.8); g.audio.cluck(a === g.refs.animals.chickB ? 1.15 : 1); }
+      if (s.found[0]) { g.ui.subtitle(`（${a.name}趴在键盘上睡得直吐泡泡）`, 2.4, ''); return; }
       s.f.talkedChick = true;
-      const lines = ['别吵别吵！决赛圈！', '咯？门锁？打完这把再说！', 'BOSS 战！别挡着我屏幕！', '这把赢了我就告诉你……才怪！'];
+      const lines = ['别吵别吵！决赛圈！', '咯？睡觉？打完这把再说！', 'BOSS 战！别挡着我屏幕！', '熄灯？电脑不断电，本鸡就不睡！'];
       g.ui.subtitle(lines[(g._chickN = (g._chickN || 0) + 1) % lines.length], 2.6, `${a.name}（鸡）`);
-      g.clue('chick', '两只鸡沉迷打游戏，根本不理人……它们的电脑插在书桌底下的<b>插线板</b>上。');
+      g.clue('chick', '两只鸡沉迷打游戏，根本不睡……它们的电脑插在书桌底下的<b>插线板</b>上。');
     };
     H.chickA = { label: '咯咯（鸡）', verb: '聊天', reach: false, act: talkChick(g.refs.animals.chickA) };
     H.chickB = { label: '哒哒（鸡）', verb: '聊天', reach: false, act: talkChick(g.refs.animals.chickB) };
@@ -229,16 +225,14 @@ export const CH5 = {
     // ---- 🐴 ----
     const talkHorse = (a) => () => {
       const s = S();
+      if (s.found[1]) { g.ui.subtitle(`（${a.name}打着呼噜，后腿一抽一抽的）`, 2.4, ''); return; }
       a.talk(2.6);
-      if (s.found[1]) {
-        g.ui.subtitle(s.f.lightsOn ? '眼睛……眼睛要瞎了……快关灯……' : '嘿嘿，这条视频也好好笑。', 2.6, `${a.name}（马）`);
-        return;
-      }
+      if (s.f.horsesDown) { g.ui.subtitle(s.f.lightsOn ? '眼睛……眼睛要瞎了……快关灯……关了灯就睡……' : '嗯……困了……', 2.6, `${a.name}（马）`); return; }
       s.f.talkedHorse = true;
       g.audio.neigh();
-      const lines = ['嗯……（头都没抬）', '别吵，这条视频马上看完了。', '哈哈哈哈哈哈这只猴子好好笑……你说啥？', '再刷五分钟就睡……（已经说了三个小时）'];
+      const lines = ['嗯……（头都没抬）', '别吵，这条视频马上看完了。', '哈哈哈哈哈哈这只猴子好好笑……你说啥？', '再刷五分钟就睡……（已经说了三个小时）', '屋里这么黑，刷手机正好……除非有人突然开灯。'];
       g.ui.subtitle(lines[(g._horseN = (g._horseN || 0) + 1) % lines.length], 2.6, `${a.name}（马）`);
-      g.clue('horse', '三匹马躺在床上刷手机，屋里黑黢黢的，只有手机屏幕亮着……');
+      g.clue('horse', '三匹马躺在床上刷手机，屋里黑黢黢的，只有手机屏幕亮着……它们最怕<b>突然开灯</b>。');
     };
     for (const id of ['horseA', 'horseB', 'horseC']) { const a = g.refs.animals[id]; H[id] = { label: `${a.name}（马）`, verb: '聊天', reach: false, act: talkHorse(a) }; }
     H.switch = { label: '电灯开关', verb: () => (S().f.lightsOn ? '关灯' : '开灯'), act: () => this.toggleLight(g) };
@@ -246,9 +240,10 @@ export const CH5 = {
     const A = g.refs.animals;
     H.monkeyA = { label: '猴赛雷（猴）', verb: () => (S().inv.includes('helmet') ? '送它红白头盔' : '聊天'), reach: false, act: () => this.talkMonkey(g) };
     H.monkeyB = { label: '美猴（猴）', verb: '聊天', reach: false, act: () => {
+      if (A.monkeyB.state === 'sleep') { g.ui.subtitle('（美猴靠着洗漱台睡着了，嘴里还叼着牙刷）', 2.6, ''); return; }
       A.monkeyB.setState('talk');
       g.audio.monkey(1.2);
-      const lines = ['别看我，我在刷牙。', '门口那只（猴赛雷）最爱时尚单品了。', '门边凳子上那顶红白头盔……猴赛雷肖想很久了。'];
+      const lines = ['别看我，我在刷牙。', '猴赛雷？它不照够镜子是不会睡的。它最爱时尚单品了。', '门边凳子上那顶红白头盔……猴赛雷肖想很久了。'];
       g.ui.subtitle(lines[(g._mbN = (g._mbN || 0) + 1) % lines.length], 2.8, '美猴（猴）');
       if (g._mbN % 3 === 0) g.clue('helmetHint', '美猴说：猴赛雷肖想门边凳子上那顶<b>红白头盔</b>很久了。');
     } };
@@ -259,7 +254,6 @@ export const CH5 = {
     H.mirror = { label: '穿衣镜', verb: '查看', reach: false, act: () => g.say('穿衣镜被猴赛雷霸占了，镜子边上一圈化妆灯泡，暖烘烘的。', 3) };
     H.gecko = { label: '壁虎', verb: '看看', reach: false, act: () => { g.refs.gecko.spook(); g.audio.squeak(); g.say('一只壁虎趴在墙上……被你一看，嗖地蹿走了。', 2.6); } };
     // ---- 门、洗手间 ----
-    H.door = { label: '老铜锁', verb: () => (S().f.unlocked ? '出门' : '开锁'), act: () => this.onDoor(g) };
     H.wcDoor = { label: '洗手间门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
     H.cubDoor = { label: '厕所隔间', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
     H.sink = { label: '洗漱台', verb: '洗把脸', act: () => {
@@ -302,11 +296,19 @@ export const CH5 = {
       g.say('啪——两台电脑同时黑屏了。', 2);
       if (!S.found[0]) {
         g.after(2.8, () => {
-          g.ui.subtitle(`咯咯咯咯！！谁拔的电！！……好好好，爱心锁🐔那一位是 ${S.digits[0]}！赶紧把电插回去！！`, 4.2, '咯咯（鸡）');
+          g.ui.subtitle('咯咯咯咯！！谁拔的电！！……行行行，不打了不打了！睡觉！！', 4.0, '咯咯（鸡）');
           A.chickA.talk(3.5);
         });
-        g.after(3.2, () => g.foundDigit(0, '被拔了电的咯咯'));
+        g.after(6.4, () => {
+          if (!S.f.powerCut || S.found[0]) return;
+          for (const a of [A.chickA, A.chickB]) a.setState('sleep');
+          this.settle(g, 0, '两只鸡断了电、骂够了，趴在键盘上睡着了。');
+          g.say('……两只鸡骂着骂着，趴在键盘上睡着了。', 3);
+        });
       }
+    } else if (S.found[0]) {
+      for (const s of R.gameScreens) s.off = true; // 屏幕不亮了：两只鸡睡着了，电脑也跟着待机
+      g.say('插线板又亮了……两只鸡睡得正香，头都没抬。', 3);
     } else {
       for (const a of [A.chickA, A.chickB]) a.setState('game');
       g.audio.bootChime();
@@ -317,16 +319,23 @@ export const CH5 = {
     const S = g.S, A = g.refs.animals;
     g.toggleLights();
     const horses = [A.horseA, A.horseB, A.horseC];
+    if (S.found[1]) {
+      if (S.f.lightsOn) g.ui.subtitle('（马大哈翻了个身，嘟囔了一句："关灯……"）', 2.4, '');
+      return;
+    }
     if (S.f.lightsOn) {
       for (const h of horses) h.setState('blind');
       g.audio.neigh(); g.after(0.3, () => g.audio.neigh());
-      if (!S.found[1]) {
-        g.after(2.6, () => {
-          g.ui.subtitle(`啊啊啊我的眼睛！！……好好好，🐴那一位是 ${S.digits[1]}！快关灯！！`, 4.2, '马大哈（马）');
-          A.horseA.talk(3.5);
-        });
-        g.after(3.0, () => g.foundDigit(1, '被灯晃瞎眼的马大哈'));
-      }
+      g.after(2.6, () => {
+        if (!S.f.lightsOn) return;
+        g.ui.subtitle('啊啊啊我的眼睛！！……行行行，不刷了不刷了！手机放下了！快关灯！！', 4.2, '马大哈（马）');
+        A.horseA.talk(3.5);
+        S.f.horsesDown = true;
+      });
+    } else if (S.f.horsesDown) {
+      for (const h of horses) h.setState('sleep');
+      g.after(1.2, () => g.say('灯一关……三匹马翻了个身，没一会儿就打起了呼噜。', 3));
+      g.after(1.6, () => this.settle(g, 1, '开灯晃了三匹马一下，它们放下了手机；关了灯，就睡着了。'));
     } else {
       for (const h of horses) h.setState('scroll');
     }
@@ -341,66 +350,41 @@ export const CH5 = {
       m.wearHelmet(h);
       m.setState('talk');
       g.audio.monkey(1.3); g.after(0.3, () => g.audio.monkey(1.45));
-      g.ui.subtitle(`哇！！！这个造型绝了！！看在头盔的份上——🐵那一位是 ${S.digits[2]}！`, 4, `${m.name}（猴）`);
+      g.ui.subtitle('哇！！！这个造型绝了！！今天的造型——满分。……可以安心睡觉了。', 4, `${m.name}（猴）`);
       S.ach.add('fashion');
-      g.after(0.6, () => g.foundDigit(2, '戴上头盔的猴赛雷'));
       g.after(3.3, () => m.setState('proud'));
+      g.after(7.0, () => {
+        m.setState('sleep'); g.refs.animals.monkeyB.setState('sleep');
+        g.say('猴赛雷戴着头盔、站着就睡着了……洗手间里的美猴也靠着洗漱台睡着了。', 3.4);
+        this.settle(g, 2, '照镜子的猴赛雷得到了红白头盔，心满意足，站着就睡着了。');
+      });
       return;
     }
+    if (S.found[2] || m.state === 'sleep') { g.ui.subtitle(`（${m.name}戴着头盔站着睡着了，嘴角还挂着笑）`, 2.4, ''); return; }
     m.setState('talk');
     g.audio.monkey(1.15);
-    if (S.found[2]) { g.ui.subtitle('这头盔……我能戴一辈子。', 2.4, `${m.name}（猴）`); return; }
     S.f.talkedMonkey = true;
-    const lines = ['别挡着我，我在欣赏全宇宙最帅的猴。', '门锁？你看我这个造型，是不是还差点什么？', '要是有个酷炫的头盔就好了……红白配色的那种。'];
+    const lines = ['别挡着我，我在欣赏全宇宙最帅的猴。', '睡觉？你看我这个造型，是不是还差点什么？差一点，我就睡不着。', '要是有个酷炫的头盔就好了……红白配色的那种。'];
     g.ui.subtitle(lines[(g._maN = (g._maN || 0) + 1) % lines.length], 3, `${m.name}（猴）`);
     if (g._maN >= 2) g.clue('monkey', '照镜子的猴赛雷想要一个<b>酷炫的头盔</b>，红白配色的那种。');
   },
 
-  onDoor(g) {
-    const S = g.S;
-    if (S.f.unlocked) { g.win(); return; }
-    if (!S.f.triedDoor) {
-      S.f.triedDoor = true;
-      g.audio.lockedRattle();
-      g.say('门被一条缠满藤的铁链拴住了，挂着一把老铜锁……三个转轮上刻着🐔🐴🐵？', 3.8);
-      g.clue('door', '门上的<b>老铜锁</b>：三个转轮上分别刻着 🐔 🐴 🐵——得去问问它们。');
-      g.after(1.6, () => this.openLock(g));
-      return;
-    }
-    this.openLock(g);
-  },
-  openLock(g) {
-    const S = g.S;
-    const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
-    const box = g.ui.lock({
-      n: 3, title: '老铜锁', variant: 'brass', labels: ['🐔', '🐴', '🐵'],
-      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '三个铜转轮上刻着鸡、马、猴……',
-      onTick: () => g.audio.tick(),
-      onSubmit: (code) => {
-        if (code === S.digits.join('')) { g.audio.unlock(); g.ui.closeModal(); this.unlock(g); return true; }
-        g.audio.error(); return false;
-      },
-    });
-    g.openModal(box);
-  },
-  // 鉴赏模式：开局就把锁整个拿掉
+  // 门上那条缠着藤的铁链、老铜锁：没有了（鉴赏模式、游戏模式都一样）
   removeLock(g) { const H = g.refs.vineLock; H.group.visible = false; H.dropped.visible = false; },
-  unlockVisual(g) {
-    const H = g.refs.vineLock;
-    g.collision.setEnabled('lockCable', false);
-    H.group.visible = false; H.dropped.visible = true;
-  },
-  unlock(g) {
-    const S = g.S, H = g.refs.vineLock;
-    S.f.unlocked = true;
-    const l = H.lock, y0 = l.position.y;
-    g.tween(0.5, (k) => { l.rotation.z = k * 1.5; l.position.y = y0 - k * 0.55; }, { ease: (t) => t * t, done: () => { this.unlockVisual(g); g.audio.chainDrop(); } });
-    g.fx.emit('dust', l.getWorldPosition(V()).add(V(0.1, 0.05, 0)), { count: 10, speed: 0.4, spread: 0.8, up: 0.6, gravity: -0.6, drag: 1, life: 1.4, size: 0.03, colors: ['#6a5238', '#8a7048', '#4a6a52'] });
-    g.say('咔哒——老铜锁开了！', 2.4);
-    g.after(1.4, () => g.win());
-  },
 
-  update(g, dt) {},
+  // 睡着的室友时不时打一声呼噜（离得近才听得见）
+  update(g, dt) {
+    const S = g.S;
+    if (!S.found.some(Boolean)) return;
+    this._snoreT -= dt;
+    if (this._snoreT > 0) return;
+    this._snoreT = 3.5 + Math.random() * 4;
+    const A = g.refs.animals, cam = g.camera.position;
+    const who = [[S.found[0], A.chickA, 1.3], [S.found[1], A.horseB, 0.8], [S.found[2], A.monkeyA, 1.1]].filter((w) => w[0]);
+    const [, a, pitch] = who[Math.floor(Math.random() * who.length)];
+    const d = a.root.getWorldPosition(_p).distanceTo(cam);
+    if (d < 4.5) g.audio.snore(0.55 * (1 - d / 5), pitch);
+  },
 
   // ---------- 灯光 + 动物 ----------
   //   暴风雨的夜：屋里只有几盏暖色的小灯（钨丝灯串、马灯、化妆镜灯泡）和屏幕的冷光；
@@ -409,7 +393,7 @@ export const CH5 = {
     const S = g.S, R = g.refs, L = R.lights, JL = R.jungleLights;
     const kk = 1 - Math.exp(-dt * 4);
     const lightsOn = (S && S.f.lightsOn) || g.lightMode === 'end';
-    const power = !(S && S.f.powerCut);
+    const power = !(S && (S.f.powerCut || S.found[0])); // 两只鸡睡着以后电脑也待机了
     const f = R.storm ? R.storm.flash : 0;
     const sag = 1 - Math.min(0.4, f * 0.3);
     const spot = lightsOn ? 10 : 0, tube = lightsOn ? 2.2 : 0;

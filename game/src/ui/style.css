@@ -250,6 +250,9 @@ body:not(.mode-view) .view-only { display: none; }
 #hud-tr .codes b[data-ic] { position: relative; margin-top: 12px; }
 #hud-tr .codes b[data-ic]::before { content: attr(data-ic); position: absolute; top: -17px; left: 50%; transform: translateX(-50%); font-size: 12px; }
 .wheel .wl { font-size: 22px; line-height: 1; height: 26px; }
+/* 滚轮之间的小数点、最后的单位（收音机的 MHz、航向的 °） */
+.wheels .wsep { align-self: center; margin: 22px -4px 0; font-family: 'SF Mono', Menlo, monospace; font-size: 34px; font-weight: 800; color: rgba(255,255,255,0.72); }
+.wheels .wsep.unit { margin: 22px 0 0 2px; font-size: 18px; font-weight: 600; letter-spacing: 0.04em; }
 
 /* 日记本 */
 .paper.diary { background: #e6d5ae; background-image: repeating-linear-gradient(0deg, transparent 0 31px, rgba(120,90,50,0.25) 31px 32px), radial-gradient(circle at 20% 10%, rgba(120,80,30,0.25), transparent 40%), radial-gradient(circle at 85% 80%, rgba(90,60,20,0.3), transparent 45%); color: #3a2a1a; font-size: 19px; transform: rotate(0.8deg); box-shadow: 0 30px 80px rgba(0,0,0,0.75), inset 0 0 90px rgba(90,60,20,0.35); }

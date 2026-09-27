@@ -254,7 +254,7 @@ function buildPlatform(T, rnd) {
   }
   // 幽灵列车：近处那条轨道上，平时藏着
   const ghost = new THREE.Group(); ghost.visible = false; ghost.position.set(-60, 0, -8.8); P.add(ghost);
-  const gM = lit('#3a4448', 0.5, 0.4, 0.05), winM = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.35, 0.9), toneMapped: false });
+  const gM = lit('#3a4448', 0.5, 0.4, 0.05), winM = new THREE.MeshBasicMaterial({ map: TM.genTrainWindow(), color: new THREE.Color(1.6, 1.35, 0.9), toneMapped: false });
   for (let k = 0; k < 3; k++) {
     const car = new THREE.Group(); car.position.x = -k * 19.6; ghost.add(car);
     car.add(mesh(new THREE.BoxGeometry(19, 3.0, 2.7), gM, { y: 1.0, cast: false }));
@@ -264,7 +264,7 @@ function buildPlatform(T, rnd) {
   const litMats = LIT.slice();
   let lastK = -1;
   return {
-    group: P, tally: { canvas: tallyC, tex: tallyTex, mat: tallyM, mesh: tally }, train, ghost, bulbs, floods, bulbM, sodiumM, fireGlow, flames, platM,
+    group: P, tally: { canvas: tallyC, tex: tallyTex, mat: tallyM, mesh: tally }, train, ghost, ghostWin: winM, bulbs, floods, bulbM, sodiumM, fireGlow, flames, platM,
     update(dt, t, K) {
       if (Math.abs(K - lastK) > 0.002) { lastK = K; for (const m of litMats) m.emissiveIntensity = 1 + K * 9; }
       const fl = 0.85 + Math.sin(t * 9) * 0.08 + Math.sin(t * 23 + 1) * 0.05 + (Math.random() - 0.5) * 0.08;

@@ -1,6 +1,7 @@
 // 第六章（原第四章）：冰封 211（21:30 · 零下七十度，暴风雪就要来了）
 //   参考《冰汽时代》：宿舍在一座末日寒潮里的蒸汽城市里——陨石坑一样的大坑中间立着一座巨大的熔炉，全城靠它取暖。
-//   室友们下矿上夜班去了，门上锁着一把黄铜"蒸汽压力锁"，三个表盘刻着 🏭🔥⚙️：
+//   室友们下矿上夜班去了。任务：请熔炉给你亮一条路——外面是白毛风，出了门什么也看不见，走着走着就绕回来（从洗手间的门里走出来）。
+//   往气动传送管里塞一张"领路申请"，熔炉调度只认三位口令 🏭🔥⚙️；口令对了，探照灯转过来照着楼下，铺出一条路：
 //   🏭 窗户冻满了冰花 → 擦开 → 用窗边的黄铜望远镜看熔炉：塔身上那根信号灯柱亮着几盏灯
 //   🔥 暖炉是凉的 → 门口雪堆里拔出冰镐 → 撬开冻住的煤箱 → 添煤点火 → 墙上的压力表慢慢爬上去，停在那一位上
 //   ⚙️ 我的书桌前坐着宿舍的蒸汽自动机「老铁」，冻成了铁疙瘩 → 屋里暖和起来之后，天花板上那根大冰柱化了，掉下一把发条钥匙
@@ -25,7 +26,8 @@ const CLOCK_D = Math.hypot(1.22 + 1.47, 4.5 - 2.02);
 export const CH6 = {
   n: 6, theme: 'frost',
   title: '第六章 · 冰封 211', sub: '21:30 · 零下 70°C · 暴风雪将至', tag: '第六章 · 冰封 211',
-  clock: [21, 30], lockName: '蒸汽压力锁', doorName: '防寒铁门', codeLen: 3, codeIcons: ['🏭', '🔥', '⚙️'],
+  clock: [21, 30], lockName: '领路口令', doorName: '防寒铁门', codeLen: 3, codeIcons: ['🏭', '🔥', '⚙️'],
+  taskName: '请熔炉给你亮一条路',
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['stove', 'automaton', 'laundry', 'pipe', 'snowdrift', 'keyIce', 'coalCrate'],
   items: {
@@ -64,14 +66,18 @@ export const CH6 = {
     this._litT = -1; this._od = 0; this._odT = 0; this._storm = 0;
     this._gustT = 3; this._crackT = 0.5; this._clankT = 8; this._breathT = 1.5; this._leakT = 1; this._doorSnowT = 0.5;
     this._keyState = 0; this._clockThawed = false; this._iceHeat = -1; this._wipes = 0; this._scope = false;
-    R.frost.overdrive = 0;
+    this._guide = 0; this._sending = false;
+    R.frost.overdrive = 0; R.frost.guide = 0;
     R.frost.heat.uHeatR.value = 0;
     // 气动传送管：室友们塞进来的信
     const [A, B, C] = S.mates;
     this._tube = [{ who: `${A}、${B}、${C}`, time: '21:02', lines: [
       '睡神：', '我们仨下矿上夜班去了（城里的煤又不够烧了）。', '你睡得跟冻猪肉似的，怎么叫都叫不醒。',
-      '门给你锁上了——<b>蒸汽压力锁</b>，3 位：', '🏭 熔炉顶上的信号灯会告诉你（窗户冻住了？擦擦）',
-      '🔥 炉子烧旺了，墙上的压力表自己会指给你看', '⚙️ 老铁记得最后一位——可惜它冻成了铁疙瘩',
+      '听好：外面是<b>白毛风</b>，出了门什么都看不见，走着走着就会<b>绕回原地</b>。',
+      '想出来，就往这根传送管里塞一张<b>领路申请</b>——熔炉调度只认三位口令：',
+      '🏭 熔炉塔身上的信号灯亮着几盏（窗户冻住了？擦擦）',
+      '🔥 你家暖炉烧旺之后，墙上的压力表指着几', '⚙️ 老铁记得最后一位——可惜它冻成了铁疙瘩',
+      '口令对了，熔炉会把探照灯打到你门口，给你亮一条路。',
       '附：冰镐插在门口的雪堆里，煤箱冻上了自己撬。'] }];
     this._tubeUnread = true;
     R.tube.lamp.material.emissiveIntensity = 2.2;
@@ -110,10 +116,8 @@ export const CH6 = {
   },
 
   // ---------- 进门 ----------
-  // 人从门口的光里走进来，门在身后关上：一阵风雪卷进来，铁链上"咔咔"结满冰碴，压力锁的表盘自己转回去锁上
+  // 人从门口的光里走进来，门在身后关上：一阵风雪卷进来
   portal: 'forge',
-  lockView: { cam: V(-0.95, 1.15, 4.25), look: V(-1.62, 0.78, 3.66) },
-  relockLine: '……铁链上一下子结满了冰？！又锁上了！',
   intro(g, { prepare }) {
     if (prepare) { g.enterRoom({ prepare: true }); return; }
     const T = g.enterRoom({ prepare: false });
@@ -137,35 +141,8 @@ export const CH6 = {
     g.fx.emit('dust', V(-1.6, 0.8, g.refs.door.z), { count: 30, speed: 1.1, spread: 1.2, up: 0.3, gravity: -0.3, drag: 1.4, life: 2.2, size: 0.018, colors: ['#eef4fc', '#d8e2ee'], sway: 0.4 });
     g.fx.emit('steam', V(-1.62, 0.7, g.refs.door.z), { count: 3, speed: 0.7, spread: 1, up: 0.15, gravity: 0, drag: 1.6, life: 1.6, size: 0.2, colors: ['#d8e0ea'], grow: 1.4 });
   },
-  // 门锁：'hide' / 'anim'（铁链一节一节缠回去，冰碴一下子结满，压力锁弹出来）/ 'show'
-  relock(g, mode) {
-    const H = g.refs.frostLock, l = H.lock;
-    H.dropped.visible = false;
-    l.scale.setScalar(1);
-    H.links.count = H.N;
-    H.lamp.emissive.set('#ff3a1a');
-    H.crust.visible = true; H.crust.scale.setScalar(1);
-    if (mode === 'hide') { H.group.visible = false; g.collision.setEnabled('lockCable', false); return; }
-    H.group.visible = true; g.collision.setEnabled('lockCable', true);
-    if (mode !== 'anim') return;
-    l.scale.setScalar(0.001);
-    H.crust.visible = false;
-    H.links.count = 1;
-    g.tween(0.5, (k) => { H.links.count = Math.max(1, Math.round(k * H.N)); }, { ease: (t) => t }).cut = true;
-    g.after(0.35, () => g.audio.chainDrop());
-    g.after(0.5, () => {
-      g.audio.clunk(); g.audio.hiss();
-      g.tween(0.3, (k) => l.scale.setScalar(Math.max(0.001, easeOutBack(k))), { ease: (t) => t }).cut = true;
-      g.fx.emit('steam', l.getWorldPosition(V()).add(V(0.08, 0.05, 0)), { count: 4, speed: 0.35, spread: 0.8, up: 0.8, gravity: 0.1, drag: 1.3, life: 1.3, size: 0.07, colors: ['#e8eef4', '#cfd8e0'], grow: 1.8 });
-    });
-    g.after(0.8, () => {
-      H.crust.visible = true; H.crust.scale.setScalar(0.001);
-      g.audio.iceBreak();
-      g.tween(0.4, (k) => H.crust.scale.setScalar(Math.max(0.001, k)), { ease: (t) => t }).cut = true;
-    });
-  },
   onPlay(g) {
-    g.ui.toast('第六章 · 在暴风雪来临之前，逃出冰封 211', '', '❄️');
+    g.ui.toast('第六章 · 暴风雪来临之前，请熔炉给你亮一条路', '', '❄️');
     g.after(1.4, () => g.ui.subtitle('南墙上那根黄铜管子里好像塞着什么东西？还亮着一盏小红灯。', 3.4, g.S.name));
   },
   exitLine: () => '老铁，帮我看好炉子！',
@@ -178,18 +155,20 @@ export const CH6 = {
 
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.readTube && !f.triedDoor) return [{ text: '看看南墙上那根铜管子', done: false }];
+    if (!f.readTube && !S.loops) return [{ text: '看看南墙上那根铜管子', done: false }];
+    if (!f.readTube) return [{ text: '白毛风里绕回来了……南墙那根铜管子里有信', done: false }];
     return [
-      { text: '🏭 数一数熔炉的信号灯', done: F[0] },
+      { text: '任务：请熔炉给你亮一条路', done: !!f.taskDone },
       { text: '🔥 让暖炉烧起来', done: F[1] },
+      { text: '🏭 数一数熔炉的信号灯', done: F[0] },
       { text: '⚙️ 唤醒自动机「老铁」', done: F[2] },
-      { text: f.unlocked ? '出门！' : `打开蒸汽压力锁（${n}/3）`, done: false },
+      { text: `往传送管里寄领路申请（${n}/3）`, done: !!f.taskDone },
+      ...(f.taskDone ? [{ text: '跟着光，出门！', done: false }] : []),
     ];
   },
   hint(g) {
     const S = g.S, f = S.f, F = S.found, inv = S.inv;
     if (!f.readTube) return '南墙上那个黄铜盒子是气动传送管，里面有室友塞过来的信。';
-    if (!f.triedDoor) return '去门口看看那把结满冰碴的蒸汽压力锁。';
     if (!F[1]) {
       if (!f.lit) {
         if (!inv.includes('icePick') && !f.crateOpen) return '门口那堆雪里插着一把冰镐，拔出来。';
@@ -209,7 +188,15 @@ export const CH6 = {
       if (!this._botThawed(g)) return '老铁身上的冰还没化开——等暖炉把屋子再烘热一点。';
       return '把发条钥匙插进老铁背后的发条孔，给它上发条。';
     }
-    return `密码凑齐了！去门口，按🏭🔥⚙️的顺序输入：${S.digits.join('')}`;
+    if (!f.taskDone) return `口令凑齐了！去南墙的气动传送管，寄一封领路申请：${S.digits.join('')}。`;
+    return '探照灯给你照出了一条路，出门吧！';
+  },
+  readyLine: (g) => `口令凑齐了：${g.S.digits.join('')}！去传送管寄领路申请！`,
+  loopLines(g, n) {
+    const S = g.S;
+    if (n === 1) return [['……白毛风里走了没几步，就什么都看不见了——怎么又从洗手间走出来了？', 3.4], [S.f.readTube ? '信上说得对：出了门只会绕回来。得请熔炉给我亮一条路。' : '南墙那根铜管子里，好像塞着信？', 3.2]];
+    if (n === 2) return [['又绕回来了……外面白茫茫一片，连自己的脚印都找不着。', 3]];
+    return [[`第 ${n} 次了。先把领路申请寄出去。`, 2.6]];
   },
   story(g, p) {
     const S = g.S;
@@ -279,7 +266,11 @@ export const CH6 = {
     H.clock = { label: '挂钟', verb: '看时间', reach: false, act: () => g.say(this._clockThawed ? `挂钟又走起来了：${g.clockText.slice(0, 5)}。` : '挂钟冻住了，指针停在 21:02——室友们出门的那一刻。', 3.2) };
     H.curtain = { label: '厚窗帘', verb: '拉一拉', act: () => g.say('厚厚的棉窗帘冻得硬邦邦的，拉不动……还好它本来就拉开着。', 3) };
     // ---- 气动传送管 ----
-    H.tube = { label: '气动传送管', verb: () => (this._tubeUnread ? '取出铜胶囊' : '看看信'), act: () => this.openTube(g) };
+    H.tube = {
+      label: '气动传送管',
+      verb: () => (this._tubeUnread ? '取出铜胶囊' : S().f.readTube && !S().f.taskDone ? '寄领路申请' : '看看信'),
+      act: () => { if (!this._tubeUnread && S().f.readTube && !S().f.taskDone) this.requestGuide(g); else this.openTube(g); },
+    };
     // ---- 🏭 窗户 + 望远镜 ----
     H.window = { label: '窗户', verb: () => (S().f.wiped ? '看窗外' : '擦掉冰花'), reach: true, act: (hv) => this.wipeWindow(g, hv && hv.point) };
     H.spyglass = { label: '黄铜望远镜', verb: '看熔炉', reach: false, act: () => this.lookScope(g) };
@@ -320,7 +311,6 @@ export const CH6 = {
       g.refs.switchRocker.rotation.x = s.f.lightsOn ? -0.12 : 0.12;
       if (s.f.lightsOn) { g.light.flicker = 0.9; if (!s.f.bulbSeen) { s.f.bulbSeen = true; g.say('灯泡里的钨丝一闪一闪的……是熔炉那边送过来的电。', 3); } }
     } };
-    H.door = { label: '蒸汽压力锁', verb: () => (S().f.unlocked ? '出门' : '开锁'), act: () => this.onDoor(g) };
     H.wcDoor = { label: '洗手间门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
     H.cubDoor = { label: '厕所隔间', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
     H.sink = { label: '洗漱台', verb: '拧水龙头', act: () => g.say('水龙头底下挂着一根冻住的水柱……一滴水都拧不出来。', 3) };
@@ -352,8 +342,8 @@ export const CH6 = {
     g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
     if (!S.f.readTube) {
       S.f.readTube = true;
-      g.clue('tube', '室友的信：门上是<b>蒸汽压力锁</b>（3 位）——🏭 熔炉顶上的信号灯；🔥 暖炉烧旺后看<b>压力表</b>；⚙️ <b>老铁</b>记得（它冻住了）。冰镐在门口雪堆里，煤箱冻上了。');
-      g.after(0.5, () => g.say('下矿上夜班？……又把我一个人丢下了。先把炉子生起来！', 3.4));
+      g.clue('tube', '室友的信：外面是白毛风，出门只会绕回原地。往<b>传送管</b>里寄一张<b>领路申请</b>，熔炉会给你亮一条路——口令 3 位：🏭 熔炉顶上的信号灯；🔥 暖炉烧旺后看<b>压力表</b>；⚙️ <b>老铁</b>记得（它冻住了）。冰镐在门口雪堆里，煤箱冻上了。');
+      g.after(0.5, () => g.say(g.S.loops ? '难怪出了门又绕回来……先把炉子生起来！' : '下矿上夜班？……又把我一个人丢下了。先把炉子生起来！', 3.4));
     }
   },
   // 又有一封信从管子里"咻——咚"地掉下来
@@ -546,7 +536,7 @@ export const CH6 = {
     g.after(3.8, () => {
       bot.setState('type');
       const d = S.digits[2];
-      const lines = ['211 号住所', '住户：4 人', '自动机：老铁', '', '致 睡神：', `压力锁 ⚙ = ${d}`];
+      const lines = ['211 号住所', '住户：4 人', '自动机：老铁', '', '致 睡神：', `领路口令 ⚙ = ${d}`];
       this._paper = lines.slice(0, 3);
       const step = () => { this._paper = lines.slice(0, Math.min(lines.length, this._paper.length + 1)); this._drawPaper(g, true); if (this._paper.length < lines.length) g.after(0.45, step); else g.audio.typeDing(); };
       g.after(0.3, step);
@@ -554,7 +544,7 @@ export const CH6 = {
     });
     g.after(7.2, () => {
       bot.talk(3.6); bot.after = 'idle'; g.audio.robotVoice(2.4);
-      g.ui.subtitle(`早、早上好，室友。你的室友们让我转告你——压力锁第 ⚙️ 位：${S.digits[2]}。`, 4, '⚙️ 老铁（自动机）');
+      g.ui.subtitle(`早、早上好，室友。你的室友们让我转告你——领路口令第 ⚙️ 位：${S.digits[2]}。`, 4, '⚙️ 老铁（自动机）');
       g._cineTo(V(0.25, 1.55, -0.45), V(0.95, 1.3, 0.25), 0.8);
     });
     g.after(7.8, () => g.foundDigit(2, '醒过来的老铁'));
@@ -566,55 +556,57 @@ export const CH6 = {
     T.tex.needsUpdate = true;
   },
 
-  // ---------- 门 ----------
-  onDoor(g) {
+  // ---------- 领路申请：口令塞进铜胶囊，"咻"地一声吸上去；过一会儿熔炉调度的回信掉下来 ----------
+  requestGuide(g) {
     const S = g.S;
-    if (S.f.unlocked) { g.win(); return; }
-    if (!S.f.triedDoor) {
-      S.f.triedDoor = true;
-      g.audio.lockedRattle();
-      g.say('门被一条结满冰碴的铁链拴住了，挂着一把黄铜压力锁……三个表盘上刻着🏭🔥⚙️？', 3.8);
-      g.clue('door', '门上的<b>蒸汽压力锁</b>：三个表盘分别刻着 🏭 🔥 ⚙️。');
-      g.after(1.6, () => this.openLock(g));
-      return;
-    }
-    this.openLock(g);
-  },
-  openLock(g) {
-    const S = g.S;
+    if (this._sending) return;
     const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
     const box = g.ui.lock({
-      n: 3, title: '蒸汽压力锁', variant: 'steam', labels: ['🏭', '🔥', '⚙️'],
-      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '三个黄铜表盘上刻着熔炉、火苗和齿轮……',
+      n: 3, title: '气动传送管 · 领路申请', variant: 'steam', labels: ['🏭', '🔥', '⚙️'], button: '寄 出',
+      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '申请单上三个格子：熔炉、火苗、齿轮……',
       onTick: () => g.audio.tick(),
-      onSubmit: (code) => {
-        if (code === S.digits.join('')) { g.audio.unlock(); g.ui.closeModal(); this.unlock(g); return true; }
-        g.audio.error(); return false;
-      },
+      onSubmit: (code) => { g.ui.closeModal(); this.sendCapsule(g, code); return true; },
     });
     g.openModal(box);
   },
-  // 鉴赏模式：开局就把锁整个拿掉
+  sendCapsule(g, code) {
+    const S = g.S, T = g.refs.tube;
+    this._sending = true;
+    g.audio.paper();
+    // 胶囊从取件口"咻"地吸上去
+    T.capsule.visible = false;
+    T.flyCap.visible = true; T.flyCap.position.set(-0.03, -0.09, 0.09);
+    g.after(0.3, () => g.audio.tubeWhoosh());
+    g.tween(0.7, (k) => T.flyCap.position.set(-0.03 * (1 - k), lerp(-0.09, 1.6, k * k), 0.09 * (1 - k)), { ease: (t) => t, delay: 0.3, done: () => { T.flyCap.visible = false; } });
+    g.say(`把"领路申请 · ${code}"塞进铜胶囊——咻！`, 2.4);
+    const ok = code === S.digits.join('');
+    const reply = ok ? ['收到。211 号住所，领路申请通过。', '熔炉为你亮灯——跟着光走，别回头。'] : ['口令不符，申请驳回。', '（请核对：信号灯数 · 压力表读数 · 自动机编号）'];
+    g.after(4.2, () => {
+      this._tube.push({ who: '熔炉调度', time: g.clockText.slice(0, 5), lines: reply });
+      T.flyCap.visible = true; T.flyCap.position.set(0, 1.6, 0);
+      g.audio.tubeWhoosh();
+      g.tween(0.85, (k) => T.flyCap.position.set(-0.03 * k, lerp(1.6, -0.09, k * k), 0.09 * k), { ease: (t) => t, done: () => { T.flyCap.visible = false; T.capsule.visible = true; g.audio.clunk(); } });
+    });
+    g.after(5.3, () => {
+      g.audio.paper();
+      g.ui.subtitle(`"${reply.join('')}"`, 3.8, '📨 熔炉调度（回信）');
+      if (!ok) { g.after(4.0, () => { this._sending = false; }); return; }
+      g.after(3.4, () => this.guideLight(g));
+    });
+  },
+  // 熔炉调度答应了：汽笛长鸣、熔炉一下子烧亮，两座瞭望塔的探照灯转过来，照着楼下的雪地——铺出一条路
+  guideLight(g) {
+    const S = g.S;
+    this.overdrive(g);
+    this._guide = 1;
+    g._cineTo(V(0.52, 1.7, -2.9), V(0.7, -4.5, -18), 1.4);
+    g.after(2.2, () => g.ui.subtitle('……探照灯转过来了。大坑里的路灯，从熔炉脚下一对一对地亮到了楼下——铺成了一条路。', 4.2, S.name));
+    g.after(6.6, () => { g._cineTo(null, null, 1.1); this._sending = false; });
+    g.completeTask('熔炉给我亮了一条路。这一回，出了门就不会绕回来了。', 6.8);
+  },
+  // 门上那条结满冰碴的铁链和压力锁：没有了（鉴赏模式、游戏模式都一样）
   removeLock(g) { const H = g.refs.frostLock; H.group.visible = false; H.dropped.visible = false; },
-  unlockVisual(g) {
-    const H = g.refs.frostLock;
-    g.collision.setEnabled('lockCable', false);
-    H.group.visible = false; H.dropped.visible = true;
-  },
-  unlock(g) {
-    const S = g.S, H = g.refs.frostLock;
-    S.f.unlocked = true;
-    H.lamp.emissive.set('#3aff6a');
-    const l = H.lock, y0 = l.position.y;
-    g.audio.hiss();
-    g.fx.emit('steam', l.getWorldPosition(V()).add(V(0.1, 0.05, 0)), { count: 16, speed: 0.6, spread: 0.8, up: 0.9, gravity: 0.2, drag: 1.3, life: 1.8, size: 0.14, colors: ['#f0f4f8', '#dce4ec'], grow: 2.2 });
-    g.after(0.3, () => { g.audio.iceBreak(); g.fx.emit('dust', l.getWorldPosition(V()), { count: 14, speed: 0.6, spread: 1, up: 0.5, gravity: -2.5, drag: 0.8, life: 1, size: 0.025, colors: ['#e8f0fa'] }); });
-    g.tween(0.5, (k) => { l.rotation.z = k * 1.5; l.position.y = y0 - k * 0.55; }, { ease: (t) => t * t, delay: 0.3, done: () => { this.unlockVisual(g); g.audio.chainDrop(); } });
-    g.say('嗤——压力锁放了气，"咔哒"一声开了！', 2.6);
-    g.after(1.6, () => g.win());
-  },
 
-  // ---------- 每帧（只在 play 时）----------
   update(g, dt) {
     const S = g.S, R = g.refs;
     // 冰柱化了：发条钥匙掉下来
@@ -653,6 +645,7 @@ export const CH6 = {
     // 熔炉超载：14 秒后慢慢退回去
     if (this._odT > 0) { this._odT -= dt; if (this._odT <= 0) this._od = 0; }
     F.overdrive = lerp(F.overdrive || 0, this._od, 1 - Math.exp(-dt * 0.8));
+    F.guide = lerp(F.guide || 0, this._guide || 0, 1 - Math.exp(-dt * 0.9));
     const od = F.overdrive;
     const fl = 0.85 + Math.sin(t * 11) * 0.06 + Math.sin(t * 23 + 1) * 0.05 + (Math.random() - 0.5) * 0.06;
     FL.stoveSpot.intensity = fire * 5.5 * fl;
@@ -668,7 +661,7 @@ export const CH6 = {
     L.ceilSpots.forEach((s) => (s.intensity = spotV));
     FL.bulbM.emissiveIntensity = (spotV / 6) * 2.4;
     L.hemi.intensity = lerp(L.hemi.intensity, 0.28 + heatK * 0.08 + (on ? 0.12 : 0) + od * 0.05, kk);
-    L.sun.intensity = (0.7 + od * 1.6) * (0.94 + Math.sin(t * 2.7) * 0.04);
+    L.sun.intensity = (0.7 + od * 1.6 + (F.guide || 0) * 0.5) * (0.94 + Math.sin(t * 2.7) * 0.04);
     L.winLight.intensity = 1.4 + od * 0.5;
     g.scene.environmentIntensity = 0.07 + heatK * 0.05 + (on ? 0.04 : 0);
     // 马灯
