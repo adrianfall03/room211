@@ -1159,7 +1159,8 @@ export function genWindowView() {
 }
 
 // 窗户雾气：手指写过的地方哈气后会显形
-export function drawWindowFog(c, digit) {
+// 窗户上的雾：平时一层白雾，对着玻璃哈口气才看得清{A}用手指写的字（笑脸 + 一句话）
+export function drawWindowFog(c, msg = '加油!!') {
   const W = c.width, H = c.height, ctx = c.getContext('2d');
   const { fbm } = createNoise(444);
   pixels(c, (x, y, d, i) => {
@@ -1177,17 +1178,12 @@ export function drawWindowFog(c, digit) {
     ctx.beginPath(); ctx.arc(W * 0.2, H * 0.44, 30, 0.2, Math.PI - 0.2); ctx.stroke();
     ctx.lineWidth = 14 + grow;
     ctx.beginPath(); ctx.moveTo(W * 0.17, H * 0.37); ctx.lineTo(W * 0.17, H * 0.38); ctx.moveTo(W * 0.23, H * 0.37); ctx.lineTo(W * 0.23, H * 0.38); ctx.stroke();
-    // ③ →
-    ctx.lineWidth = 10 + grow;
-    ctx.beginPath(); ctx.arc(W * 0.5, H * 0.45, 40, 0, Math.PI * 2); ctx.stroke();
-    ctx.font = `bold ${54 + grow}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('3', W * 0.5, H * 0.455);
-    ctx.beginPath(); ctx.moveTo(W * 0.58, H * 0.45); ctx.lineTo(W * 0.66, H * 0.45); ctx.lineTo(W * 0.63, H * 0.4); ctx.moveTo(W * 0.66, H * 0.45); ctx.lineTo(W * 0.63, H * 0.5); ctx.stroke();
-    // 数字（大）
-    ctx.font = `bold ${220 + grow * 2}px "Comic Sans MS", "Chalkboard SE", Arial`;
-    ctx.fillText(String(digit), W * 0.79, H * 0.47);
-    ctx.lineWidth = 6 + grow;
-    ctx.strokeText(String(digit), W * 0.79, H * 0.47);
+    // 手指写的一句话
+    ctx.font = `bold ${108 + grow * 2}px "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(msg, W * 0.62, H * 0.46);
+    ctx.lineWidth = 5 + grow;
+    ctx.strokeText(msg, W * 0.62, H * 0.46);
   };
   ctx.save();
   ctx.globalCompositeOperation = 'destination-out';
@@ -1197,9 +1193,9 @@ export function drawWindowFog(c, digit) {
   ctx.globalCompositeOperation = 'source-over';
   strokes('rgba(18,28,40,0.62)', 0);
   // 水珠顺着笔画往下流
-  const rnd = mulberry32(digit + 7);
+  const rnd = mulberry32(msg.length + 7);
   for (let k = 0; k < 22; k++) {
-    const x = W * (0.7 + rnd() * 0.18), y = H * (0.66 + rnd() * 0.12), l = 20 + rnd() * 60;
+    const x = W * (0.42 + rnd() * 0.4), y = H * (0.62 + rnd() * 0.14), l = 20 + rnd() * 60;
     ctx.fillStyle = 'rgba(18,28,40,0.45)';
     ctx.fillRect(x, y, 3, l);
   }

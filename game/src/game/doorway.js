@@ -1,5 +1,5 @@
 // 门口的"光门"：出门时门外不再是走廊，而是一整片光——人走进光里，下一间 211 的门口也亮着同一片光，
-// 人从光里走出来，门在身后自己关上、又锁上了。
+// 人从光里走出来，门在身后自己关上。任务没完成就出门的话，同一片光会把人从洗手间的门里送回这间屋子（addWcLight）。
 //   kind：'warm' 第一章（暖白色的晨光）/ 'vortex' 第二章（紫色时空漩涡）/ 'sea' 第三章（海面下往上看的一片蓝绿色的光）/ 'tunnel' 第四章（迎面开来的列车大灯）
 //         / 'light' 第五章（暖白色的一片雾光）/ 'forge' 第六章（熔炉一样的橘红色暖光）/ 'space' 第七章（淡蓝色光门）
 import * as THREE from 'three';
@@ -106,7 +106,7 @@ const FRAG = {
       gl_FragColor = vec4(col * alpha * 2.0 * power, alpha * power);
     }`,
 };
-// 光门后面那层不透明的底色（挡住门外的走廊），和照进屋里的灯光颜色
+// 光门后面那层不透明的底色（挡住门外的走廊 / 洗手间），和照进屋里的灯光颜色
 const TINT = {
   warm: ['#fff3dc', '#ffe8c0'], vortex: ['#d8ccff', '#9a7aff'], sea: ['#bfeaea', '#7ad0d8'], tunnel: ['#fff4e0', '#ffe6c0'], light: ['#fff2dc', '#ffe2b8'], forge: ['#ffd8a8', '#ffb070'], space: ['#e2f4ff', '#cfe8ff'],
 };
@@ -185,6 +185,68 @@ export function addDoorLight(g, kind = 'warm') {
   const upd = (dt, t) => { U.time.value = t; };
   R.updaters.push(upd);
   R.doorLight = L;
+  L.power = 0;
+  return L;
+}
+
+// 任务没完成就出门：同一片光把人从洗手间的门里"吐"回屋里（彭罗斯阶梯）。
+// 光铺满洗手间的门后面——隔着玻璃门能看见一片亮，人影从光里走到门后、推门出来。返回和 addDoorLight 一样的 { power, remove }
+const WC_Z = 4.5, WC_TW = 0.16; // 南墙室内墙面、墙厚（见 world/dorm.js 的 LAYOUT）
+export function addWcLight(g, kind = 'warm') {
+  const R = g.refs;
+  if (R.wcLight) R.wcLight.remove();
+  const [back, spill] = TINT[kind] || TINT.warm;
+  const group = new THREE.Group(); group.name = 'wcLight';
+  const U = { time: { value: 0 }, power: { value: 0 } };
+  // 洗手间里离门一米的地方立一整块发光的底色：挡住洗手间的后墙，人从它里面走出来
+  const pz = WC_Z + WC_TW + 0.86;
+  const backMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(back).multiplyScalar(1.3), toneMapped: false, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const backM = noRay(new THREE.Mesh(new THREE.PlaneGeometry(1.3, 2.5), backMat));
+  backM.position.set(0, 1.25, pz); backM.rotation.y = Math.PI;
+  group.add(backM);
+  const mat = new THREE.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG[kind] || FRAG.warm, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false });
+  const portal = noRay(new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.3), mat));
+  portal.position.set(0, 1.18, pz - 0.03); portal.rotation.y = Math.PI; portal.renderOrder = 4;
+  group.add(portal);
+  // 屋里这一面：南墙上门框四周的光晕 + 地上从门口铺进屋里的一道光
+  const hU = { color: { value: new THREE.Color(spill) }, power: U.power };
+  const addMat = (frag) => new THREE.ShaderMaterial({ uniforms: hU, vertexShader: VERT, fragmentShader: frag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
+  const halo = noRay(new THREE.Mesh(new THREE.PlaneGeometry(1.7, 2.9), addMat(HALO_FRAG)));
+  halo.position.set(0, 1.12, WC_Z - 0.012); halo.rotation.y = Math.PI; halo.renderOrder = 4;
+  group.add(halo);
+  const sg = new THREE.BufferGeometry();
+  // 从门洞（z=4.5，宽 0.78）往屋里（-z）铺 1.6m，越往里越宽、越淡
+  sg.setAttribute('position', new THREE.Float32BufferAttribute([0.38, 0.004, WC_Z, -0.38, 0.004, WC_Z, -0.6, 0.004, WC_Z - 1.6, 0.66, 0.004, WC_Z - 1.6], 3));
+  sg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 0, 1, 1, 1, 1, 0], 2));
+  sg.setIndex([0, 2, 1, 0, 3, 2]);
+  const spillM = noRay(new THREE.Mesh(sg, addMat(SPILL_FRAG)));
+  spillM.renderOrder = 4;
+  group.add(spillM);
+  R.root.add(group);
+  // 还是借走廊那盏灯（出门的光这时已经收掉了），挪进洗手间里
+  const lamp = R.lights.corridor;
+  if (lamp) { lamp.color.set(spill); lamp.position.set(0, 1.7, WC_Z + WC_TW + 0.5); }
+  const L = {
+    kind, group,
+    get power() { return U.power.value; },
+    set power(v) {
+      U.power.value = v;
+      backMat.opacity = Math.min(1, v * 1.4);
+      group.visible = v > 0.002;
+      if (lamp) lamp.intensity = 3 * Math.min(v, 1.6);
+    },
+    remove() {
+      group.parent && group.parent.remove(group);
+      group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+      if (lamp) lamp.intensity = 0;
+      const i = R.updaters.indexOf(upd);
+      if (i >= 0) R.updaters.splice(i, 1);
+      if (R.wcLight === L) R.wcLight = null;
+    },
+  };
+  const upd = (dt, t) => { U.time.value = t; };
+  R.updaters.push(upd);
+  R.wcLight = L;
   L.power = 0;
   return L;
 }

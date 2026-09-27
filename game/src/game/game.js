@@ -7,7 +7,7 @@ import { CHAPTERS, LAST_CHAPTER } from './chapters.js';
 import { chapterLabel } from './chapternames.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
-import { addDoorLight } from './doorway.js';
+import { addDoorLight, addWcLight } from './doorway.js';
 
 // 不限时：故事里的钟从开局时间往后走，越走越慢，永远差一点才到点（8:00 开考 / 18:00 天黑 / 23:00 熄灯）
 // 走到一半所需的时间 ≈ TAU × 0.7；第二、三章用 CH.tau
@@ -24,9 +24,12 @@ const MATE_NAMES = [
   '亚索', '提莫', '盖伦', '鲁班七号', '李白', '韩信', '程咬金', '诸葛亮', '关羽', '张飞', '赵云', '吕布',
 ];
 // 三个室友戏份固定、名字随机（S.mates = [A, B, C]，下面的文案里用 {A}{B}{C} 占位）：
-//   A：W1 的床（黄色碎花被），把准考证锁进行李箱，第③位写在窗户上
-//   B：W2 的床（蓝被子），第②位在电脑里，第④位锁在抽屉里（钥匙在他袜子里）
-//   C：E2 的床（粉色床帘）和旁边的书桌，用车锁锁门，第①位塞在空调里（电池在头盔里）
+//   A：W1 的床（黄色碎花被），把准考证锁进行李箱（密码"他最怕的那一天"），窗户上哈口气是他写的"加油"
+//   B：W2 的床（蓝被子），把文具袋锁进抽屉；抽屉钥匙在他袜子里，这句话写在电脑里（开机密码要紫光手电照键盘）
+//   C：E2 的床（粉色床帘）和旁边的书桌，把学生证塞进了空调（遥控器电池在头盔里）
+// 第一章的任务：带齐考试用品（准考证 · 学生证 · 文具袋）。门没有锁——可东西没带齐就出门，门外的光只会把人从洗手间的门里送回来
+const CH1_ICONS = ['🎫', '🪪', '✏️'];
+const CH1_ITEMS = ['ticket', 'studentId', 'pencilCase'];
 
 const ITEMS = {
   studentId: { icon: '🪪', name: '学生证', desc: '考试必带。照片上的你还没有黑眼圈。' },
@@ -36,6 +39,7 @@ const ITEMS = {
   remote: { icon: '📟', name: '遥控器', desc: '空调遥控器' },
   batteries: { icon: '🔋', name: '5号电池', desc: '两节5号电池' },
   key: { icon: '🗝️', name: '小钥匙', desc: '从{B}袜子里掉出来的小钥匙……' },
+  pencilCase: { icon: '✏️', name: '文具袋', desc: '2B 铅笔、橡皮、黑色签字笔，还有那台按键发黏的计算器' },
   latiao: { icon: '🌶️', name: '辣条', desc: '点击吃掉' },
 };
 
@@ -105,6 +109,7 @@ const ACH = [
   ['gargantua', '🕳️ 卡冈图雅', '不小心放出了货柜 G 里的微型黑洞'],
   ['stay', '📚 书架背后的幽灵', '隐藏结局：从书缝里看到了那天晚上的自己'],
   ['enlist', '🎖️ 新兵报到', '接过少校递来的军帽，回敬一个军礼'],
+  ['penrose', '🌀 彭罗斯阶梯', '在同一间 211 里，推开门又从洗手间走回来三次'],
   ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部七个 211'],
 ];
 
@@ -202,7 +207,8 @@ export class Game {
   }
 
   // ================== 新的一局 ==================
-  // view：鉴赏模式——没有任务、没有门锁，走到门口就去下一关
+  // view：鉴赏模式——没有任务，走到门口就去下一关
+  // 游戏模式：门都没有锁，可每一间 211 都有一个任务；任务没完成就出门，只会从洗手间的门里走回这间屋子
   newRun({ name, chapter = 1, view = false }) {
     const rnd = mulberry32((Date.now() ^ 0x5f3759df) >>> 0);
     this.rnd = rnd;
@@ -210,14 +216,14 @@ export class Game {
     const dates = [[6, 18], [6, 25], [6, 12], [6, 19], [6, 23], [6, 16], [1, 12], [1, 15], [1, 18], [1, 20]];
     const [month, day] = dates[r(dates.length)];
     const words = ['GANK', 'PUSH', 'FARM', 'WARD', 'TANK', 'KITE', 'DIVE', 'JUNG'];
-    const digits = [1 + r(9), r(10), r(10), r(10)];
     const pool = MATE_NAMES.filter((m) => m !== name);
     const mates = [0, 1, 2].map(() => pool.splice(r(pool.length), 1)[0]);
     this.S = {
       name: name || '我', mates, elapsed: 0, hints: 0, freeHints: 0,
-      digits, found: [false, false, false, false], month, day, suitCode: `${month}${day}`, pcPass: words[r(words.length)],
+      // 第一章：三样考试用品（HUD 上的三个格子，拿到一样打一个勾）
+      digits: CH1_ICONS.map(() => '✓'), found: CH1_ICONS.map(() => false), month, day, suitCode: `${month}${day}`, pcPass: words[r(words.length)],
       f: {}, inv: [], clues: new Map(), ach: new Set(), phoneCharge: 0, msgSent: {}, newItem: null, helmetOn: false,
-      lastSec: -1, chapter, done: [], view: !!view,
+      lastSec: -1, chapter, done: [], view: !!view, loops: 0, loopsTotal: 0,
     };
     this.handlers = this._handlers();
     this.ui.setViewMode(this.S.view);
@@ -228,7 +234,7 @@ export class Game {
     R.ticket.tex.needsUpdate = true;
     TX.drawKeyboardUV(R.kbUV.canvas, this.S.pcPass);
     R.kbUV.tex.needsUpdate = true;
-    TX.drawWindowFog(R.fog.canvas, digits[2]);
+    TX.drawWindowFog(R.fog.canvas, '加油!!');
     R.fog.tex.needsUpdate = true;
     const [A, B, C] = mates;
     const roster = R.interact.roster;
@@ -237,6 +243,9 @@ export class Game {
     TX.drawUVDoodles(R.doodle.canvas, C);
     R.doodle.tex.needsUpdate = true;
     this.msgs = this._initialMessages();
+    // 学生证被{C}塞进了空调：桌上那本先藏起来，开空调时从出风口飘下来
+    if (!this.S.view && chapter === 1) R.studentId.visible = false;
+    this.ui.setChapterTag('', '考试用品');
   }
 
   _initialMessages() {
@@ -245,15 +254,13 @@ export class Game {
       { time: '06:52', who: A, text: '起床了起床了！今天考高数！！' },
       { who: B, text: '@睡神 醒醒' },
       { who: C, text: '叫不醒，打了一晚上排位，呼噜打得跟拖拉机一样 🚜' },
-      { time: '07:03', who: A, text: '那就给他留点“惊喜” 😏' },
-      { who: C, text: '门我用他自己的车锁锁上了 🔒 4位密码拆成4份藏宿舍里了' },
-      { who: C, text: '第①位我塞空调里了。遥控器电池？藏他宝贝头盔里了 🪖' },
-      { time: '07:08', who: B, text: '第②位在他电脑里。开机密码？用紫光手电照照他天天敲的东西 😎' },
-      { who: A, text: '准考证和紫光手电我都塞他行李箱里了，箱子密码是“他最怕的那一天” 📅' },
-      { time: '07:12', who: A, text: '第③位我写在窗户玻璃上了，对着玻璃哈口气就能看见 🌫️' },
-      { who: B, text: '第④位锁他抽屉里了，抽屉钥匙……在我昨天穿的袜子里 🧦 自己去脏衣篓翻' },
+      { time: '07:03', who: A, text: '那就给他留点“惊喜” 😏 考试要带的三样东西，咱们一人藏一样！' },
+      { who: A, text: '准考证和紫光手电我塞他行李箱里了，箱子密码是“他最怕的那一天” 📅' },
+      { time: '07:08', who: C, text: '学生证我塞空调里了，一开空调它自己就飞出来 ❄️ 遥控器电池？藏他宝贝头盔里了 🪖' },
+      { who: B, text: '文具袋我锁他抽屉里了。钥匙在哪？写在他电脑里——开机密码？用紫光手电照照他天天敲的东西 😎' },
       { who: C, text: `${B}你是魔鬼吧 🤮` },
-      { time: '07:20', who: A, text: '8点开考，他要是出不来就等着重修吧 🙏' },
+      { time: '07:12', who: A, text: '窗户上我还给他留了句话，对着玻璃哈口气就能看见 🌫️' },
+      { time: '07:20', who: A, text: '三样少一样都进不了考场。8点开考，他要是出不来就等着重修吧 🙏' },
       { who: C, text: '兄弟们撤了，考场见！' },
     ];
   }
@@ -303,7 +310,7 @@ export class Game {
       this.goChapter(opts.chapter, { fromTitle: true });
       return;
     }
-    if (this.S.view) this._removeDoorLock();
+    this._removeDoorLock();
     this.state = 'intro';
     this.ui.hideTitle();
     this.camera.clearViewOffset();
@@ -356,7 +363,6 @@ export class Game {
     const R = this.refs, D = R.door;
     D.pivot.rotation.y = D.base;
     if (R.doorLight) R.doorLight.remove();
-    if (!this.S.view && this.CH && this.CH.relock) this.CH.relock(this, 'show');
     this.auto = null; this._afterReach = null; this._cutPose = null;
     this.ctrl.teleport(-1.05, 3.9, Math.PI / 2);
     this.ch.root.rotation.y = Math.PI / 2;
@@ -495,7 +501,8 @@ export class Game {
       this.clockText = clockText;
     }
     if (!S.view) {
-      this.ui.setCodes(S.digits, S.found, this.CH ? this.CH.codeIcons : null);
+      if (!this.CH) CH1_ITEMS.forEach((id, i) => (S.found[i] = S.inv.includes(id)));
+      this.ui.setCodes(S.digits, S.found, this.CH ? this.CH.codeIcons : CH1_ICONS);
       this.ui.setObjectives(this._objectives());
     }
     if (force || this._invDirty) {
@@ -528,16 +535,19 @@ export class Game {
 
   _objectives() {
     if (this.CH) return this.CH.objectives(this);
-    const S = this.S, f = S.f;
-    const n = S.found.filter(Boolean).length;
-    if (!f.readSticky) return [{ text: '看看显示器上的便利贴', done: false }];
+    const S = this.S, f = S.f, inv = S.inv;
+    if (!f.readSticky && !S.loops) return [{ text: '看看显示器上的便利贴', done: false }];
+    const n = CH1_ITEMS.filter((id) => inv.includes(id)).length;
+    const knowAll = f.phoneRead;
     const list = [
-      { text: '带上学生证', done: !!f.studentId },
-      { text: '找回准考证（在行李箱里）', done: !!f.ticket },
-      { text: `集齐门锁密码 ${n}/4`, done: n === 4 },
+      { text: `任务：带齐考试用品 ${n}/3`, done: !!f.taskDone },
+      { text: `🎫 准考证${f.suitSeen || knowAll ? '（锁在行李箱里）' : ''}`, done: inv.includes('ticket') },
+      { text: `🪪 学生证${knowAll ? '（塞进了空调）' : ''}`, done: inv.includes('studentId') },
+      { text: `✏️ 文具袋${knowAll || f.pcUnlocked || f.drawerTried ? '（锁在抽屉里）' : ''}`, done: inv.includes('pencilCase') },
     ];
     if (!f.phoneOn) list.push({ text: '（可选）给手机充电，看看宿舍群', done: false });
-    list.push({ text: f.doorUnlocked ? '出门！冲向考场！' : '打开门上的车锁，逃出宿舍', done: false });
+    if (f.taskDone) list.push({ text: '出门！冲向考场！', done: false });
+    else if (S.loops) list.push({ text: '没带齐就出门？只会从洗手间走回来', done: false });
     return list;
   }
 
@@ -634,6 +644,19 @@ export class Game {
     this._invDirty = true;
     const it = this._items()[id];
     if (!silent) { this.audio.pickup(); this.ui.toast(`获得：<b>${it.name}</b>`, 'item', it.icon); }
+    if (!this.CH && CH1_ITEMS.every((k) => S.inv.includes(k))) this.completeTask('准考证、学生证、文具袋……齐了！这回总能出门了吧？', 1.2);
+  }
+  // 这一层的任务完成了：一声又低又长的铜管音，屋子轻轻一震——门外那片光，这回会把人送去下一间 211
+  completeTask(line = '', delay = 0.3) {
+    const S = this.S;
+    if (S.view || S.f.taskDone) return;
+    S.f.taskDone = true;
+    this.after(delay, () => {
+      this.audio.braam();
+      this._shake(0.2);
+      this.ui.toast(`任务完成 · ${this.CH ? this.CH.taskName : '带齐考试用品'}`, 'clue', '🚪');
+      if (line) this.after(1.6, () => this.say(line, 3.8));
+    });
   }
   take(id) {
     const S = this.S;
@@ -641,7 +664,7 @@ export class Game {
     this._invDirty = true;
   }
   hideObj(o) { if (o) o.visible = false; }
-  // 鉴赏模式没有线索本、没有门锁：谜题道具照样能玩，只是不再弹线索和密码
+  // 鉴赏模式没有线索本、没有任务：谜题道具照样能玩，只是不再弹线索和密码
   clue(key, html) {
     if (this.S.view) return;
     if (!this.S.clues.has(key)) this.ui.toast('线索已记录到线索本 <kbd>J</kbd>', 'clue', '📒');
@@ -654,11 +677,11 @@ export class Game {
     if (S.view) return;
     this.audio.clue();
     const marks = this.CH && this.CH.codeIcons ? this.CH.codeIcons : ['①', '②', '③', '④'];
-    const lockName = this.CH ? this.CH.lockName : '门锁';
-    this.ui.toast(`${lockName}密码第${marks[i]}位：<b style="font-size:20px">${S.digits[i]}</b>`, 'clue', '🔑');
+    const lockName = this.CH ? this.CH.lockName : '任务';
+    this.ui.toast(`${lockName}第${marks[i]}位：<b style="font-size:20px">${S.digits[i]}</b>`, 'clue', '🔑');
     S.clues.set(`d${i}`, `${lockName}第<b>${marks[i]}</b>位 = <b>${S.digits[i]}</b>（${src}）`);
     const n = S.found.filter(Boolean).length;
-    if (n === S.digits.length) this.after(1.5, () => this.say(`密码凑齐了：${S.digits.join('')}！快去门口！`, 4));
+    if (n === S.digits.length) this.after(1.5, () => this.say(this.CH && this.CH.readyLine ? this.CH.readyLine(this) : `凑齐了：${S.digits.join('')}！`, 4));
   }
   useItem(id) {
     const S = this.S;
@@ -679,17 +702,25 @@ export class Game {
   // ---------- 各物件的交互 ----------
   _handlers() {
     const H = this._handlersBase();
-    // 鉴赏模式：门上没有锁，直接出门去下一关
-    if (this.S && this.S.view) H.door = { label: this._doorName(), verb: () => (this.chapter < LAST_CHAPTER ? '去下一关' : '出门（结局）'), act: () => this.win() };
+    // 门都没有锁，推开就能出去：鉴赏模式直接去下一关；游戏模式要是任务还没完成，门外的光会把人从洗手间的门里送回来
+    H.door = {
+      label: () => this._doorName(),
+      verb: () => (this.S && this.S.view ? (this.chapter < LAST_CHAPTER ? '去下一关' : '出门（结局）') : (this.CH && this.CH.doorVerb) || '出门'),
+      act: () => this.exitDoor(),
+    };
     return H;
   }
   _doorName() { return (this.CH && this.CH.doorName) || '宿舍门'; }
-  // 鉴赏模式：开局就把门锁整个拿掉（连掉在地上的锁也不留）
+  exitDoor() {
+    const S = this.S;
+    if (S.view || S.f.taskDone) this.win();
+    else this.loopBack();
+  }
+  // 门上没有锁了：开局就把以前的锁整个拿掉（连掉在地上的锁也不留）
   _removeDoorLock() {
     this.collision.setEnabled('lockCable', false);
     if (this.CH) this.CH.removeLock(this);
     else { const L = this.refs.lock; L.group.visible = false; L.dropped.visible = false; }
-    this.S.f.doorUnlocked = true; this.S.f.unlocked = true;
   }
   // 鉴赏模式按 N：不走出门了，直接穿越
   viewSkip() {
@@ -756,7 +787,7 @@ export class Game {
       label: '抽屉', verb: () => (this.S.f.drawerOpen ? '查看' : this.S.inv.includes('key') ? '用小钥匙打开' : '打开'),
       act: () => this.onDrawer(),
     };
-    H.drawerNote = { label: '纸条', verb: '阅读', act: () => this.readNote(3) };
+    H.pencilCase = { label: '文具袋', verb: '拿走', act: () => { this.give('pencilCase'); this.hideObj(this.refs.pencilCase); this.say(`文具袋！2B 铅笔、橡皮、计算器都在……${this.S.mates[1]}你还知道给我留着。`, 3.4); } };
     H.latiao = { label: '辣条', verb: '拿走', act: () => { this.give('latiao'); this.hideObj(this.refs.latiao); this.say(`一包辣条？${this.S.mates[1]}还挺有良心。`); } };
     H.remote = {
       label: '空调遥控器', verb: '拿起',
@@ -785,7 +816,6 @@ export class Game {
       act: () => { if (this.S.helmetOn) this.wearHelmet(false); else this.say('一张老木凳，头盔原本放在这。'); },
     };
     H.ac = { label: '空调', verb: () => (this.S.f.acOn ? '查看' : this.S.f.remoteLoaded ? '用遥控器打开' : '查看'), act: () => this.onAC() };
-    H.acNote = { label: '纸条', verb: '捡起来看', act: () => this.readNote(0) };
     H.suitcase = { label: '行李箱', verb: () => (this.S.f.suitcaseOpen ? '查看' : '输入密码'), act: () => this.onSuitcase() };
     H.suitNote = { label: '便利贴', verb: '阅读', act: () => this.readSuitNote() };
     H.ticket = {
@@ -806,7 +836,6 @@ export class Game {
     H.basket = { label: '脏衣篓', verb: () => (this.S.f.key ? '查看' : '翻找'), act: () => this.onBasket() };
     H.curtain = { label: '窗帘', verb: () => (this.S.f.curtainOpen ? '拉上' : '拉开'), act: () => this.toggleCurtain() };
     H.window = { label: '窗户', verb: '对着玻璃哈气', act: () => this.breathOnWindow() };
-    H.door = { label: '宿舍门', verb: () => (this.S.f.doorUnlocked ? '出门' : '开锁'), act: () => this.onDoor() };
     H.wcDoor = { label: '洗手间门', verb: () => (this.refs.wcDoor.open ? '关上' : '推开'), act: () => this.toggleWcDoor() };
     H.cubDoor = { label: '厕所隔间', verb: () => (this.refs.cubDoor.open ? '关上' : '打开'), act: () => this.toggleCubDoor() };
     H.sink = { label: '洗漱台', verb: '洗把脸', act: () => this.washFace() };
@@ -835,13 +864,13 @@ export class Game {
     this.audio.paper();
     const node = this.ui.doc({
       variant: 'sticky',
-      html: `睡神：<br>叫了你八百遍都不醒 😤 我们先去考场了。<br>昨晚你五杀喊得全楼都听见了，<br>所以——门我们用<span class="red">你自己的车锁</span>锁上了 🔒<br><span class="red">4位密码</span>拆成4份藏在宿舍里，自己找吧～<br>准考证也塞你<span class="red">行李箱</span>里了。<br>8点前出不来，就等着重修吧！<br>（实在不行，看看手机群里）<div class="sig">—— 211 全体室友<br>${S.mates.join('、')}</div>`,
+      html: `睡神：<br>叫了你八百遍都不醒 😤 我们先去考场了。<br>昨晚你五杀喊得全楼都听见了，所以——<br>你的<span class="red">准考证、学生证、文具袋</span>，我们一人藏了一样 😏<br>三样<span class="red">一样都不能少</span>：少带一样，你就是出了门，也走不到考场。<br>（不信？你现在就去开门试试）<br>藏哪了？宿舍群里说了——手机没电是你的事。<br>8点开考，迟到就等着重修吧！<div class="sig">—— 211 全体室友<br>${S.mates.join('、')}</div>`,
     });
     this.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
     if (!S.f.readSticky) {
       S.f.readSticky = true;
-      this.clue('sticky', '室友的便利贴：门锁是<b>4位密码</b>，拆成4份藏在宿舍里；<b>准考证在行李箱</b>里。');
-      this.after(0.4, () => this.say('这帮家伙……！先找准考证，再凑齐密码！', 3.5));
+      this.clue('sticky', '室友的便利贴：<b>准考证、学生证、文具袋</b>被他们一人藏了一样，少带一样都“走不到考场”；藏在哪，宿舍群里有说。');
+      this.after(0.4, () => this.say(S.loops ? '难怪出了门又从洗手间走回来……三样东西，一样一样找回来！' : '这帮家伙……！三样东西，一样一样找回来！', 3.5));
     }
   }
 
@@ -856,14 +885,17 @@ export class Game {
     const node = this.ui.pc({
       name: S.name, time: this.clockText, unlocked: !!S.f.pcUnlocked,
       hint: '密码提示：紫光之下，键盘会说话',
-      noteText: `睡神：\n\n想打游戏？门都没有（字面意思）😂\n\n门锁密码第②位是：<span class="big">${S.digits[1]}</span>\n\n—— ${S.mates[1]}`,
+      noteText: `睡神：\n\n想打游戏？没门 😂\n\n文具袋锁你抽屉里了，抽屉钥匙在我<span class="big">昨天穿的袜子</span>里 🧦\n自己去脏衣篓翻吧\n\n—— ${S.mates[1]}`,
       onTyping: () => this.audio.typeKey(),
       onUnlock: (pw) => {
         if (pw === S.pcPass) {
           S.f.pcUnlocked = true;
           this.audio.bootChime();
           this._drawMonitor('desktop');
-          this.after(0.6, () => this.foundDigit(1, '电脑桌面上的 txt'));
+          this.after(0.6, () => {
+            S.f.pcNote = true;
+            this.clue('pcNote', `电脑桌面上${S.mates[1]}的 txt：抽屉钥匙在他<b>昨天穿的袜子</b>里（脏衣篓）。`);
+          });
           return true;
         }
         this.audio.error();
@@ -892,7 +924,7 @@ export class Game {
   _drawMonitor(kind) {
     const R = this.refs, S = this.S;
     if (kind === 'lock') TX.drawLockScreen(R.monitor.canvas, { name: S.name, time: this.clockText || '07:30', hint: '提示：紫光之下，键盘会说话' });
-    else if (kind === 'desktop') TX.drawDesktop(R.monitor.canvas, { name: S.name, openNote: true, noteText: `睡神：\n门锁密码第②位是：${S.digits[1]}\n—— ${S.mates[1]}` });
+    else if (kind === 'desktop') TX.drawDesktop(R.monitor.canvas, { name: S.name, openNote: true, noteText: `睡神：\n抽屉钥匙在我昨天穿的袜子里\n—— ${S.mates[1]}` });
     else TX.drawMobaScreen(R.monitor.canvas);
     R.monitor.tex.needsUpdate = true;
     this._monColor = kind === 'moba' ? '#ffe6b0' : '#9fb8ff';
@@ -918,7 +950,7 @@ export class Game {
     const node = this.ui.phone({ messages: this.msgs, time: this.clockText, battery: Math.round(12 + S.phoneCharge * 8) });
     this._phoneNode = node;
     this.openModal(node, { onClose: () => (this._phoneNode = null) });
-    this.clue('chat', `宿舍群：①空调+头盔里的电池　②电脑（紫光照键盘）　③窗户哈气　④抽屉（钥匙在${S.mates[1]}袜子里）　准考证在行李箱（密码：他最怕的那一天）`);
+    this.clue('chat', `宿舍群：🎫 准考证在<b>行李箱</b>（密码：他最怕的那一天）　🪪 学生证在<b>空调</b>里（遥控器电池在头盔里）　✏️ 文具袋锁在<b>抽屉</b>里（钥匙的下落写在电脑里，开机密码用紫光照键盘）`);
   }
 
   showCalendar() {
@@ -954,20 +986,6 @@ export class Game {
     const node = this.ui.doc({ variant: 'plain', title: '211 值日表', html: `周一 ${A} · 周二 ${B} · 周三 ${C} · <s>周四 ${S.name}</s> · 周五 ${A} · 周六 ${B} · 周日 全员大扫除<br><br>周四那一栏被人用红笔划掉了，旁边写着：<span class="red">“考完再说！”</span>` });
     this.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
   }
-  readNote(i) {
-    const S = this.S;
-    const R = this.refs;
-    this.audio.paper();
-    const [A, B, C] = S.mates;
-    const who = [C, B, A, B][i];
-    const marks = ['①', '②', '③', '④'];
-    const extra = i === 0 ? '空调吹了一整晚了吧？电费你交 😏' : '辣条给你补补脑，考试加油！';
-    const node = this.ui.doc({ html: `门锁密码第 ${marks[i]} 位：<span class="big">${S.digits[i]}</span><br>${extra}<div class="sig">—— ${who}</div>` });
-    this.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
-    if (i === 0) this.hideObj(R.acNote);
-    if (i === 3) this.hideObj(R.drawerNote);
-    this.after(0.2, () => this.foundDigit(i, i === 0 ? '空调里掉出的纸条' : '抽屉里的纸条'));
-  }
   readSuitNote() {
     const S = this.S;
     this.audio.paper();
@@ -1001,9 +1019,10 @@ export class Game {
 
   onDrawer() {
     const S = this.S;
-    if (S.f.drawerOpen) { this.say(S.found[3] ? '抽屉里只剩几支笔了。' : '抽屉里有张纸条！'); return; }
+    if (S.f.drawerOpen) { this.say(S.inv.includes('pencilCase') ? '抽屉里只剩几张草稿纸了。' : '文具袋就在抽屉里！'); return; }
     if (!S.inv.includes('key')) {
       this.audio.lockedRattle();
+      S.f.drawerTried = true;
       this.say('抽屉锁着……钥匙呢？', 2.6);
       this.clue('drawer', '我的书桌<b>抽屉是锁着的</b>，需要一把小钥匙。');
       return;
@@ -1015,7 +1034,7 @@ export class Game {
     const d = this.refs.drawer;
     const z0 = d.position.z;
     this.tween(0.7, (k) => (d.position.z = z0 + 0.3 * k), { ease: easeOut });
-    this.after(0.8, () => this.say('打开了！里面有张纸条……还有一包辣条？', 3.2));
+    this.after(0.8, () => this.say('打开了！文具袋在里面……还有一包辣条？', 3.2));
   }
 
   onBasket() {
@@ -1048,23 +1067,26 @@ export class Game {
     const flap = R.ac.userData.flap;
     this.tween(1.2, (k) => (flap.rotation.x = 1.0 * k), { delay: 0.3 });
     this.after(0.8, () => this.audio.startLoop('ac', { freq: 420, gain: 0.05 }));
-    this.after(1.2, () => this.dropACNote());
+    this.after(1.2, () => this.dropStudentId());
     this.say('滴滴——空调开了。', 2);
   }
-  dropACNote() {
-    const note = this.refs.acNote;
-    const ac = this.refs.ac.position; // 空调在西墙宿舍门上方，出风口朝东
-    const start = new THREE.Vector3(ac.x + 0.14, 2.36, ac.z), end = new THREE.Vector3(-1.05, 0.006, 3.35);
-    note.visible = true;
-    note.position.copy(start);
+  // 学生证被冷风从出风口吹出来，翻着跟头落到门边的地上
+  dropStudentId() {
+    const R = this.refs, card = R.studentId;
+    if (this.S.inv.includes('studentId')) return;
+    const ac = R.ac.position; // 空调在西墙宿舍门上方，出风口朝东
+    const start = new THREE.Vector3(ac.x + 0.14, 2.36, ac.z), end = new THREE.Vector3(-1.02, 0.004, 3.3);
+    R.root.attach(card);
+    card.visible = true;
+    card.position.copy(start);
     this.audio.paper();
-    this.tween(2.8, (k, raw) => {
-      const e = easeIn(raw) * 0.6 + raw * 0.4;
-      note.position.lerpVectors(start, end, e);
-      note.position.x += Math.sin(raw * 9) * 0.16 * (1 - raw);
-      note.position.z += Math.cos(raw * 7) * 0.1 * (1 - raw);
-      note.rotation.set(-Math.PI / 2 + Math.sin(raw * 11) * 0.9 * (1 - raw), 0, raw * 4 + Math.sin(raw * 6) * 0.5);
-    }, { ease: (t) => t, done: () => { note.rotation.set(-Math.PI / 2, 0, 0.6); this.say('空调里飘出来一张纸条！', 2.5); } });
+    this.tween(2.4, (k, raw) => {
+      const e = easeIn(raw) * 0.7 + raw * 0.3;
+      card.position.lerpVectors(start, end, e);
+      card.position.x += Math.sin(raw * 8) * 0.12 * (1 - raw);
+      card.position.z += Math.cos(raw * 6) * 0.08 * (1 - raw);
+      card.rotation.set(Math.sin(raw * 13) * 1.4 * (1 - raw), raw * 5, Math.cos(raw * 9) * 0.9 * (1 - raw));
+    }, { ease: (t) => t, done: () => { card.rotation.set(0, 0.5, 0); this.audio.noise({ dur: 0.06, gain: 0.15, type: 'lowpass', freq: 900 }); this.say(`啪嗒——空调里吹出来一本蓝色的小本子……我的学生证！${this.S.mates[2]}你可真会藏。`, 3.4); } });
   }
 
   toggleCurtain() {
@@ -1089,7 +1111,7 @@ export class Game {
     const o0 = fog.mat.opacity;
     this.tween(0.9, (k) => (fog.mat.opacity = lerp(o0, 0.93, k)), { ease: easeOut });
     this._fogHold = 6;
-    if (!S.found[2]) this.after(1.6, () => { this.foundDigit(2, '窗户上哈气显出的字'); this.say(`玻璃上显出了字：③ → ${S.digits[2]}！`, 3.4); });
+    if (!S.f.fogRead) this.after(1.6, () => { S.f.fogRead = true; this.say(`玻璃上显出几个字：“加油!!”……旁边还画了个笑脸。${S.mates[0]}写的吧。`, 3.6); });
   }
 
   wearHelmet(on) {
@@ -1198,84 +1220,30 @@ export class Game {
     else if (S.uvOn && !S.f.uvTried) { S.f.uvTried = true; this.say('紫光……照照看哪里有荧光？', 2.6); }
   }
 
-  onDoor() {
-    const S = this.S;
-    if (!S.f.triedDoor) {
-      S.f.triedDoor = true;
-      this.audio.lockedRattle();
-      this.say('门把手被我的车锁拴在了门边的铁桌腿上？！这帮家伙……', 3.4);
-      this.clue('door', '门把手被<b>4位数字自行车锁</b>拴在门边折叠桌的桌腿上。');
-      this.after(1.3, () => this.openDoorLock());
-      return;
-    }
-    if (!S.f.doorUnlocked) { this.openDoorLock(); return; }
-    this.tryExit();
-  }
-  openDoorLock() {
-    const S = this.S;
-    const n = S.found.filter(Boolean).length;
-    const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
-    const box = this.ui.lock({
-      n: 4, title: '自行车密码锁（4位）', hint: n ? `已知线索：<b>${known}</b>` : '密码被室友拆成了4份，藏在宿舍里',
-      onTick: () => this.audio.tick(),
-      onSubmit: (code) => {
-        if (code === S.digits.join('')) { this.audio.unlock(); this.ui.closeModal(); this.unlockDoor(); return true; }
-        this.audio.error(); return false;
-      },
-    });
-    this.openModal(box);
-  }
-  unlockDoor() {
-    const S = this.S, L = this.refs.lock;
-    S.f.doorUnlocked = true;
-    this.collision.setEnabled('lockCable', false);
-    const body = L.body;
-    const y0 = body.position.y;
-    this.tween(0.5, (k) => { body.rotation.z = k * 0.8; body.position.y = y0 - k * 0.05; }, {
-      done: () => { L.group.visible = false; L.dropped.visible = true; this.audio.noise({ dur: 0.25, gain: 0.3, type: 'lowpass', freq: 800 }); },
-    });
-    this.say('咔哒——锁开了！！', 2.2);
-    this.after(1.4, () => this.tryExit());
-  }
-  tryExit() {
-    const S = this.S;
-    const miss = [];
-    if (!S.inv.includes('ticket')) miss.push('准考证');
-    if (!S.inv.includes('studentId')) miss.push('学生证');
-    if (miss.length) { this.say(`等等！${miss.join('和')}还没拿！没有它进不了考场！`, 3.4); return; }
-    this.win();
-  }
-
   // ---------- 提示 / 线索本 / 暂停 ----------
   hintText() {
-    const S = this.S, f = S.f, F = S.found, inv = S.inv;
-    if (!f.readSticky) return '显示器上贴着一张便利贴，先看看吧。';
-    if (!f.triedDoor) return '去门口看看，门到底怎么了。';
-    if (!f.studentId) return '桌上那个蓝色小本子是你的学生证，考试要带。';
-    if (!f.suitcaseOpen) return f.sawCalendar ? `行李箱密码是“你最怕的那一天”——台历上被圈出的日期：${S.month}月${S.day}日，写成3位数。` : '行李箱在你床边，密码是“你最怕的那一天”。看看桌上的台历，哪天被红笔圈了？';
-    if (!f.ticket) return '行李箱里的准考证，记得拿上！';
-    if (!f.uv) return '行李箱里还有一支紫光手电，拿上它。';
-    if (!F[0]) {
-      if (!f.remote) return '空调遥控器在门边那张黑色杂物桌上。';
-      if (!f.remoteLoaded) return '遥控器电池被抠走了……门边凳子上的红白头盔里好像塞了东西？';
-      if (!f.acOn) return '空调在门上方的墙上，对着它用遥控器。';
-      return '空调里飘出了一张纸条，落在门边地上，捡起来看看。';
+    const S = this.S, f = S.f, inv = S.inv;
+    if (!f.readSticky) return S.loops ? '出了门又从洗手间走回来？显示器上那张便利贴，先看看吧。' : '显示器上贴着一张便利贴，先看看吧。';
+    if (!inv.includes('ticket')) {
+      if (!f.suitcaseOpen) return f.sawCalendar ? `行李箱密码是“你最怕的那一天”——台历上被圈出的日期：${S.month}月${S.day}日，写成3位数。` : '准考证锁在你床边的行李箱里，密码是“你最怕的那一天”。看看桌上的台历，哪天被红笔圈了？';
+      return '行李箱开了：准考证记得拿上（旁边的紫光手电也拿上）。';
     }
-    if (!F[1]) {
-      if (!f.pcSeen) return '去你的电脑前看看。';
+    if (!inv.includes('studentId')) {
+      if (f.acOn) return '学生证从空调里飘下来了，就落在门边的地上，捡起来。';
+      if (!f.remote) return `学生证被${S.mates[2]}塞进了空调。空调遥控器在门边那张黑色杂物桌上。`;
+      if (!f.remoteLoaded) return '遥控器电池被抠走了……门边凳子上的红白头盔里好像塞了东西？';
+      return '空调在门上方的墙上，对着它用遥控器打开。';
+    }
+    if (!inv.includes('pencilCase')) {
+      if (f.drawerOpen) return '抽屉开了，把文具袋拿上。';
+      if (f.key) return '用小钥匙打开你书桌的抽屉。';
+      if (f.pcUnlocked) return `抽屉钥匙在${S.mates[1]}的袜子里——找找那个蓝色的脏衣篓（窗边右侧）。`;
+      if (!inv.includes('uv')) return '文具袋锁在抽屉里，钥匙的下落写在电脑里。开机密码得用紫光手电照键盘——手电在行李箱里。';
+      if (!f.pcSeen) return '去你的电脑前看看，文具袋的线索在电脑里。';
       if (!S.uvOn) return '电脑密码提示“紫光之下，键盘会说话”——按 F 打开紫光手电，照照键盘。';
       return `紫光照亮的键帽顺序就是开机密码（${S.pcPass.length}个字母），去电脑上输入。`;
     }
-    if (!F[2]) {
-      if (!f.curtainOpen) return '窗帘拉得严严实实，拉开看看窗户。';
-      return '窗玻璃起雾了，走近窗户，对着玻璃哈口气。';
-    }
-    if (!F[3]) {
-      if (!f.key) return `抽屉钥匙在${S.mates[1]}的袜子里——找找那个蓝色的脏衣篓（窗边右侧）。`;
-      return '用小钥匙打开你书桌的抽屉。';
-    }
-    if (!f.doorUnlocked) return `密码凑齐了！去门口按①②③④的顺序输入：${S.digits.join('')}`;
-    return '快出门！冲向考场！';
+    return '三样都齐了！出门，冲向考场！';
   }
   // 提示不扣时间，但会计入结算评分（吃东西、洗脸换来的免费提示不算）
   hint() {
@@ -1354,7 +1322,7 @@ export class Game {
     const door = D.pivot;
     // 宿舍门在西墙最里头，往屋里开（贴向南墙）；先走到门的斜前方等门打开
     this.auto = { path: [new THREE.Vector3(-0.3, 0, clamp(p0.z, 1.3, 3.2)), new THREE.Vector3(-0.85, 0, 3.25)], speed: 1.7, i: 0 };
-    this.after(0.3, () => this.say(this.CH ? this.CH.exitLine(this) : S.view ? '冲！！！' : '准考证 ✓　学生证 ✓　冲！！！', 2.4));
+    this.after(0.3, () => this.say(this.CH ? this.CH.exitLine(this) : S.view ? '冲！！！' : '准考证 ✓　学生证 ✓　文具袋 ✓　冲！！！', 2.4));
     const kind = (this.CH && this.CH.portal) || 'warm';
     this._doorKind = kind;
     const openDoorAt = () => {
@@ -1380,8 +1348,129 @@ export class Game {
     this._afterReach = openDoorAt;
   }
 
+  // 任务还没完成就出门：门外还是那片光，人照样走进去——可白光散开的时候，人是从洗手间的门里走出来的，
+  // 回到的还是这一间 211（像彭罗斯阶梯一样绕回原地）。每绕一次，人会念叨得更具体一点
+  loopBack() {
+    if (this.state !== 'play') return;
+    const S = this.S;
+    S.loops = (S.loops || 0) + 1;
+    S.loopsTotal = (S.loopsTotal || 0) + 1;
+    if (S.loops >= 3) S.ach.add('penrose');
+    this.state = 'outro';
+    this.ui.closeModal(true);
+    this.input.exitLock();
+    this.ui.showHUD(false);
+    this.ui.showTouch(false);
+    this.ui.letterbox(true);
+    this._setHover(null);
+    if (S.uvOn) this.toggleUV();
+    this._modeBeforeLoop = this.ctrl.mode;
+    this.ctrl.setMode('third');
+    const p0 = this.ctrl.pos.clone();
+    const D = this.refs.door, dz = D.z;
+    const fy = this.ctrl.float ? this.ctrl.pos.y : 0;
+    this._cineSet(new THREE.Vector3(0.35, 1.6 + fy * 0.6, 2.1), new THREE.Vector3(-1.8, 1.1 + fy * 0.6, dz));
+    this.auto = { path: [new THREE.Vector3(-0.3, 0, clamp(p0.z, 1.3, 3.2)), new THREE.Vector3(-0.85, 0, 3.25)], speed: 1.7, i: 0 };
+    const tries = ['……再试一次。', '这次总该行了吧……', '…………', '就当是最后一次。'];
+    const line = S.loops === 1 ? (this.CH ? this.CH.exitLine(this) : '冲！！！') : tries[(S.loops - 2) % tries.length];
+    this.after(0.3, () => this.say(line, 2.2));
+    const kind = (this.CH && this.CH.portal) || 'warm';
+    this._afterReach = () => {
+      this.audio.doorOpen();
+      const L = addDoorLight(this, kind);
+      this.tween(1.3, (k) => { D.pivot.rotation.y = D.base + D.openAngle * k; L.power = k; }, { ease: easeOut });
+      this.audio.chime();
+      this.after(1.1, () => {
+        this.auto = { path: [new THREE.Vector3(-1.25, 0, dz), new THREE.Vector3(-2.4, 0, dz)], speed: 1.3, i: 0 };
+        this._cineTo(new THREE.Vector3(-0.15, 1.55 + fy, 3.5), new THREE.Vector3(-1.75, 1.15 + fy, dz), 1.2);
+        this.audio.whoosh();
+      });
+      this.after(2.3, () => {
+        const G = this.gfx.grade;
+        this.tween(0.6, (k) => { L.power = 1 + k * 1.5; if (this.gfx.useComposer) G.flash = k * 0.6; }, { ease: (t) => t * t });
+        this.ui.fade(1, { dur: 0.6, white: true });
+      });
+      this.after(2.95, () => this._loopReturn(kind));
+    };
+  }
+  // 白屏底下：门关回去、光收掉，人挪进洗手间里；白光散开——洗手间的玻璃门后面亮着同一片光，人影从光里走到门后，推门出来
+  _loopReturn(kind) {
+    const R = this.refs, D = R.door, W = R.wcDoor, S = this.S, CH = this.CH;
+    this.gfx.grade.flash = 0;
+    D.pivot.rotation.y = D.base;
+    if (R.doorLight) R.doorLight.remove();
+    // 洗手间的门先关好（第七章驾驶舱的门本来开着，也一样先关上、再被推开）
+    if (W.open || W.anim) {
+      W.anim = false; W.open = false;
+      W.pivot.rotation.y = W.base || 0;
+      this.collision.setEnabled('wcShut', true); this.collision.setEnabled('wcOpen', false);
+      W.camBox.copy(W.closedBox);
+      R.lights.wc.shadow.needsUpdate = true;
+    }
+    const L = addWcLight(this, kind);
+    L.power = 1;
+    const st = (CH && CH.loopStart) || { x: 0.08, z: 5.85 };
+    const fy = this.ctrl.float ? this.ctrl.floatTarget : 0;
+    this.auto = null; this._afterReach = null;
+    this.ctrl.teleport(st.x, st.z, Math.PI);
+    this.ch.root.position.set(st.x, fy, st.z); this.ch.root.rotation.y = Math.PI;
+    this.ch.setExpression('focus');
+    this._cutPose = null;
+    // 镜头站在两排床中间的过道里，正对着洗手间的玻璃门（x 超过 ±0.84 就钻进上下铺里了）
+    this._cineSet(new THREE.Vector3(0.32, 1.5 + fy * 0.5, 1.65), new THREE.Vector3(0.0, 1.12 + fy * 0.5, 4.6));
+    this.audio.loopBack();
+    this.ui.fade(0, { dur: 1.1, white: true });
+    // 人影走到玻璃门后面
+    this.after(0.35, () => { this.auto = { path: [new THREE.Vector3(st.x * 0.4, 0, 5.02)], speed: this.ctrl.float ? 0.8 : 0.95, i: 0 }; });
+    this._afterReach = () => {
+      this._swingDoor(W, { shutId: 'wcShut', openId: 'wcOpen', sound: (o) => (CH && CH.theme === 'ruin' ? this.audio.creak() : this.audio.glassDoor(o)), dur: 0.55 });
+      this.after(0.45, () => {
+        this.auto = { path: [new THREE.Vector3(0.02, 0, 4.2), new THREE.Vector3(0.05, 0, 3.55)], speed: this.ctrl.float ? 0.85 : 1.0, i: 0 };
+        this._cineTo(new THREE.Vector3(0.4, 1.55 + fy * 0.5, 2.0), new THREE.Vector3(0.02, 1.2 + fy * 0.5, 4.1), 1.8);
+        this._afterReach = () => this._loopArrive(L);
+      });
+    };
+  }
+  // 站定、回头看一眼洗手间：原来绕回来了
+  _loopArrive(L) {
+    const S = this.S, CH = this.CH, fy = this.ctrl.float ? this.ctrl.floatTarget : 0;
+    this.tween(1.6, (k) => { L.power = 1 - k; }, { ease: (t) => t, done: () => L.remove() });
+    this.ch.setExpression('shock');
+    this._cutPose = { lookYaw: 0.7, lookPitch: 0.05 }; // 回头瞟一眼身后的洗手间，再转回来
+    this.after(1.5, () => { if (this._cutPose) this._cutPose = { lookYaw: -0.1, lookPitch: 0.12 }; });
+    this._cineTo(new THREE.Vector3(0.42, 1.62 + fy * 0.5, 2.45), new THREE.Vector3(0.0, 1.35 + fy * 0.5, 3.8), 1.4);
+    const lines = CH && CH.loopLines ? CH.loopLines(this, S.loops) : this._loopLines1(S.loops);
+    let t = 0.5;
+    for (const [text, dur] of lines) { this.after(t, () => this.say(text, dur)); t += dur + 0.2; }
+    this.after(Math.min(t, 3.6), () => { this._cutPose = null; this.ch.setExpression('focus'); this._resumePlay(); });
+  }
+  _loopLines1(n) {
+    const S = this.S, inv = S.inv;
+    const miss = ['准考证', '学生证', '文具袋'].filter((_, i) => !inv.includes(CH1_ITEMS[i]));
+    if (n === 1) return [['……？？我明明出门了……怎么从洗手间里走出来了？！', 2.8], [S.f.readSticky ? `${miss.join('、')}还没带上……难道东西没带齐，这扇门就不放我走？` : '……显示器上那张便利贴，是不是写了什么？', 3.2]];
+    if (n === 2) return [['又是洗手间……这扇门，是个圈。', 2.4], [`还差：${miss.join('、')}。`, 2.4]];
+    return [[`第 ${n} 次了……先把${miss.join('、')}找回来。`, 3]];
+  }
+  // 绕回来之后接着玩：视角、HUD 都恢复原样（不像 beginPlay 那样重新弹章节提示）
+  _resumePlay() {
+    if (this.state !== 'outro') return;
+    this.state = 'play';
+    this.auto = null; this._afterReach = null; this._cutPose = null;
+    this.ctrl.overrides = null;
+    if (this._modeBeforeLoop) { this.ctrl.setMode(this._modeBeforeLoop); this._modeBeforeLoop = null; }
+    this.ctrl.yaw = this.ctrl.charYaw + Math.PI; this.ctrl.pitch = -0.1;
+    this._cineTo(null, null, 1.0);
+    this.ui.letterbox(false);
+    this.ui.showHUD(true);
+    if (this.input.isTouch) this.ui.showTouch(true);
+    this._touchUI = this.input.isTouch;
+    this._invDirty = true;
+    this._refreshHUD(true);
+    this.input.requestLock();
+  }
+
   // 进门（第二章以后每一章的进门过场前半段）：人从门口的光里走出来——镜头和上一间屋子出门时一模一样——
-  // 门在身后"砰"地自己关上，门锁又"咔哒"锁上了。prepare 时返回 undefined，否则返回这段过场用了几秒
+  // 门在身后"砰"地自己关上。prepare 时返回 undefined，否则返回这段过场用了几秒
   enterRoom({ prepare }) {
     const R = this.refs, D = R.door, CH = this.CH, S = this.S, dz = D.z;
     const fy = this.ctrl.float ? this.ctrl.floatTarget : 0;
@@ -1394,7 +1483,6 @@ export class Game {
       this.ctrl.yaw = Math.PI / 2 + Math.PI; this.ctrl.pitch = -0.08;
       this.ch.root.position.set(-2.35, fy, dz); this.ch.root.rotation.y = Math.PI / 2;
       this.ch.setExpression('focus');
-      if (!S.view && CH.relock) CH.relock(this, 'hide');
       this._cineSet(new THREE.Vector3(-0.15, 1.55 + fy, 3.5), new THREE.Vector3(-1.75, 1.15 + fy, dz));
       return undefined;
     }
@@ -1421,26 +1509,16 @@ export class Game {
       this._cutPose = null;
       this.tween(0.45, (k) => { this.ctrl.charYaw = y0 + wrapAngle(y1 - y0) * k; this.ch.root.rotation.y = this.ctrl.charYaw; }).cut = true;
     });
-    if (S.view) {
-      this.after(2.3, () => { this.audio.lockedRattle(); this.ui.subtitle('门……自己关上了。外面那片光也没了。', 2.4, S.name); });
-      this.after(3.6, () => { this._cineTo(new THREE.Vector3(-0.3, 1.62 + fy, 2.9), new THREE.Vector3(-1.2, 1.2 + fy, 3.9), 1.0); turnBack(); });
-      return 3.9;
-    }
-    // 门锁自己又锁上了：镜头凑到锁跟前
-    this.after(2.25, () => {
-      const v = CH.lockView;
-      if (v) this._cineTo(v.cam.clone().setY(v.cam.y + fy * 0.5), v.look.clone().setY(v.look.y + fy * 0.3), 0.45);
-      if (CH.relock) CH.relock(this, 'anim');
-    });
-    this.after(2.9, () => { this.audio.lockedRattle(); this._shake(0.08); this.ui.subtitle(CH.relockLine || '……门又锁上了？！', 2.4, S.name); });
-    this.after(4.0, () => { this.ch.setExpression('focus'); this._cineTo(new THREE.Vector3(-0.3, 1.62 + fy, 2.9), new THREE.Vector3(-1.2, 1.2 + fy, 3.9), 1.0); turnBack(); });
-    return 4.4;
+    // 门上已经没有锁了：门自己关上，门外那片光也没了
+    this.after(2.3, () => { this.audio.creak(); this.ui.subtitle('门……自己关上了。外面那片光也没了。', 2.4, S.name); });
+    this.after(3.6, () => { this.ch.setExpression('focus'); this._cineTo(new THREE.Vector3(-0.3, 1.62 + fy, 2.9), new THREE.Vector3(-1.2, 1.2 + fy, 3.9), 1.0); turnBack(); });
+    return 3.9;
   }
 
   // ================== 章节 ==================
   _chapterDone({ throughDoor = false } = {}) {
     const S = this.S;
-    S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints });
+    S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints, loops: S.loops || 0 });
     if (this.chapter < LAST_CHAPTER) this.goChapter(this.chapter + 1, { throughDoor });
     else this.finale();
   }
@@ -1535,15 +1613,15 @@ export class Game {
   }
   _initChapter() {
     const S = this.S, CH = this.CH;
-    Object.assign(S, { elapsed: 0, hints: 0, freeHints: 0, f: {}, inv: [], clues: new Map(), newItem: null, helmetOn: false, uvOn: false, phoneCharge: 0, msgSent: {}, lastSec: -1 });
+    Object.assign(S, { elapsed: 0, hints: 0, freeHints: 0, f: {}, inv: [], clues: new Map(), newItem: null, helmetOn: false, uvOn: false, phoneCharge: 0, msgSent: {}, lastSec: -1, loops: 0 });
     S.digits = Array.from({ length: CH.codeLen }, (_, i) => (i === 0 ? 1 + Math.floor(this.rnd() * 9) : Math.floor(this.rnd() * 10)));
     S.found = S.digits.map(() => false);
     this.ch.torch.visible = false;
     CH.init(this);
     this.handlers = this._handlers();
     this._invDirty = true;
-    if (S.view) this._removeDoorLock();
-    else {
+    this._removeDoorLock();
+    if (!S.view) {
       this.settings.unlocked = Math.max(this.settings.unlocked || 1, CH.n);
       this.settings.chapter = CH.n;
       this.saveSettings();
@@ -1603,12 +1681,12 @@ export class Game {
         <h2>🕳️ 彩蛋结局</h2><div style="color:var(--muted);letter-spacing:.3em;margin-top:-6px">书架背后的幽灵</div>
         <p style="line-height:1.9">那天晚上，211 的书架上掉下来三本书。${A}说宿舍闹鬼，谁也没当回事。<br>只有电脑前的那个你，回头望了书架一眼，笑了一下。<br><b>而书架另一边、被白光吞没的那个你——去了哪里呢？</b></p>
         <div class="stats">${chRows}</div>
-        <div class="stats totals"><div><b>${formatMMSS(runs.reduce((a, r) => a + r.elapsed, 0))}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div></div>
+        <div class="stats totals"><div><b>${formatMMSS(runs.reduce((a, r) => a + r.elapsed, 0))}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div><div><b>${S.loopsTotal || 0}</b><span>绕回原地</span></div></div>
         <div class="ach">${achHtml}</div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button><button class="btn" data-a="admire">📚 再看一会儿</button></div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload(S.view ? 'view' : 'game'));
     } else if (S.view) {
-      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>七个 211 都逛完啦！<br>游戏模式里每个房间都有一把锁和一串谜题。</p>
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>七个 211 都逛完啦！<br>游戏模式里，每一间 211 都有一个任务——没完成就推门出去，只会从洗手间的门里走回来。</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
@@ -1631,7 +1709,7 @@ export class Game {
         <div class="rank">${rank}</div>
         <p>${text}</p>
         <div class="stats">${chRows}</div>
-        <div class="stats totals"><div><b>${formatMMSS(totalT)}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div></div>
+        <div class="stats totals"><div><b>${formatMMSS(totalT)}</b><span>总用时</span></div><div><b>${hints}</b><span>提示次数</span></div><div><b>${S.loopsTotal || 0}</b><span>绕回原地</span></div></div>
         <div class="ach">${achHtml}</div>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('game'));

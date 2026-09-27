@@ -409,10 +409,10 @@ export class Audio {
   robotBeep(n = 2, base = 900) {
     for (let i = 0; i < n; i++) this.tone({ f: base * (1 + ((i * 7) % 5) * 0.18), dur: 0.07, type: 'square', gain: 0.035, delay: i * 0.09, rev: false });
   }
-  snore() {
-    this.noise({ dur: 1.2, gain: 0.18, type: 'lowpass', freq: 380, brown: true, curve: [[0.4, 1], [1, 0]] });
-    this.tone({ f: 90, f2: 70, dur: 1.0, type: 'sawtooth', gain: 0.025 });
-    this.tone({ f: 1400, f2: 2200, dur: 0.35, type: 'sine', gain: 0.03, delay: 1.3 });
+  snore(k = 1, pitch = 1) {
+    this.noise({ dur: 1.2, gain: 0.18 * k, type: 'lowpass', freq: 380 * pitch, brown: true, curve: [[0.4, 1], [1, 0]] });
+    this.tone({ f: 90 * pitch, f2: 70 * pitch, dur: 1.0, type: 'sawtooth', gain: 0.025 * k });
+    this.tone({ f: 1400 * pitch, f2: 2200 * pitch, dur: 0.35, type: 'sine', gain: 0.03 * k, delay: 1.3 });
   }
   slurp() { this.noise({ dur: 0.45, gain: 0.25, type: 'bandpass', freq: 700, freq2: 1600, Q: 3, curve: [[0.2, 1], [1, 0]] }); this.tone({ f: 300, f2: 700, dur: 0.2, type: 'sine', gain: 0.06, delay: 0.3 }); }
   pop() { this.tone({ f: 500, f2: 1400, dur: 0.08, type: 'sine', gain: 0.18 }); this.noise({ dur: 0.25, gain: 0.2, type: 'highpass', freq: 3000, delay: 0.02 }); }
@@ -479,6 +479,53 @@ export class Audio {
   riser(sec = 6) {
     this.noise({ dur: sec, gain: 0.16, type: 'bandpass', freq: 220, freq2: 5200, Q: 1.3, curve: [[0.2, 0.25], [0.85, 1], [1, 0]] });
     this.tone({ f: 196, f2: 784, dur: sec, type: 'sine', gain: 0.035, attack: sec * 0.85 });
+  }
+
+  // ----- 梦境循环 -----
+  // 一层梦"松动"了：铜管一样又低又宽的一声长音（几支锯齿波叠成一个和弦，低通慢慢打开再合上）+ 底下一记闷鼓
+  braam(sec = 3.6, gain = 1) {
+    const c = this.ctx; if (!c) return;
+    const t0 = this.t;
+    const f = c.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 0.9;
+    f.frequency.setValueAtTime(160, t0); f.frequency.exponentialRampToValueAtTime(1300, t0 + 0.45); f.frequency.exponentialRampToValueAtTime(220, t0 + sec);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.16 * gain, t0 + 0.12); g.gain.setValueAtTime(0.16 * gain, t0 + sec * 0.45); g.gain.exponentialRampToValueAtTime(0.0001, t0 + sec);
+    f.connect(g); this._out(g);
+    for (const [fr, det] of [[43.65, -6], [43.65, 7], [65.41, -4], [87.31, 5], [130.8, -8], [174.6, 9]]) {
+      const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr; o.detune.value = det;
+      o.connect(f); o.start(t0); o.stop(t0 + sec + 0.1);
+    }
+    this.noise({ dur: 1.2, gain: 0.5 * gain, type: 'lowpass', freq: 160, brown: true, curve: [[0.04, 1], [0.3, 0.5], [1, 0]] });
+    this.tone({ f: 55, f2: 36, dur: 1.4, type: 'sine', gain: 0.22 * gain, attack: 0.02 });
+  }
+  // 从洗手间的门里被"吐"回来：一声倒着放的吸气 + 很低的嗡——像是时间被倒回去了一截
+  loopBack() {
+    this.noise({ dur: 1.6, gain: 0.22, type: 'bandpass', freq: 5200, freq2: 300, Q: 0.9, curve: [[0.7, 1], [0.95, 0.3], [1, 0]] });
+    this.tone({ f: 98, f2: 49, dur: 2.6, type: 'sine', gain: 0.1, attack: 0.9 });
+    this.tone({ f: 147, f2: 73.5, dur: 2.2, type: 'triangle', gain: 0.025, attack: 0.9 });
+  }
+  // 电台的整点报时：五短一长
+  timeSignal() {
+    for (let i = 0; i < 5; i++) this.tone({ f: 800, dur: 0.11, type: 'sine', gain: 0.12, delay: i * 0.9, rev: false });
+    this.tone({ f: 1600, dur: 0.55, type: 'sine', gain: 0.13, delay: 5 * 0.9, rev: false, attack: 0.004 });
+  }
+  // 老式电话拨号：每一位"咔啦咔啦"转回去，拨几就响几下
+  dial(digits = '') {
+    let t = 0;
+    for (const ch of String(digits)) {
+      const n = Number(ch) || 10;
+      this.noise({ dur: 0.05, gain: 0.2, type: 'bandpass', freq: 1400, Q: 3, delay: t, rev: false });
+      for (let k = 0; k < n; k++) this.noise({ dur: 0.02, gain: 0.14, type: 'highpass', freq: 2600, delay: t + 0.18 + k * 0.07, rev: false });
+      t += 0.3 + n * 0.07;
+    }
+    return t;
+  }
+  // 听筒里的"嘟——"：通了 = 长音（calling），空号 = 急促的短音（busy）
+  lineTone(kind = 'calling', n = 2) {
+    for (let k = 0; k < n; k++) {
+      if (kind === 'busy') for (let i = 0; i < 4; i++) this.tone({ f: 450, dur: 0.18, type: 'sine', gain: 0.05, delay: k * 1.5 + i * 0.36, rev: false });
+      else this.tone({ f: 450, dur: 1.0, type: 'sine', gain: 0.045, delay: k * 2.0, rev: false });
+    }
   }
 
   // ----- 结局：征兵报到 -----

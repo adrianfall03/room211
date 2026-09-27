@@ -369,3 +369,37 @@ export function genTrainSide(W = 1024, H = 256) {
   ctx.fillStyle = 'rgba(220,210,180,0.7)'; ctx.font = `bold 26px ${STENCIL}`; ctx.fillText('81-717 · № 2112', 40, 200);
   return toTex(c, { wrap: false });
 }
+
+// 幽灵列车的车窗：隔着脏玻璃看见的车厢里——顶上一条灯带、一根扶手、几根吊环、一排座椅的椅背，空无一人
+export function genTrainWindow(W = 256, H = 192) {
+  const c = makeCanvas(W, H), x = c.getContext('2d'), rnd = mulberry32(2077);
+  const g = x.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#fff2d8'); g.addColorStop(0.22, '#f4dcb0'); g.addColorStop(0.6, '#c9a676'); g.addColorStop(1, '#6e5436');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  // 车厢另一头的窗：两块暗一点的方块
+  x.fillStyle = 'rgba(40,34,26,0.35)';
+  for (const [x0, w] of [[W * 0.12, W * 0.3], [W * 0.58, W * 0.3]]) x.fillRect(x0, H * 0.3, w, H * 0.26);
+  // 顶灯带
+  x.fillStyle = 'rgba(255,255,245,0.95)'; x.fillRect(0, H * 0.06, W, H * 0.05);
+  // 扶手 + 吊环
+  x.strokeStyle = 'rgba(60,48,34,0.85)'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(0, H * 0.2); x.lineTo(W, H * 0.2); x.stroke();
+  x.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    const px = W * (0.08 + i * 0.17) + (rnd() - 0.5) * 6, sw = (rnd() - 0.5) * 4;
+    x.beginPath(); x.moveTo(px, H * 0.2); x.lineTo(px + sw, H * 0.3); x.stroke();
+    x.beginPath(); x.ellipse(px + sw, H * 0.33, 5, 7, 0, 0, Math.PI * 2); x.stroke();
+  }
+  // 一排椅背
+  x.fillStyle = 'rgba(58,40,28,0.9)';
+  for (let i = 0; i < 4; i++) { const px = W * (0.04 + i * 0.25); x.beginPath(); x.roundRect(px, H * 0.62, W * 0.2, H * 0.4, 10); x.fill(); }
+  x.fillStyle = 'rgba(120,90,60,0.35)';
+  for (let i = 0; i < 4; i++) { const px = W * (0.04 + i * 0.25); x.fillRect(px + 6, H * 0.64, W * 0.2 - 12, 4); }
+  // 玻璃上的灰和划痕
+  for (let i = 0; i < 260; i++) { x.fillStyle = `rgba(70,60,48,${0.05 + rnd() * 0.12})`; x.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 3, 1 + rnd() * 3); }
+  x.strokeStyle = 'rgba(255,240,220,0.18)'; x.lineWidth = 1;
+  for (let i = 0; i < 8; i++) { const a = rnd() * W, b = rnd() * H; x.beginPath(); x.moveTo(a, b); x.lineTo(a + (rnd() - 0.5) * 60, b + (rnd() - 0.5) * 30); x.stroke(); }
+  // 窗框
+  x.strokeStyle = '#1a1c1c'; x.lineWidth = 10; x.strokeRect(0, 0, W, H);
+  return toTex(c, { wrap: false });
+}

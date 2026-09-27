@@ -1,8 +1,9 @@
 // 第三章：船舱 211（凌晨 04:10 · 北大西洋 · 天亮之前）
-//   宿舍成了一艘老货轮船头底下的船员舱。室友们上甲板值早班去了（四点到八点那一班），把我锁在舱里。
-//   门上是一把"水密门转盘锁"，三个转盘刻着 🗼⚓📻：
-//   🗼 桌上滑来滑去的扳手 → 拧开舷窗的铁盖 → 北边海上有座灯塔，每 12 秒闪一组——一组闪几下
+//   宿舍成了一艘老货轮船头底下的船员舱。室友们上甲板值早班去了（四点到八点那一班）。
+//   任务：让船不再原地打转——舵卡住了，船在同一片海上转了一夜：推开水密门出去，绕一圈，又从洗手间的门里走回这间舱。
+//   驾驶台要一个新航向（三位数 ⚓🗼📻），凑齐了对着传声筒报上去：
 //   ⚓ 地上的积水没过脚背，水底下隐约有白漆字 → 天花板货网里卡着舱底泵的摇把 → 洗手间里的钩篙把它勾下来 → 装上泵、压六下 → 水抽干了，甲板上刷着"⚓ N"
+//   🗼 桌上滑来滑去的扳手 → 拧开舷窗的铁盖 → 北边海上有座灯塔，每 12 秒闪一组——一组闪几下
 //   📻 我的书桌成了电报台：打开电子管收音机 → 天线没接（线头耷拉在墙边）→ 接上以后收到室友发的摩尔斯电码，纸带上一串点划 → 对照墙上的电码表
 //   整间屋子一直在晃（横摇 + 纵摇）：马灯来回摆、地上的积水晃到一边又晃回来、人也跟着歪；舷窗打开之后，窗外的海平线也跟着斜
 import * as THREE from 'three';
@@ -13,6 +14,8 @@ import { SHIP_MOTION, LIGHTHOUSE } from '../world/ship.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _f = new THREE.Vector3(), _up = new THREE.Vector3(), _t = new THREE.Vector3();
+const _Y = new THREE.Vector3(0, 1, 0);
+const SEA_PIVOT = new THREE.Vector3(0, -1.0, 0.45); // 海绕着转的那根轴（见 world/ship.js 的 buildSea）
 const CN = '一二三四五六七八九';
 const LH_CYCLE = 12, LH_GAP = 0.9; // 灯塔：每 12 秒闪一组，一组里每 0.9 秒闪一下
 const DRAIN = [0.1, -0.035]; // 积水：抽水前 / 抽干以后（屋子中心处的水面高度）
@@ -21,7 +24,9 @@ const STROKES = 6;
 export const CH3 = {
   n: 3, theme: 'ship',
   title: '第三章 · 船舱 211', sub: '04:10 · 北大西洋 · 天亮之前', tag: '第三章 · 船舱 211',
-  clock: [4, 10], lockName: '转盘锁', doorName: '水密门', codeLen: 3, codeIcons: ['🗼', '⚓', '📻'],
+  clock: [4, 10], lockName: '新航向', doorName: '水密门', codeLen: 3, codeIcons: ['⚓', '🗼', '📻'],
+  taskName: '让船不再原地打转',
+  loopStart: { x: 0.12, z: 5.85 },
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['cargoNet', 'porthole', 'pump', 'stencil', 'vests', 'crates', 'chart', 'voicePipe'],
   items: {
@@ -42,8 +47,10 @@ export const CH3 = {
     g.uvLight.visible = false; // 这一章用不上紫光手电
     g.scene.fog = new THREE.FogExp2('#0c1216', 0.03);
     g.lightMode = 'game';
-    S.digits[0] = 2 + Math.floor(g.rnd() * 7); // 灯塔一组闪 2~8 下
-    TS.drawDeckStencil(R.stencil.canvas, S.digits[1]);
+    // 航向 = ⚓🗼📻：⚓（舱底的白漆字）0~2，🗼（灯塔一组闪几下）2~8，📻（电报）0~9——最大 289°
+    S.digits[0] = Math.floor(g.rnd() * 3);
+    S.digits[1] = 2 + Math.floor(g.rnd() * 7);
+    TS.drawDeckStencil(R.stencil.canvas, S.digits[0]);
     R.stencil.tex.needsUpdate = true;
     R.ship.h = DRAIN[0];
     // 舱顶灯一开始就亮着（第一次试玩觉得太暗）：开关还能关掉，只剩马灯
@@ -56,6 +63,7 @@ export const CH3 = {
     this._tx = null; this._txT = 0; this._tape = []; this._printed = 0; this._radioBusy = false;
     this._creakT = 4; this._sloshSign = 0; this._boomT = 14; this._splashD = 0; this._lastPos = null;
     this._leakT = 0; this._washDecay = 0; this._dripT = 1;
+    this._yaw = 0; this._yawV = 0; this._yawTo = 0; this._calm = 0;
     this._baseQ = new THREE.Quaternion(); this._rolledQ = null;
     this._drawTape(g);
     R.lantern.ang.set(0, 0, 0); R.lantern.vel.set(0, 0, 0);
@@ -64,10 +72,8 @@ export const CH3 = {
   },
 
   // ---------- 进门 ----------
-  // 人从门口的光里走进来，门在身后关上：一股海水从门缝底下漫进来，转轮自己转回去，一圈压紧把手"咔咔咔"扣死
+  // 人从门口的光里走进来，门在身后关上：一股海水从门缝底下漫进来
   portal: 'sea',
-  lockView: { cam: V(-0.9, 1.45, 3.2), look: V(-1.76, 1.15, 3.9) },
-  relockLine: '……舱门的转轮自己转回去了？！又锁死了！',
   intro(g, { prepare }) {
     if (prepare) { g.enterRoom({ prepare: true }); return; }
     const T = g.enterRoom({ prepare: false });
@@ -91,24 +97,9 @@ export const CH3 = {
     g.audio.slosh(1.2);
     g.fx.emit('drop', V(-1.7, 0.08, dz), { count: 16, speed: 1.1, spread: 1.2, up: 0.8, gravity: -6, drag: 0.4, life: 0.8, size: 0.03, colors: ['#9ab4c0', '#c8d8e0'] });
   },
-  // 门锁：'hide'（门开着：压紧把手全翻开）/ 'anim'（转轮自己转回去，把手一个个扣死）/ 'show'
   _dogs(g, closed) { for (const [i, d] of g.refs.shipLock.dogs.entries()) d.rotation.z = closed ? 0 : (i % 2 ? -1.35 : 1.35); },
-  relock(g, mode) {
-    const H = g.refs.shipLock;
-    H.lamp.emissive.set('#ff3a1a'); H.lamp.emissiveIntensity = 2.2;
-    if (mode === 'hide') { this._dogs(g, false); return; }
-    if (mode !== 'anim') { this._dogs(g, true); return; }
-    this._dogs(g, false);
-    const w0 = H.wheel.rotation.z;
-    g.tween(0.9, (k) => (H.wheel.rotation.z = w0 + k * Math.PI * 3), { ease: easeInOut }).cut = true;
-    g.audio.ratchet(8);
-    H.dogs.forEach((d, i) => {
-      const r0 = d.rotation.z;
-      g.after(0.45 + i * 0.1, () => { g.audio.clunk(); g.tween(0.12, (k) => (d.rotation.z = r0 * (1 - k)), { ease: (t) => t }).cut = true; });
-    });
-  },
   onPlay(g) {
-    g.ui.toast('第三章 · 天亮之前，逃出船舱 211', '', '⚓');
+    g.ui.toast('第三章 · 天亮之前，让船不再原地打转', '', '⚓');
     g.after(1.4, () => g.ui.subtitle('先看看电报台边上那本摊开的本子……', 3.2, g.S.name));
   },
   exitLine: () => '天快亮了……走！',
@@ -117,25 +108,21 @@ export const CH3 = {
   // ---------- 目标 / 提示 ----------
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.readLog && !f.triedDoor) return [{ text: '看看电报台边上那本航海日志', done: false }];
+    if (!f.readLog && !S.loops) return [{ text: '看看电报台边上那本航海日志', done: false }];
+    if (!f.readLog) return [{ text: '出去又回到舱里……看看那本航海日志', done: false }];
     return [
-      { text: '🗼 数一数灯塔一组闪几下', done: F[0] },
-      { text: '⚓ 把舱底的积水抽干', done: F[1] },
+      { text: '任务：让船不再原地打转', done: !!f.taskDone },
+      { text: '⚓ 把舱底的积水抽干', done: F[0] },
+      { text: '🗼 数一数灯塔一组闪几下', done: F[1] },
       { text: '📻 收一封电报', done: F[2] },
-      { text: f.unlocked ? '出门！' : `打开水密门的转盘锁（${n}/3）`, done: false },
+      { text: `对着传声筒报新航向（${n}/3）`, done: !!f.taskDone },
+      ...(f.taskDone ? [{ text: '出门！', done: false }] : []),
     ];
   },
   hint(g) {
     const S = g.S, f = S.f, F = S.found, inv = S.inv, R = g.refs;
-    if (!f.readLog) return '我的书桌（电报台）上摊着一本航海日志，先看看室友写了什么。';
+    if (!f.readLog) return S.loops ? '推开水密门又从洗手间走回来了？我的书桌（电报台）上摊着一本航海日志，看看室友写了什么。' : '我的书桌（电报台）上摊着一本航海日志，先看看室友写了什么。';
     if (!F[0]) {
-      if (!R.portholes.some((p) => p.open)) {
-        if (!inv.includes('wrench')) return '舷窗盖是用蝶形螺母拧死的，得用扳手。窗边的海图桌上有把扳手，跟着船晃来晃去地滑。';
-        return '拿着扳手去北墙，把舷窗的铁盖拧开。';
-      }
-      return '对着打开的舷窗按 E 看窗外——北边有座灯塔，数一数它一组闪几下。';
-    }
-    if (!F[1]) {
       if (!this._leverIn) {
         if (!inv.includes('lever')) {
           if (!inv.includes('hook')) return '舱底泵（南墙，洗手间门东边）少了摇把——摇把卡在天花板的货网里，太高了。洗手间里靠着一根钩篙。';
@@ -145,19 +132,34 @@ export const CH3 = {
       }
       return '一下一下地压舱底泵，把地上的水抽干，看看水底下的白漆字。';
     }
+    if (!F[1]) {
+      if (!R.portholes.some((p) => p.open)) {
+        if (!inv.includes('wrench')) return '舷窗盖是用蝶形螺母拧死的，得用扳手。窗边的海图桌上有把扳手，跟着船晃来晃去地滑。';
+        return '拿着扳手去北墙，把舷窗的铁盖拧开。';
+      }
+      return '对着打开的舷窗按 E 看窗外——北边有座灯塔，数一数它一组闪几下。';
+    }
     if (!F[2]) {
       if (!R.radio.on) return '书桌上那台电子管收音机就是电报机，打开它的电源。';
       if (!R.antenna.connected) return '收音机里只有沙沙声——天线没接。天花板上垂下来一根线，线头耷拉在墙边，接到收音机上。';
       if (!this._tape.length) return '等一会儿，室友会用摩尔斯电码发电报过来，收报机会把它打在纸带上。';
       return '看看收报机吐出来的纸带，对照墙上的摩尔斯电码表。';
     }
-    return `密码凑齐了！去门口，按🗼⚓📻的顺序输入：${S.digits.join('')}`;
+    if (!f.taskDone) return `航向凑齐了！去门边墙上的传声筒，把新航向 ${S.digits.join('')}° 报给驾驶台。`;
+    return '船转过来了，出门吧！';
+  },
+  readyLine: (g) => `航向凑齐了：${g.S.digits.join('')}°！去门边的传声筒，报给驾驶台！`,
+  loopLines(g, n) {
+    const S = g.S;
+    if (n === 1) return [['……又回到舱里了？我明明是从水密门出去的。', 2.8], [S.f.readLog ? '日志上说船在原地打转……这间舱也跟着转？得让驾驶台换个航向。' : '电报台边上那本航海日志……看看写了什么。', 3.4]];
+    if (n === 2) return [['船在打转，我也在打转。', 2.4]];
+    return [[`第 ${n} 圈了……先把航向报上去。`, 2.6]];
   },
   story(g, p) {
     const S = g.S, [A, B, C] = S.mates;
     const pipe = (key, who, text, cb) => { if (S.msgSent[key]) return; S.msgSent[key] = true; this.pipeCall(g, who, text); cb && cb(); };
     if (p > 0.16 && !S.msgSent.bell1) { S.msgSent.bell1 = true; g.after(0.2, () => { g.audio.shipBell(1); g.after(1.2, () => g.ui.subtitle('甲板上传来一声钟响……四点半了。', 3, S.name)); }); }
-    if (p > 0.3) pipe('p1', A, '睡神——！醒了没——？！浪有点大，你在舱里抓稳了！电报我们等会儿就发！');
+    if (p > 0.3) pipe('p1', A, '睡神——！醒了没——？！浪有点大，你在舱里抓稳了！电报我们等会儿就发，航向算好了就对着传声筒喊！');
     if (p > 0.46 && !S.msgSent.whale) {
       S.msgSent.whale = true; this._whale = 1;
       g.audio.hullBoom(0.6); g._shake(0.12);
@@ -241,7 +243,7 @@ export const CH3 = {
     H.cargoNet = { label: '货网', verb: () => (this._netLever ? (S().inv.includes('hook') ? '用钩篙勾下来' : '查看') : '查看'), reach: false, act: () => this.onNet(g) };
     H.pump = { label: '舱底泵', verb: () => (this._leverIn ? (S().f.drained ? '查看' : '压水') : S().inv.includes('lever') ? '装上摇把' : '查看'), act: () => this.onPump(g) };
     H.stencil = { label: '甲板上的字', verb: '看看', reach: false, act: () => {
-      if (S().f.drained) { g.say(`甲板上用白漆刷着一个锚，旁边一个大大的 ${S().digits[1]}。`, 3); return; }
+      if (S().f.drained) { g.say(`甲板上用白漆刷着一个锚，旁边一个大大的 ${S().digits[0]}。`, 3); return; }
       g.say('水底下好像有一大片白色的东西……是字？水太浑了，看不清。', 3.2);
       g.clue('stencil', '地上的积水底下隐约有<b>白漆字</b>——得先把水抽干。');
     } };
@@ -273,15 +275,15 @@ export const CH3 = {
       this._bellN = (this._bellN || 0) + 1;
       g.say(['当、当——（两响……这会儿该敲几响来着？）', '当、当——（值班钟：每半小时敲一次，四点半是一响……我敲多了。）', '当、当——（甲板上有人喊："别敲了！"）'][(this._bellN - 1) % 3], 3.4);
     } };
-    H.voicePipe = { label: '传声筒', verb: '喊一嗓子', act: () => {
+    H.voicePipe = { label: '传声筒', verb: () => (S().f.readLog && !S().f.taskDone ? '报航向' : '喊一嗓子'), act: () => {
+      if (S().f.readLog && !S().f.taskDone) { this.reportHeading(g); return; }
       const [A, B, C] = S().mates;
       g.say('（对着铜管子）喂——！有人吗——？！', 2);
       g.audio.shout(1.1, 0.7, true);
-      const replies = [[A, '听见了听见了！喊什么喊，你倒是先把门打开啊！'], [B, '别喊了，一嘴海风……电报记得接天线！'], [C, '睡神你终于醒了！我们在甲板上，这边浪好大——']];
+      const replies = [[A, '听见了听见了！航向算出来没有？驾驶台等着呢！'], [B, '别喊了，一嘴海风……电报记得接天线！'], [C, '睡神你终于醒了！我们在甲板上，这边浪好大——']];
       const [who, t] = replies[(this._pipeN = ((this._pipeN || 0) + 1)) % 3];
       g.after(2.2, () => { g.audio.pipeWhistle(); g.ui.subtitle(t, 3.4, `🔊 ${who}（传声筒）`); });
     } };
-    H.door = { label: '水密门', verb: () => (S().f.unlocked ? '出门' : '开锁'), act: () => this.onDoor(g) };
     H.wcDoor = { label: '洗手间门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => g.toggleWcDoor() };
     H.cubDoor = { label: '厕所隔间', verb: () => (g.refs.cubDoor.open ? '关上' : '打开'), act: () => g.toggleCubDoor() };
     H.sink = { label: '洗漱台', verb: '拧水龙头', act: () => { g.audio.water(1.2); g.say('水龙头里流出来的是……咸的。海水淡化器坏了？', 3); } };
@@ -307,16 +309,18 @@ export const CH3 = {
     g.audio.paper();
     const node = g.ui.doc({ variant: 'log', title: '航海日志 · 211 号货轮', html: `<div class="date">04:02 · 西北风 7 级 · 涌浪 6 米 · 能见度良好</div>
       ${A}、${B}、${C} 上甲板值早班（四点到八点）。睡神叫不醒，随他去。<br>
-      舱门给他锁上了——<b>水密门转盘锁</b>，3 位：<br>
-      🗼 船头北边有座灯塔，数它<b>一组闪几下</b>（舷窗盖拧死了，扳手……刚才还在海图桌上）<br>
-      ⚓ 舱底刷着呢——得先把水<b>抽干</b>（泵的摇把晃到天花板的货网里去了，自己想办法）<br>
-      📻 我们会用<b>电报</b>发给你（记得接天线）<br>
+      舵卡住了，这条船在同一片海上<b>打了一夜的转</b>——<br>你出了水密门也没用：绕一圈，还是回到这间舱里。<br>
+      驾驶台要一个<b>新航向</b>（三位数），我们拆成了三份：<br>
+      ⚓ 第一位刷在舱底甲板上——得先把水<b>抽干</b>（泵的摇把晃到天花板的货网里去了，自己想办法）<br>
+      🗼 第二位：船头北边那座灯塔<b>一组闪几下</b>（舷窗盖拧死了，扳手……刚才还在海图桌上）<br>
+      📻 第三位我们用<b>电报</b>发给你（记得接天线）<br>
+      凑齐了，对着门边的<b>传声筒</b>把航向报给驾驶台。<br>
       附：舱里有点漏水，别慌。这船漏了三十年了。<div class="sig">—— 211 全体船员</div>` });
     g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
     if (!S.f.readLog) {
       S.f.readLog = true;
-      g.clue('log', '航海日志：门上是<b>水密门转盘锁</b>（3 位）——🗼 北边灯塔<b>一组闪几下</b>；⚓ 抽干舱底的水，<b>甲板上刷着</b>；📻 室友会发<b>电报</b>（要接天线）。');
-      g.after(0.5, () => g.say('上甲板值班？……又把我一个人丢下了。先把舷窗打开看看外面！', 3.4));
+      g.clue('log', '航海日志：船在原地打转，出门只会绕回舱里。驾驶台要一个<b>新航向</b>（⚓🗼📻 三位）——⚓ 抽干舱底的水，<b>甲板上刷着</b>；🗼 北边灯塔<b>一组闪几下</b>；📻 室友会发<b>电报</b>（要接天线）。凑齐了对着<b>传声筒</b>报上去。');
+      g.after(0.5, () => g.say('难怪出了门又回到这儿……船在打转，我也在打转。先把航向凑齐！', 3.4));
     }
   },
 
@@ -356,16 +360,16 @@ export const CH3 = {
     const eye = V(P.px, 1.74, -2.94);
     if (this._whale === 1) { this.whaleShow(g, P, eye); return; }
     // 看的方向：舷窗正前方和灯塔之间（竖屏手机视野窄，直接对着灯塔会把舷窗挤到画面角落里）
-    const toLh = LIGHTHOUSE.clone().sub(eye).normalize(), look = eye.clone().add(toLh.lerp(V(0, 0, -1), cam.aspect < 1 ? 0.55 : 0.2).normalize().multiplyScalar(20));
+    const toLh = this._lh().sub(eye).normalize(), look = eye.clone().add(toLh.lerp(V(0, 0, -1), cam.aspect < 1 ? 0.55 : 0.2).normalize().multiplyScalar(20));
     const zf = g.zoomFov(44);
     g._cineTo(eye, look, 1.2);
     g.tween(1.2, (k) => { cam.fov = lerp(fov0, zf, k); cam.updateProjectionMatrix(); }, { ease: easeInOut });
-    const N = S.digits[0];
-    if (first || !S.found[0]) {
+    const N = S.digits[1];
+    if (first || !S.found[1]) {
       g.after(0.9, () => g.ui.subtitle('月光下的海……北边的海上有一座灯塔！', 2.6, S.name));
       this._lhT = -0.9; // 1.8 秒后开始闪下一组
       for (let i = 0; i < N; i++) g.after(1.85 + i * LH_GAP, () => g.ui.subtitle(`${CN[i]}……`, 0.8, S.name));
-      g.after(1.9 + N * LH_GAP + 0.7, () => { g.ui.subtitle(`一组闪了 ${N} 下！`, 2.6, S.name); g.foundDigit(0, '北边灯塔一组的闪光'); S.f.sawLight = true; });
+      g.after(1.9 + N * LH_GAP + 0.7, () => { g.ui.subtitle(`一组闪了 ${N} 下！`, 2.6, S.name); g.foundDigit(1, '北边灯塔一组的闪光'); S.f.sawLight = true; });
       g.after(1.9 + N * LH_GAP + 3.4, () => this._endLook(g));
     } else {
       g.after(0.8, () => g.ui.subtitle(`灯塔还在闪：一组 ${N} 下，停一会儿，再来一组。`, 3, S.name));
@@ -476,8 +480,8 @@ export const CH3 = {
   revealStencil(g) {
     const S = g.S, st = g.refs.stencil.mesh.position;
     g._cineTo(V(0.1, 1.9, 1.3), V(st.x, 0, st.z), 1.2);
-    g.after(1.3, () => g.ui.subtitle(`水抽干了……甲板上用白漆刷着一个锚，旁边一个大大的 ${S.digits[1]}！`, 3.2, S.name));
-    g.after(1.9, () => g.foundDigit(1, '舱底甲板上刷的白漆字'));
+    g.after(1.3, () => g.ui.subtitle(`水抽干了……甲板上用白漆刷着一个锚，旁边一个大大的 ${S.digits[0]}！`, 3.2, S.name));
+    g.after(1.9, () => g.foundDigit(0, '舱底甲板上刷的白漆字'));
     g.after(4.3, () => g._cineTo(null, null, 1.0));
   },
 
@@ -591,46 +595,44 @@ export const CH3 = {
     g.after(0.8, () => g.audio.creak());
   },
 
-  // ---------- 门 ----------
-  onDoor(g) {
-    const S = g.S;
-    if (S.f.unlocked) { g.win(); return; }
-    if (!S.f.triedDoor) {
-      S.f.triedDoor = true;
-      g.audio.lockedRattle();
-      g.say('水密门的转轮转不动……门上挂着一把转盘锁，三个转盘刻着🗼⚓📻？', 3.6);
-      g.clue('door', '<b>水密门</b>上的转盘锁：三个转盘分别刻着 🗼 ⚓ 📻。');
-      g.after(1.6, () => this.openLock(g));
-      return;
-    }
-    this.openLock(g);
-  },
-  openLock(g) {
-    const S = g.S;
-    const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
+  // ---------- 报航向：对着传声筒喊给驾驶台 ----------
+  reportHeading(g) {
+    const S = g.S, [A] = S.mates;
+    const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join('');
+    g.audio.pipeWhistle();
     const box = g.ui.lock({
-      n: 3, title: '水密门 · 转盘锁', variant: 'ship', labels: ['🗼', '⚓', '📻'],
-      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '三个黄铜转盘上刻着灯塔、船锚和收音机……',
+      n: 3, title: '传声筒 · 报新航向', variant: 'ship', labels: ['⚓', '🗼', '📻'], suffix: '°', button: '报 航 向',
+      hint: S.found.some(Boolean) ? `日志里的新航向：<b>${known}</b>°` : '对着铜管子喊给驾驶台：新航向，三位数（⚓🗼📻）。',
       onTick: () => g.audio.tick(),
       onSubmit: (code) => {
-        if (code === S.digits.join('')) { g.audio.unlock(); g.ui.closeModal(); this.unlock(g); return true; }
-        g.audio.error(); return false;
+        if (code === S.digits.join('')) { g.ui.closeModal(); this.setCourse(g); return true; }
+        g.audio.error();
+        g.after(0.5, () => { g.audio.pipeWhistle(); g.ui.subtitle(`航向 ${code}°？……不对不对！那边全是礁石！再算算！`, 3, `🔊 ${A}（传声筒）`); });
+        return false;
       },
     });
     g.openModal(box);
   },
-  removeLock(g) { this._dogs(g, false); const H = g.refs.shipLock; H.lamp.emissive.set('#3aff6a'); H.lamp.emissiveIntensity = 0.8; },
-  unlock(g) {
-    const S = g.S, H = g.refs.shipLock;
-    S.f.unlocked = true;
-    H.lamp.emissive.set('#3aff6a');
-    const w0 = H.wheel.rotation.z;
-    g.tween(1.0, (k) => (H.wheel.rotation.z = w0 - k * Math.PI * 3), { ease: easeInOut });
-    g.audio.ratchet(8);
-    H.dogs.forEach((d, i) => g.after(0.5 + i * 0.1, () => { g.audio.clunk(); g.tween(0.15, (k) => (d.rotation.z = k * (i % 2 ? -1.35 : 1.35)), { ease: easeOut }); }));
-    g.say('转轮转开了，压紧把手一个个弹开——门开了！', 2.8);
-    g.after(1.8, () => g.win());
+  // 航向报对了：驾驶台"右满舵"，船身一歪，整片海绕着船转过去——灯塔转到了正前方；之后浪也小了
+  setCourse(g) {
+    const S = g.S, [A] = S.mates, hd = S.digits.join('');
+    g.say(`（对着铜管子）驾驶台！新航向——${hd}！`, 2.4);
+    g.audio.shout(1.1, 0.7, true);
+    g.after(2.4, () => { g.audio.pipeWhistle(); g.ui.subtitle(`航向 ${hd}，收到！——右满舵！！`, 3, `🔊 ${A}（传声筒）`); });
+    g.after(4.0, () => {
+      // 灯塔转到正前方：绕着海的转轴转一个角度
+      const p = LIGHTHOUSE.clone().sub(SEA_PIVOT);
+      this._yawTo = -Math.atan2(-p.x, -p.z);
+      this.bigWave(g, 1.3); g.audio.shipBell(3); g.audio.creak();
+    });
+    g.after(7.0, () => g.ui.subtitle('……船头转过来了。灯塔的光，正对着船头一下一下地闪。', 3.4, S.name));
+    g.after(9.4, () => { this._calm = 1; const H = g.refs.shipLock; H.lamp.emissive.set('#3aff6a'); H.lamp.emissiveIntensity = 1.2; });
+    g.completeTask('船……不再打转了。这一回，推开水密门应该能出去了。', 9.4);
   },
+  // 灯塔现在在哪（船转过向之后跟着转）
+  _lh() { return LIGHTHOUSE.clone().sub(SEA_PIVOT).applyAxisAngle(_Y, this._yaw || 0).add(SEA_PIVOT); },
+  // 门上的压紧把手全是松开的（没有锁），红灯表示船还在打转；航向报上去之后变绿
+  removeLock(g) { this._dogs(g, false); const H = g.refs.shipLock; H.lamp.emissive.set('#ff8a2a'); H.lamp.emissiveIntensity = 1.4; },
 
   // ---------- 每帧（只在 play 时）----------
   update(g, dt) {
@@ -648,7 +650,11 @@ export const CH3 = {
     const kk = 1 - Math.exp(-dt * 3);
     const p = S && !S.view ? g.storyP() : 0.3;
     // ---- 晃：越往后浪越大；大浪来的时候猛地歪一下 ----
-    this._rollK = lerp(this._rollK || 1, 1 + p * 0.45, kk);
+    this._rollK = lerp(this._rollK || 1, (1 + p * 0.45) * (this._calm ? 0.62 : 1), kk);
+    // 报了新航向：船慢慢转过去（带一点过冲），之后稳住
+    this._yawV = (this._yawV || 0) + ((this._yawTo || 0) - (this._yaw || 0)) * 1.1 * dt;
+    this._yawV *= Math.exp(-dt * 1.3);
+    this._yaw = (this._yaw || 0) + this._yawV * dt;
     this._kickV = (this._kickV || 0) * Math.exp(-dt * 0.6);
     this._kick = lerp(this._kick || 0, this._kickV * Math.sin(t * 1.4), 1 - Math.exp(-dt * 4));
     const roll = SHIP_MOTION.roll(t, this._rollK) + this._kick, pitch = SHIP_MOTION.pitch(t, this._rollK);
@@ -696,14 +702,14 @@ export const CH3 = {
       Wr.group.rotation.y = 0.15 + Wr.x * 0.12;
     }
     // ---- 灯塔：每 12 秒闪一组 N 下 ----
-    const N = S ? S.digits[0] : 3;
+    const N = S ? S.digits[1] : 3;
     this._lhT = ((this._lhT || 0) + dt);
     if (this._lhT > LH_CYCLE) this._lhT -= LH_CYCLE;
     let flash = 0;
     for (let i = 0; i < N; i++) { const u = this._lhT - 1.0 - i * LH_GAP; if (u > 0 && u < 0.4) flash = Math.max(flash, smoothstep(0, 0.05, u) * (1 - smoothstep(0.12, 0.38, u))); }
     this._flash = flash;
     const dawn = smoothstep(0.35, 1.0, p) * 0.85;
-    R.sea.update(dt, t, roll, pitch, flash, dawn);
+    R.sea.update(dt, t, roll, pitch, flash, dawn, this._yaw || 0);
     // ---- 月光：只从打开了铁盖的舷窗透进来（墙和铁盖都投影，地上是一个个圆光斑）；灯塔一闪，那一束猛地一亮 ----
     const nOpen = R.portholes.reduce((a, P) => a + (P.open ? 1 : Math.max(0, -P.hinge.rotation.y / 1.95)), 0);
     L.sun.intensity = nOpen > 0.01 ? 0.75 + flash * 3.2 : 0;

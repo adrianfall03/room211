@@ -922,11 +922,19 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   const tower = K.pcTower(); dl(tower, 0.3, -0.05, 0, 0);
   mark('pcTower', tower);
   refs.tower = tower;
-  // 抽屉里的东西
-  const drawerNote = K.mesh(new THREE.PlaneGeometry(0.1, 0.07), new THREE.MeshStandardMaterial({ map: T.foldedNote2, roughness: 0.9 }), { rx: -Math.PI / 2, y: -0.036, z: 0.02, cast: false });
-  refs.drawer.add(drawerNote);
-  mark('drawerNote', drawerNote);
-  refs.drawerNote = drawerNote;
+  // 抽屉里的东西：{B}锁进去的文具袋（第一章要带去考场的三样东西之一）
+  const pcase = K.group({ x: -0.07, y: -0.032, z: 0.03, ry: 0.25 });
+  const pcFab = K.std('#2f3a4f', 0.92);
+  pcase.add(K.mesh(K.rbox(0.2, 0.036, 0.075, 0.016), pcFab, { cast: false }));
+  pcase.add(K.mesh(K.box(0.18, 0.004, 0.006), K.std('#15181e', 0.6), { y: 0.018, cast: false }));
+  pcase.add(K.mesh(K.box(0.016, 0.005, 0.01), M.chrome, { x: 0.07, y: 0.021, cast: false }));
+  const pencil = K.group({ x: -0.02, y: 0.02, z: 0.012, ry: 0.08 });
+  pencil.add(K.mesh(K.cyl(0.0035, 0.0035, 0.07, 6), K.std('#e2b62a', 0.5), { rz: Math.PI / 2, cast: false }));
+  pencil.add(K.mesh(K.cyl(0.0035, 0.0005, 0.012, 6), K.std('#d8b894', 0.6), { x: 0.041, rz: -Math.PI / 2, cast: false }));
+  pcase.add(pencil);
+  refs.drawer.add(pcase);
+  mark('pencilCase', pcase);
+  refs.pencilCase = pcase;
   const latiao = K.snackBag('latiao', 0.1, 0.15);
   latiao.rotation.set(-Math.PI / 2, 0, 0.4); latiao.position.set(0.1, -0.03, -0.06); latiao.scale.set(1, 1, 0.5);
   refs.drawer.add(latiao);

@@ -1,6 +1,7 @@
 // 第四章：地铁 211（2077 · 地下 60 米 · 末班车早就停了）
-//   地面上已经住不了人了，宿舍成了地铁站台边上的一间值班室。室友们戴着防毒面具上地面"捡破烂"去了，把我锁在屋里。
-//   门上是一扇气密门，门上的数字密码盘 3 位，刻着 ☢️🚂👻：
+//   地面上已经住不了人了，宿舍成了地铁站台边上的一间值班室。室友们戴着防毒面具上地面"捡破烂"去了。
+//   任务：拦下那趟幽灵列车。211 站在环线上——出了气密门沿着隧道走，走一圈又回到这里（从毒气间的门里走出来）；
+//   想离开，只能坐那趟从来不停站的车：用桌上的野战电话拨调度室的分机（3 位，☢️🚂👻），让它在 211 停一下：
 //   ☢️ 屋里有五只刷着编号的弹药箱，其中一只里面藏着"热"东西 → 桌上的盖革计数器：离它越近，咔哒声越密 → 那只箱子上的编号
 //   🚂 站台的灯坏了，窗外一片漆黑 → 窗边书桌上的手摇发电机，摇满 → 站台的钠灯亮起来：远处那节老车厢上，室友用粉笔画了"正"字（一个"正" = 5）
 //   👻 洗手间成了毒气间，里面浮着一团噼啪放电的"异常" → 门边挂着防毒面具（滤罐是空的）→ 新滤罐在某只弹药箱里 → 戴上面具走进去，
@@ -20,7 +21,9 @@ const CRANKS = 8; // 手摇发电机摇几圈才亮
 export const CH4 = {
   n: 4, theme: 'metro',
   title: '第四章 · 地铁 211', sub: '2077 · 地下 60 米 · 末班车早就停了', tag: '第四章 · 地铁 211',
-  clock: [23, 11], lockName: '气密门密码', doorName: '气密门', codeLen: 3, codeIcons: ['☢️', '🚂', '👻'],
+  clock: [23, 11], lockName: '调度分机', doorName: '气密门', codeLen: 3, codeIcons: ['☢️', '🚂', '👻'],
+  taskName: '拦下那趟幽灵列车',
+  loopStart: { x: -0.05, z: 5.9 },
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）
   big: ['crate0', 'crate1', 'crate2', 'crate3', 'crate4', 'sandbags', 'dynamo', 'guitar', 'anomaly', 'metroMap'],
   torchPower: 3.4, // 手电筒比紫光手电亮得多
@@ -70,6 +73,7 @@ export const CH4 = {
     this._charge = 0; this._cranking = false; this._K = 0; this._lit = false; this._look = false;
     this._vision = null; this._blackout = 0; this._ring = 0; this._ringT = 0; this._calls = []; this._callNew = null;
     this._ghostT = -1; this._alarmT = 0; this._arcT = 0; this._ratSeen = false; this._dropT = 6;
+    this._stopT = -1; this._calling = false;
     g.give('uv', true);
     // 两只灯泡一开始就亮着（一闪一闪的）：第一次试玩几乎全黑，开关还能关掉
     S.f.lightsOn = true; S.f.bulbSeen = true;
@@ -114,10 +118,8 @@ export const CH4 = {
   },
 
   // ---------- 进门 ----------
-  // 人从门口的光里走进来，门在身后"哐"地关上：杠杆门把自己砸了下来，密码盘"嘀嘀"两声，红字"ЗАКРЫТО"
+  // 人从门口的光里走进来，门在身后"哐"地关上
   portal: 'tunnel',
-  lockView: { cam: V(-0.9, 1.5, 3.2), look: V(-1.76, 1.25, 3.85) },
-  relockLine: '……门把自己砸下来了？！又锁上了！',
   intro(g, { prepare }) {
     if (prepare) { g.enterRoom({ prepare: true }); return; }
     const T = g.enterRoom({ prepare: false });
@@ -135,20 +137,12 @@ export const CH4 = {
   onSlam(g) {
     g.fx.emit('dust', V(-1.6, 1.8, g.refs.door.z), { count: 26, speed: 0.6, spread: 1.2, up: 0.1, gravity: -0.4, drag: 1.4, life: 2.4, size: 0.12, colors: ['#6a6254', '#4a4438'], grow: 1.2 });
   },
-  relock(g, mode) {
-    const H = g.refs.metroLock;
-    if (mode === 'hide') { H.lever.rotation.z = 1.2; H.drawLcd('ОТКРЫТО', '#3aff6a'); return; }
-    if (mode !== 'anim') { H.lever.rotation.z = 0; H.drawLcd('ЗАКРЫТО'); return; }
-    H.lever.rotation.z = 1.2;
-    g.tween(0.25, (k) => (H.lever.rotation.z = 1.2 * (1 - k)), { ease: (t) => t * t, done: () => { g.audio.clunk(); g._shake(0.1); } }).cut = true;
-    g.after(0.4, () => { g.audio.robotBeep(2, 1400); H.drawLcd('ЗАКРЫТО'); });
-  },
   onPlay(g) {
-    g.ui.toast('第四章 · 在滤网失效之前，逃出地铁 211', '', '🚇');
+    g.ui.toast('第四章 · 滤网失效之前，拦下那趟幽灵列车', '', '🚇');
     this._ring = 1; this._ringT = 0.5;
     g.after(1.2, () => g.ui.subtitle(`电话还在响……先接电话。（手电筒在身上，${g.input.isTouch ? '点右下角的「手电」' : '按 F'}打开）`, 3.6, g.S.name));
   },
-  exitLine: () => '走！趁着列车还没开过来……',
+  exitLine: (g) => (g.S.f.taskDone ? '走！车还在等！' : '走！趁着列车还没开过来……'),
   onDoorOpen(g) { g.audio.ghostTrain(4); },
   onTorch(g, on) {
     g.audio.switchClick();
@@ -158,17 +152,20 @@ export const CH4 = {
   // ---------- 目标 / 提示 ----------
   objectives(g) {
     const S = g.S, f = S.f, F = S.found, n = F.filter(Boolean).length;
-    if (!f.answered && !f.triedDoor) return [{ text: '接一下书桌上的野战电话', done: false }];
+    if (!f.answered && !S.loops) return [{ text: '接一下书桌上的野战电话', done: false }];
+    if (!f.answered) return [{ text: '走了一圈又回来了……先接书桌上的电话', done: false }];
     return [
+      { text: '任务：拦下那趟幽灵列车', done: !!f.taskDone },
       { text: '☢️ 找出"热"的那只弹药箱', done: F[0] },
       { text: '🚂 让站台的灯亮起来', done: F[1] },
       { text: '👻 戴上防毒面具，去洗手间看看"那个东西"', done: F[2] },
-      { text: f.unlocked ? '出门！' : `打开气密门的密码盘（${n}/3）`, done: false },
+      { text: `用野战电话拨调度分机（${n}/3）`, done: !!f.taskDone },
+      ...(f.taskDone ? [{ text: '出门，上车！', done: false }] : []),
     ];
   },
   hint(g) {
     const S = g.S, f = S.f, F = S.found, inv = S.inv;
-    if (!f.answered) return '书桌上那台野战电话在响，接一下。';
+    if (!f.answered) return this._ring ? '书桌上那台野战电话在响，接一下。' : '书桌上那台野战电话，拿起听筒听听录音。';
     if (!F[0]) {
       if (!inv.includes('geiger')) return '盖革计数器就在你的书桌上，拿起来。';
       if (!this._geigerOn) return '点一下物品栏里的盖革计数器，打开它。';
@@ -182,16 +179,24 @@ export const CH4 = {
       if (!g.refs.wcDoor.open) return '推开洗手间的玻璃门，走进去。';
       return '走近洗手间里那团噼啪放电的光。';
     }
-    return `密码凑齐了！去门口，按☢️🚂👻的顺序输入：${S.digits.join('')}`;
+    if (!f.taskDone) return `分机号凑齐了！拿起书桌上的野战电话，拨 ${S.digits.join('')}。`;
+    return '车停在站台上了，出门上车！';
+  },
+  readyLine: (g) => `分机号凑齐了：${g.S.digits.join('')}！拿起野战电话拨过去！`,
+  loopLines(g, n) {
+    const S = g.S;
+    if (n === 1) return [[this._masked ? '……？我怎么从毒气间里走出来了？！' : '咳、咳——我怎么从毒气间里走出来了？！', 2.8], [S.f.answered ? '电话里说的是真的：这条环线没有尽头。得让那趟车停下来。' : '隧道绕了一圈……又回到了 211？桌上那台电话在响。', 3.4]];
+    if (n === 2) return [['又绕回来了。环线，环线，环线……', 2.6]];
+    return [[`第 ${n} 圈。先给调度打电话。`, 2.6]];
   },
   story(g, p) {
     const S = g.S, [A, B, C] = S.mates;
     const call = (key, who, text) => { if (S.msgSent[key]) return; S.msgSent[key] = true; this._calls.push({ who, text }); this._callNew = { who, text }; this._ring = 1; this._ringT = 0.2; };
     if (p > 0.18 && !S.msgSent.rats) { S.msgSent.rats = true; this.ratRush(g); }
     if (p > 0.32) call('c1', C, '地面上起风了，辐射有点高，我们往回走了。滤罐省着点用！');
-    if (p > 0.45 && !S.msgSent.ghost) { S.msgSent.ghost = true; this.ghostTrain(g); }
+    if (p > 0.45 && !S.msgSent.ghost && this._stopT < 0) { S.msgSent.ghost = true; this.ghostTrain(g); }
     if (p > 0.66 && !S.msgSent.alarm) { S.msgSent.alarm = true; this._alarmT = 6; g.audio.alarm(3); g.after(1.2, () => g.ui.subtitle('【站台广播】注意：通风系统故障，空气滤网效率下降，请各值班室戴好面具。', 4.4, '📢 站台广播')); }
-    if (p > 0.84) call('c2', A, `我们到隔壁站了！${B}换了两只滤罐……你出来了没？`);
+    if (p > 0.84) call('c2', A, `我们到隔壁站了！${B}换了两只滤罐……你打给调度了没？`);
   },
 
   // ---------- 交互 ----------
@@ -234,7 +239,11 @@ export const CH4 = {
       graffiti: ['隔板涂鸦', '隔板上写着"窗外有猴!!"……旁边多了一行："隧道里也有！！戴面具的！！"'],
     };
     for (const [id, [l, t]] of Object.entries(Fl)) H[id] = flav(l, t);
-    H.phone211 = { label: '野战电话', verb: () => (this._ring ? '接电话' : '听听录音'), act: () => this.onPhone(g) };
+    H.phone211 = {
+      label: '野战电话',
+      verb: () => (this._ring ? '接电话' : S().f.answered && !S().f.taskDone ? '拨调度分机' : '听听录音'),
+      act: () => { if (!this._ring && S().f.answered && !S().f.taskDone) this.dialDispatch(g); else this.onPhone(g); },
+    };
     H.switch = { label: '电灯开关', verb: () => (S().f.lightsOn ? '关灯' : '开灯'), act: () => {
       const s = S();
       s.f.lightsOn = !s.f.lightsOn; g.audio.switchClick();
@@ -281,7 +290,6 @@ export const CH4 = {
       g.say('壶里是热的蘑菇茶……一股土味，但喝下去整个人暖和了。（下一次提示免费）', 3.6);
     } };
     H.shrine = flav('蜡烛', '蜡烛前面摆着一张照片：四个人站在阳光底下——是我们 211。照片背面写着："等天晴了，一起上去看太阳。"');
-    H.door = { label: '气密门', verb: () => (S().f.unlocked ? '出门' : '输密码'), act: () => this.onDoor(g) };
     H.wcDoor = { label: '毒气间的门', verb: () => (g.refs.wcDoor.open ? '关上' : '推开'), act: () => {
       if (!g.refs.wcDoor.open && !this._masked && !S().f.gasWarned) { S().f.gasWarned = true; g.say('门上贴着"毒气"……里面全是绿雾。不戴面具进去就是找死。', 3.4); g.clue('gas', '洗手间成了<b>毒气间</b>，得戴上<b>防毒面具</b>才能进去。'); }
       g.toggleWcDoor();
@@ -321,11 +329,12 @@ export const CH4 = {
     const first = !S.f.answered;
     const lines = first ? [
       [A, '喂？睡神？终于醒了！我们仨戴着面具上地面捡破烂去了。'],
-      [B, '门给你锁了——气密门的密码 3 位：'],
+      [B, '跟你说个事：211 站在<b>环线</b>上。你出了气密门沿着隧道走，走一圈，还是回到 211——这条线没有尽头。'],
+      [C, '想离开，只能坐那趟<b>从来不停站的车</b>。要它停？用这台电话给<b>调度室</b>打过去，分机号 3 位：'],
       [B, '☢️ 我们在一只弹药箱里藏了点"热"东西。<b>哪只箱子"热"，箱子上的编号就是第一位</b>。盖革计数器在你桌上。'],
       [C, '🚂 站台的灯坏了。窗外那节老车厢上我们用粉笔画了<b>"正"字</b>——窗边的<b>手摇发电机</b>摇一摇就看得见。'],
       [A, '👻 最后一位……洗手间里有毒气，还有"那个东西"。<b>戴好防毒面具</b>（滤罐在某只弹药箱里）去看看，它会告诉你的。'],
-      [C, '别乱跑。隧道里有老鼠，很大的那种。'],
+      [C, '凑齐了就拨过去。别乱跑，隧道里有老鼠，很大的那种。'],
     ] : this._callNew ? [[this._callNew.who, this._callNew.text]] : [[null, '（听筒里只有沙沙声……对面已经挂了。）']];
     this._callNew = null;
     const html = lines.map(([who, t]) => `<div style="margin-bottom:10px">${who ? `<b style="color:#7a4a1a">${who}：</b>` : ''}${t}</div>`).join('');
@@ -333,8 +342,8 @@ export const CH4 = {
     g.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
     if (first) {
       S.f.answered = true;
-      g.clue('phone', '室友的电话：<b>气密门</b>密码 3 位——☢️ "热"的那只<b>弹药箱</b>上的编号（盖革计数器）；🚂 站台上那节车厢上的<b>"正"字</b>（先摇<b>发电机</b>）；👻 戴上<b>防毒面具</b>去<b>洗手间</b>看"那个东西"。');
-      g.after(0.6, () => g.say('上地面捡破烂？……又把我一个人丢在这儿。先找那只"热"的箱子！', 3.4));
+      g.clue('phone', '室友的电话：211 站在<b>环线</b>上，走出去也会绕回来。要离开，得打电话给<b>调度室</b>让那趟不停站的车停一下——分机 3 位：☢️ "热"的那只<b>弹药箱</b>上的编号（盖革计数器）；🚂 站台上那节车厢上的<b>"正"字</b>（先摇<b>发电机</b>）；👻 戴上<b>防毒面具</b>去<b>洗手间</b>看"那个东西"。');
+      g.after(0.6, () => g.say('环线……难怪走不出去。先找那只"热"的箱子！', 3.4));
     }
   },
 
@@ -520,44 +529,51 @@ export const CH4 = {
     }
   },
 
-  // ---------- 门 ----------
-  onDoor(g) {
+  // ---------- 给调度打电话：拨对了分机，那趟从不停站的车在 211 停了下来 ----------
+  dialDispatch(g) {
     const S = g.S;
-    if (S.f.unlocked) { g.win(); return; }
-    if (!S.f.triedDoor) {
-      S.f.triedDoor = true;
-      g.audio.lockedRattle(); g.audio.robotBeep(2, 1400);
-      g.say('气密门的杠杆门把纹丝不动……密码盘上三个格子：☢️🚂👻？', 3.4);
-      g.clue('door', '<b>气密门</b>的密码盘：三位，分别刻着 ☢️ 🚂 👻。');
-      g.after(1.6, () => this.openLock(g));
-      return;
-    }
-    this.openLock(g);
-  },
-  openLock(g) {
-    const S = g.S;
+    if (this._calling) return;
     const known = S.digits.map((d, i) => (S.found[i] ? d : '?')).join(' ');
     const box = g.ui.lock({
-      n: 3, title: 'ГЕРМОДВЕРЬ · 气密门', variant: 'metro', labels: ['☢️', '🚂', '👻'],
-      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '密码盘上三个格子：辐射、列车、影子……',
+      n: 3, title: 'ТЕЛЕФОН · 拨调度分机', variant: 'metro', labels: ['☢️', '🚂', '👻'], button: '拨 号',
+      hint: S.found.some(Boolean) ? `已知：<b>${known}</b>` : '拨号盘上三个格子：辐射、列车、影子……',
       onTick: () => g.audio.tick(),
-      onSubmit: (code) => {
-        if (code === S.digits.join('')) { g.audio.unlock(); g.ui.closeModal(); this.unlock(g); return true; }
-        g.audio.error(); g.refs.metroLock.drawLcd('ОШИБКА'); g.after(1.2, () => g.refs.metroLock.drawLcd('ЗАКРЫТО')); return false;
-      },
+      onSubmit: (code) => { g.ui.closeModal(); this.placeCall(g, code); return true; },
     });
     g.openModal(box);
   },
-  removeLock(g) { const H = g.refs.metroLock; H.lever.rotation.z = 1.2; H.drawLcd('ОТКРЫТО', '#3aff6a'); },
-  unlock(g) {
-    const S = g.S, H = g.refs.metroLock;
-    S.f.unlocked = true;
-    H.drawLcd('ОТКРЫТО', '#3aff6a');
-    g.audio.robotBeep(3, 1800);
-    g.after(0.4, () => { g.audio.hiss(); g.tween(0.5, (k) => (H.lever.rotation.z = 1.2 * k), { ease: easeOut, done: () => g.audio.clunk() }); });
-    g.say('嘀——"ОТКРЫТО"！气密门"嗤"地泄了一口气。', 2.8);
-    g.after(1.8, () => g.win());
+  placeCall(g, code) {
+    const S = g.S, H = g.refs.fieldPhone.handset;
+    this._calling = true;
+    g.tween(0.3, (k) => (H.position.y = 0.16 + Math.sin(k * Math.PI) * 0.06), { ease: (t) => t });
+    const d = g.audio.dial(code) + 0.3;
+    if (code !== S.digits.join('')) {
+      g.after(d, () => { g.audio.lineTone('busy', 1); g.ui.subtitle(`（${code}）……嘟、嘟、嘟。空号。`, 2.4, S.name); });
+      g.after(d + 1.6, () => { this._calling = false; });
+      return;
+    }
+    g.after(d, () => g.audio.lineTone('calling', 2));
+    g.after(d + 3.6, () => { g.audio.clunk(); g.ui.subtitle('……这里是环线调度。211 值班室？这么晚了，还有人？', 3.4, '📞 调度室'); });
+    g.after(d + 7.2, () => g.say('那趟不停站的车——能让它在 211 停一下吗？就一下。', 3.2));
+    g.after(d + 10.6, () => g.ui.subtitle('……它从来不停。……好吧，就这一次。一分钟，别让它等。', 3.6, '📞 调度室'));
+    g.after(d + 14.4, () => this.trainArrives(g));
   },
+  // 幽灵列车亮着灯从隧道里开过来，这一次，刹着车停在了窗外
+  trainArrives(g) {
+    const S = g.S;
+    this._ghostT = -1;
+    this._stopT = 0;
+    g.audio.ghostTrain(6);
+    g.light.flicker = 2;
+    g.after(0.5, () => { g._shake(0.08); this._dust(g, 2); });
+    g._cineTo(V(0.2, 1.62, -2.9), V(0.4, 1.2, -9.5), 1.4);
+    g.after(3.2, () => { g.audio.noise({ dur: 2.4, gain: 0.16, type: 'bandpass', freq: 3600, freq2: 2200, Q: 6, curve: [[0.1, 1], [0.8, 0.8], [1, 0]] }); g._shake(0.12); });
+    g.after(5.2, () => { g.audio.hiss(); g.ui.subtitle('……车停了。车厢里亮着灯，一个人也没有。', 3.2, S.name); });
+    g.after(8.6, () => { g._cineTo(null, null, 1.2); this._calling = false; });
+    g.completeTask('它在等我。这一回，从气密门出去，应该能赶上它。', 8.8);
+  },
+  // 鉴赏模式、游戏模式都一样：气密门上没有锁（杠杆门把抬着，屏幕上是"ОТКРЫТО"）
+  removeLock(g) { const H = g.refs.metroLock; H.lever.rotation.z = 1.2; H.drawLcd('ОТКРЫТО', '#3aff6a'); },
 
   // ---------- 每帧（只在 play 时）----------
   update(g, dt) {
@@ -627,15 +643,23 @@ export const CH4 = {
     this._K = lerp(this._K || 0, target, 1 - Math.exp(-dt * 10));
     const K = this._K * dark;
     PL.update(dt, t, K);
-    // 幽灵列车
-    if (this._ghostT >= 0) {
+    // 幽灵列车：打过调度电话之后，它刹着车停在窗外，一直等着
+    if (this._stopT >= 0) {
+      this._stopT += dt;
+      const k = Math.min(1, this._stopT / 5.2);
+      PL.ghost.visible = true;
+      PL.ghost.position.x = -70 * (1 - k) * (1 - k);
+      // 停稳以后车窗的光暗下来一点（开过去的时候那么亮是为了一闪而过；停在窗外一直那么亮就成了几块白板）
+      const w = Math.min(1, Math.max(0, (this._stopT - 4) / 2));
+      PL.ghostWin.color.setRGB(1.6 - 0.95 * w, 1.35 - 0.83 * w, 0.9 - 0.58 * w);
+    } else if (this._ghostT >= 0) {
       this._ghostT += dt;
       const k = this._ghostT / 3.0;
       PL.ghost.visible = k < 1;
       PL.ghost.position.x = lerp(-70, 70, k);
       if (k >= 1) this._ghostT = -1;
     }
-    const gpass = PL.ghost.visible ? clamp(1 - Math.abs(PL.ghost.position.x) / 28, 0, 1) : 0;
+    const gpass = PL.ghost.visible ? clamp(1 - Math.abs(PL.ghost.position.x) / 28, 0, 1) * (this._stopT > 6 ? 0.65 : 1) : 0;
     L.sun.intensity = K * 1.5 * (0.95 + Math.sin(t * 50) * 0.03) + gpass * 2.2;
     L.sun.color.setRGB(1, 0.64 + gpass * 0.3, 0.3 + gpass * 0.55);
     L.winLight.intensity = 0.06 + K * 0.7 + gpass * 1.2;

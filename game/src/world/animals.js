@@ -289,13 +289,27 @@ export class Chicken extends Creature {
       _w.set(-0.35, 0.85 + Math.sin(t * 16 + 1) * 0.1, 0.1); this._armTo(this.armR, _w, dt, 20);
       this._legsStand(t, 1);
       lookW = 1;
+    } else if (s === 'sleep') {
+      // 断了电、骂够了：趴在键盘前睡着了——身子往前倒，脑袋耷拉下来，翅膀搭在键盘上，一起一伏地喘气
+      const br = Math.sin(t * 1.5 + this.phase);
+      bodyY = seat + br * 0.004;
+      lean = 0.62 + br * 0.015;
+      squint = 0;
+      const kb = ctx.kbLocal;
+      _w.set(kb.x + 0.05, kb.y + 0.03, kb.z - 0.02); this._armTo(this.armL, _w, dt, 3);
+      _w.set(kb.x - 0.08, kb.y + 0.03, kb.z - 0.03); this._armTo(this.armR, _w, dt, 3);
+      this.head.position.z = 0.02;
+      this.head.rotation.x = damp(this.head.rotation.x, 0.75 + br * 0.03, 3, dt);
+      this._legsSit(t);
     }
+    // 睡着以后耳机的灯也暗下去
+    this.rgb.emissiveIntensity = damp(this.rgb.emissiveIntensity, s === 'sleep' ? 0.12 : 1.1, 2, dt);
     this.body.position.y = damp(this.body.position.y, bodyY, 12, dt);
     T.rotation.x = damp(T.rotation.x, lean, 8, dt);
-    this.beak.rotation.x = damp(this.beak.rotation.x, beakOpen * 0.5 + (this.talkT > 0 ? Math.max(0, Math.sin(t * 18)) * 0.3 : 0), 25, dt);
-    this._lookAt(T, this.head, pl, dt, lookW);
+    this.beak.rotation.x = damp(this.beak.rotation.x, beakOpen * 0.5 + (this.talkT > 0 && s !== 'sleep' ? Math.max(0, Math.sin(t * 18)) * 0.3 : 0), 25, dt);
+    this._lookAt(T, this.head, pl, dt, s === 'sleep' ? 0 : lookW);
     this.head.rotation.y = this.headYaw;
-    if (lookW > 0.5) this.head.rotation.x = this.headPitch;
+    if (lookW > 0.5 && s !== 'sleep') this.head.rotation.x = this.headPitch;
     this._blink(dt, squint);
   }
   _armTo(arm, pRoot, dt, speed = 14) {
@@ -459,10 +473,20 @@ export class Horse extends Creature {
       _w.set(0.25, 0.95, 0.25 + Math.sin(t * 10) * 0.08); reach(this.armL, _w, dt, 16);
       _w.set(-0.25, 0.95, 0.25 + Math.sin(t * 10 + 1) * 0.08); reach(this.armR, _w, dt, 16);
       jaw = 0.5; lookW = 1;
+    } else if (s === 'sleep') {
+      // 手机扣在胸口、屏幕黑了，蹄子搭在肚子上，眼睛闭着，慢慢地一呼一吸
+      _w.set(0.1, 0.36, 0.2); reach(this.armL, _w, dt, 4);
+      _w.set(-0.1, 0.34, 0.2); reach(this.armR, _w, dt, 4);
+      this.phone.position.lerp(V(0.02, 0.36, 0.26), 1 - Math.exp(-dt * 3));
+      squint = 0;
+      this.head.rotation.x = damp(this.head.rotation.x, 0.05, 2, dt);
+      T.scale.y = 1 + Math.sin(t * 1.3 + this.phase) * 0.012;
     }
-    // 腿：躺着时膝盖立起来晃；趴着时小腿翘在空中蹬
+    if (this.screen) this.screen.visible = s !== 'sleep';
+    // 腿：躺着时膝盖立起来晃；趴着时小腿翘在空中蹬（睡着了就几乎不动）
+    const still = s === 'sleep' ? 0.12 : 1;
     for (const L of [this.legL, this.legR]) {
-      const k = Math.sin(t * (this.pose === 'belly' ? 3.5 : 1.2) + L.side * 1.7 + this.phase);
+      const k = Math.sin(t * (this.pose === 'belly' ? 3.5 : 1.2) + L.side * 1.7 + this.phase) * still;
       const kick = s === 'blind' ? Math.sin(t * 16 + L.side * 2) * 0.4 : 0;
       if (this.pose === 'belly') { L.hip.rotation.set(0.1, 0, L.side * 0.1); L.knee.rotation.x = -1.3 - k * 0.5 + kick; }
       else if (this.pose === 'side') { L.hip.rotation.set(-1.0 + k * 0.1 + kick, 0, L.side * 0.1); L.knee.rotation.x = 1.4; }
@@ -586,6 +610,9 @@ export class Monkey extends Creature {
       tgt = { L: V(0.25, 0.85, 0.1), R: V(-0.25, 0.85 + Math.sin(t * 12) * 0.05, 0.1), yaw: 0, tilt: 0, lean: -0.1, wink: 0 };
       lookW = 1;
       if (pl) faceYaw = Math.atan2(pl.x - this.root.position.x, pl.z - this.root.position.z);
+    } else if (s === 'sleep') {
+      // 心满意足了：站着就睡着了，两手垂下来，脑袋一点一点往一边歪
+      tgt = { L: V(0.2, 0.06, 0.04), R: V(-0.2, 0.06, 0.04), yaw: 0, tilt: 0.3 + Math.sin(t * 0.7 + this.phase) * 0.04, lean: 0.1, wink: 0 };
     }
     const c = this.cur, k = 1 - Math.exp(-dt * 7);
     c.L.lerp(tgt.L, k); c.R.lerp(tgt.R, k);
@@ -599,10 +626,10 @@ export class Monkey extends Creature {
     this.root.rotation.y = dampAngle(this.root.rotation.y, faceYaw, 5, dt);
     this.torso.rotation.set(c.lean + Math.sin(t * 2) * 0.02, c.yaw * 0.6, Math.sin(t * 1.7) * 0.03);
     this._lookAt(this.torso, this.head, pl, dt, lookW, 1.0, 0.4);
-    this.head.rotation.set(this.headPitch * lookW + (s === 'proud' ? -0.15 : 0), c.yaw * 0.5 + this.headYaw, c.tilt);
+    this.head.rotation.set(this.headPitch * lookW + (s === 'proud' ? -0.15 : 0) + (s === 'sleep' ? 0.42 : 0), c.yaw * 0.5 + this.headYaw, c.tilt);
     // 站姿：重心在两条腿之间换来换去
     const sway = Math.sin(t * 1.5 + this.phase);
-    this.body.position.y = 0.42 + (s === 'cheer' ? Math.abs(Math.sin(t * 8)) * 0.12 : 0);
+    this.body.position.y = 0.42 + (s === 'cheer' ? Math.abs(Math.sin(t * 8)) * 0.12 : 0) - (s === 'sleep' ? 0.025 : 0);
     this.legL.hip.rotation.set(0, 0, 0.05 + sway * 0.04); this.legR.hip.rotation.set(0, 0, -0.05 + sway * 0.04);
     this.legL.knee.rotation.x = 0.04; this.legR.knee.rotation.x = 0.04 + Math.max(0, -sway) * 0.15;
     this.tail.rotation.y = Math.sin(t * 1.8 + this.phase) * 0.3;
@@ -610,6 +637,6 @@ export class Monkey extends Creature {
     this.eyes[1].userData.wink = tgt.wink === 1 && s !== 'talk';
     this.eyes[0].userData.wink = false;
     this.kissMouth.visible = tgt.wink === 2; this.smile.visible = !this.kissMouth.visible;
-    this._blink(dt, 1);
+    this._blink(dt, s === 'sleep' ? 0 : 1);
   }
 }

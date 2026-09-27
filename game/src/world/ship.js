@@ -323,9 +323,10 @@ function buildSea(rnd) {
   for (const [x, y, c, s] of [[-3.5, 4.2, '#fff6e0', 0.9], [3.2, 3.8, '#fff0d0', 0.8], [1.5, 1.6, '#ff3a2a', 0.6], [3.6, 3.0, '#ffe0a8', 0.5]]) { const g = glowSprite(c, s, 0.9); g.position.set(x, y, 0); ship2.add(g); }
   return {
     pivot, U, sea, sky, lh: { group: lh, flash, lamp, beam, beamM },
-    update(dt, t, roll, pitch, flashK, dawn) {
+    // yaw：船转向（第三章报了新航向之后，整片海绕着船转过去一点，灯塔转到正前方）
+    update(dt, t, roll, pitch, flashK, dawn, yaw = 0) {
       U.uTime.value = t; U.uHeave.value = SHIP_MOTION.heave(t) * 0.8; U.uFlash.value = flashK; U.uDawn.value = dawn;
-      pivot.rotation.set(pitch, 0, roll);
+      pivot.rotation.set(pitch, yaw, roll, 'YXZ');
       flash.material.opacity = flashK;
       beamM.uniforms.uK.value = flashK;
       lamp.material.opacity = 0.4 + flashK * 0.5;

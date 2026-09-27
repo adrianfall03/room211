@@ -26,7 +26,7 @@ export class UI {
       <div id="hud" class="hidden">
         <div id="hud-tl"><div class="h">当前目标</div><ul id="objectives"></ul></div>
         <div id="hud-tr"><div class="ct">07:30</div><div class="cr">用时 00:00</div>
-          <div class="codes"><span>门锁</span><b>?</b><b>?</b><b>?</b><b>?</b></div><div class="chap"></div></div>
+          <div class="codes"><span>任务</span><b>?</b><b>?</b><b>?</b></div><div class="chap"></div></div>
         <div id="crosshair"></div>
         <div id="prompt" class="hidden"><kbd>E</kbd><span class="verb"></span><span class="obj"></span></div>
         <div id="subtitle" style="opacity:0"></div>
@@ -66,7 +66,7 @@ export class UI {
   }
 
   // ---------- 标题 ----------
-  // mode：'game' 游戏模式（解谜开锁，通关一章解锁一章）/ 'view' 鉴赏模式（没有任务和门锁，章节随便选）
+  // mode：'game' 游戏模式（每一间都有任务，完成了才走得出去）/ 'view' 鉴赏模式（没有任务，章节随便选）
   // 标题：只有"游戏模式""鉴赏模式"两个按钮，都从第一章开始；
   // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩
   showTitle({ onStart, lastChapter = 1 }) {
@@ -138,7 +138,7 @@ export class UI {
   }
   // 鉴赏模式：藏起任务、密码格、提示 / 线索按钮，露出"下一关"
   setViewMode(v) { document.body.classList.toggle('mode-view', !!v); }
-  setChapterTag(text, lockName = '门锁') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
+  setChapterTag(text, lockName = '任务') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
     document.body.classList.remove('theme-ruin', 'theme-ship', 'theme-metro', 'theme-jungle', 'theme-frost', 'theme-space', 'theme-finale');
@@ -253,9 +253,10 @@ export class UI {
     return p;
   }
 
-  // 滚轮密码锁
-  lock({ n = 4, title = '密码锁', hint = '', initial = null, onSubmit, onTick, labels = null, variant = '' }) {
-    const box = h('div', `lockbox ${variant}`, `<h3>${esc(title)}</h3><div class="hint">${hint}</div><div class="wheels"></div><div class="actions"><button class="btn primary" data-a="ok">开 锁</button></div><div class="m-foot">点击 ▲▼ / 滚轮 / 直接敲数字键 · Enter 确认</div>`);
+  // 滚轮密码盘（门上已经没有锁了：收音机调频、报航向、拨分机号……都用它）
+  //   button：确认键上的字；seps：{ 第几个滚轮之前: '.' } 滚轮之间插一个符号；suffix：最后跟一个单位（MHz、°）
+  lock({ n = 4, title = '密码锁', hint = '', initial = null, onSubmit, onTick, labels = null, variant = '', button = '开 锁', seps = null, suffix = '' }) {
+    const box = h('div', `lockbox ${variant}`, `<h3>${esc(title)}</h3><div class="hint">${hint}</div><div class="wheels"></div><div class="actions"><button class="btn primary" data-a="ok">${esc(button)}</button></div><div class="m-foot">点击 ▲▼ / 滚轮 / 直接敲数字键 · Enter 确认</div>`);
     const vals = initial ? [...initial] : new Array(n).fill(0);
     let sel = 0;
     const wheelsEl = $('.wheels', box);
@@ -271,8 +272,10 @@ export class UI {
       $('.face', w).addEventListener('click', () => { sel = i; syncSel(); });
       render();
       wheels.push({ w, bump, render });
+      if (seps && seps[i]) wheelsEl.appendChild(h('div', 'wsep', esc(seps[i])));
       wheelsEl.appendChild(w);
     }
+    if (suffix) wheelsEl.appendChild(h('div', 'wsep unit', esc(suffix)));
     const syncSel = () => wheels.forEach((o, i) => o.w.classList.toggle('sel', i === sel));
     syncSel();
     const submit = () => {
