@@ -67,8 +67,9 @@ export class UI {
 
   // ---------- 标题 ----------
   // mode：'game' 游戏模式（每一间都有任务，完成了才走得出去）/ 'view' 鉴赏模式（没有任务，章节随便选）
-  // 标题：只有"游戏模式""鉴赏模式"两个按钮，都从第一章开始；
-  // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩
+  // 标题：只有"游戏模式""鉴赏模式""动画教程"三个按钮；前两个都从第一章开始，
+  // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩；
+  // 动画教程：挑一章（或七章连播），看主角自己把通关步骤走一遍（game/tutorial.js）
   showTitle({ onStart, lastChapter = 1 }) {
     const t = h('div');
     t.id = 'title';
@@ -78,6 +79,7 @@ export class UI {
         <div class="t-menu">
           <button data-a="game">游戏模式</button>
           <button data-a="view">鉴赏模式</button>
+          <button data-a="tut">动画教程</button>
         </div>
         <div class="t-menu t-resume hidden">
           <p>上次玩到${chapterLabel(lastChapter)}</p>
@@ -85,14 +87,24 @@ export class UI {
           <button data-a="restart">从第一章开始</button>
           <button data-a="back" class="t-back">返回</button>
         </div>
+        <div class="t-menu t-tut hidden">
+          <p>主角自己把通关步骤走一遍：去哪、按什么、密码从哪来</p>
+          <div class="t-grid">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<button data-a="tutCh" data-n="${n}">${chapterLabel(n)}</button>`).join('')}</div>
+          <button data-a="tutAll">七章连播</button>
+          <button data-a="back" class="t-back">返回</button>
+        </div>
       </div>`;
     document.body.appendChild(t);
     this.titleEl = t;
-    const [main, resume] = t.querySelectorAll('.t-menu');
-    const show = (el) => { main.classList.toggle('hidden', el !== main); resume.classList.toggle('hidden', el !== resume); };
+    const menus = [...t.querySelectorAll('.t-menu')];
+    const [main, resume, tut] = menus;
+    const show = (el) => menus.forEach((m) => m.classList.toggle('hidden', m !== el));
     const act = {
       game: () => { if (lastChapter > 1) show(resume); else onStart({ mode: 'game', chapter: 1 }); },
       view: () => onStart({ mode: 'view', chapter: 1 }),
+      tut: () => show(tut),
+      tutCh: (b) => onStart({ mode: 'tutorial', chapter: Number(b.dataset.n), all: false }),
+      tutAll: () => onStart({ mode: 'tutorial', chapter: 1, all: true }),
       resume: () => onStart({ mode: 'game', chapter: lastChapter }),
       restart: () => onStart({ mode: 'game', chapter: 1 }),
       back: () => show(main),
@@ -100,7 +112,7 @@ export class UI {
     t.querySelectorAll('button[data-a]').forEach((b) => b.addEventListener('click', () => {
       if (!this.titleEl) return; // 已经点过开始了
       this.audio.click();
-      act[b.dataset.a]();
+      act[b.dataset.a](b);
     }));
   }
   hideTitle() {

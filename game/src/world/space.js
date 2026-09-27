@@ -434,8 +434,8 @@ export function decorateSpace(ctx) {
   refs.lock.group.visible = false;
   if (refs.interact.roster) refs.interact.roster.visible = false;
   for (const f of refs.fixtures || []) f.visible = false; // 宿舍的日光灯管换成舱里的灯箱
-  // 宿舍的铝合金窗框、窗台拆掉（舷窗框自己有），只留玻璃
-  for (const c of refs.win.children) if (c.isMesh && !(c.material && c.material.transparent)) c.visible = false;
+  // 宿舍的铝合金窗框、窗台拆掉（舷窗框自己有），只留玻璃——还有那块看不见的"窗户"互动面（对着舷窗"看风景"要用它）
+  for (const c of refs.win.children) if (c.isMesh && !(c.material && c.material.transparent) && c.userData.iid !== 'window') c.visible = false;
   // 舷窗玻璃：外面是真空，只淡淡地映一点舱里的东西（不然整片星空会蒙上一层灰）
   Object.assign(M.glass, { color: new THREE.Color('#8a9794'), opacity: 0.05, envMapIntensity: 0.12, roughness: 0.03 });
   // 遮光板（多层隔热毯）一开始是关着的
