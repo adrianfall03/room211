@@ -1,7 +1,7 @@
 // 第五章隐藏结局：书架背后的"另一个时空"——考试前一天晚上 02:47 的 211 宿舍（第一章的写实画风）。
 //   整间宿舍另外搭在一个单独的场景里，绕着书架背板转了 180°：两个书架背靠背，太空舱这边抽掉一本书，
 //   从空隙里看过去，就是宿舍书架上书与书之间的缝——电脑前两个人在打排位（其中一个是你自己），
-//   另外两个室友站在后面指指点点。画面每帧用同一个镜头渲染到一张贴图上，贴在资料库那一格的背板上。
+//   另外两个室友和隔壁来串门的站在后面指指点点（几个人照着当年宿舍的一张合照捏的，见 LOOKS）。画面每帧用同一个镜头渲染到一张贴图上，贴在资料库那一格的背板上。
 //   反过来也行：有几个镜头就架在这间宿舍里（主画面直接画这个场景），书架那道缝后面贴着"反向的窗"，
 //   里面是同一个镜头拍到的太空舱——隔着两个背靠背的书架，两边的人能互相看见。
 import * as THREE from 'three';
@@ -38,12 +38,17 @@ const STAND = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().m
 // 过去的宿舍：本地坐标就是宿舍自己的坐标；绕 (x=-1.8, z=-1.075) 转半圈，书架背板正好贴着太空舱资料库的背板
 export const PAST_POS = V(-3.6, 0, -2.15);
 
-function dress(ch, { top, sleeve, pants, hair }) {
-  const M = ch.mats;
-  const plain = (m, c) => { if (!m || !c) return; m.map = null; m.normalMap = null; m.color.set(c); m.needsUpdate = true; };
-  plain(M.jacketMat, top); plain(M.sleeveMat, sleeve || top); plain(M.jeansMat, pants);
-  if (hair) M.hairMat.color.set(hair);
-}
+// 那天晚上的三个室友 + 一个来串门的：照着当年宿舍里的一张合照捏的
+export const LOOKS = {
+  // 照片最左：粗黑框眼镜、侧分背头、白 T 恤胸前一行红字、挂一串长珠链，脸圆，笑得最开
+  A: { skin: [228, 184, 152], skinColor: '#e2b596', hair: [22, 18, 16], hairColor: '#15100d', outfit: 'tee', tee: '#efeee9', print: 'tuss', necklace: true, hairStyle: 'quiff', glasses: { color: '#0e0d0c', rim: 0.0034, top: 0.0068, w: 0.047, h: 0.027 }, headScale: [1.07, 1, 1.03] },
+  // 照片最右：粉红 T 恤、细框眼镜、一头蓬松的厚头发，整个人趴过来看屏幕
+  B: { skin: [208, 158, 124], skinColor: '#cfa07e', hair: [20, 17, 16], hairColor: '#120e0c', outfit: 'tee', tee: '#d8767a', hairStyle: 'mop', glasses: { color: '#2c2a2a', rim: 0.002, top: 0.0024, w: 0.045, h: 0.028 } },
+  // 坐在我旁边那台电脑前：细框眼镜、干净的短发、白 T 恤印着 COCO，瘦
+  C: { skin: [214, 168, 136], skinColor: '#d6a888', hair: [24, 20, 18], hairColor: '#17110e', outfit: 'tee', tee: '#ecebe6', print: 'coco', hairStyle: 'neat', glasses: { color: '#221e1b', rim: 0.0022, top: 0.0026, w: 0.046, h: 0.026 }, headScale: [0.95, 1.03, 0.98] },
+  // 站在我正后面：光着膀子、两边剃短的背头、左耳一颗黑耳钉
+  D: { skin: [200, 146, 110], skinColor: '#c48f6c', hair: [22, 18, 16], hairColor: '#140f0c', outfit: 'bare', hairStyle: 'undercut', earring: true, headScale: [0.98, 1.02, 1] },
+};
 
 export class PastDorm {
   constructor(g) {
@@ -146,24 +151,26 @@ export class PastDorm {
 
   _buildPeople(R, K) {
     const root = R.root, S = this.g.S;
-    const mk = (opts, look) => { const ch = createCharacter(opts); dress(ch, look); root.add(ch.root); return ch; };
+    const mk = (k) => { const ch = createCharacter(LOOKS[k]); root.add(ch.root); return ch; };
     // 你自己（通宵打排位，就是第一章早上趴在桌上睡着的那身衣服）
     const me = createCharacter(); root.add(me.root);
     me.root.position.set(R.sit.x, 0, R.sit.z); me.root.rotation.y = R.sit.yaw;
     // C：坐在自己的书桌前，戴着耳机
-    const C = mk({ skin: [200, 150, 118], skinColor: '#c8906e', hairColor: '#2a1c14' }, { top: '#5a6270', pants: '#2a2c33', hair: '#2a1c14' });
+    const C = mk('C');
     C.root.position.set(1.0, 0, -0.85); C.root.rotation.y = Math.PI / 2;
     const hs = R.headset; hs.parent && hs.parent.remove(hs); hs.position.set(0, 0.03, 0); hs.rotation.set(0, Math.PI / 2, 0); hs.scale.setScalar(1.05); C.helmetSlot.add(hs);
-    // A：白 T 恤 + 白色棒球帽，站在两台电脑后面
-    const A = mk({ skin: [222, 172, 138], skinColor: '#dca88a', hairColor: '#1a1410' }, { top: '#e8e6e0', pants: '#3a4a6a', hair: '#1a1410' });
+    // A：站在两台电脑后面
+    const A = mk('A');
     A.root.position.set(0.3, 0, -0.55); A.root.rotation.y = Math.PI / 2 + 0.25;
-    const cap = K.whiteCap(); cap.scale.set(1.0, 1.35, 1.0); cap.position.set(0, -0.012, 0.0); A.helmetSlot.add(cap); // 帽冠加高一点，别让头发从帽顶戳出来
-    // B：红色卫衣，站在我身后探头看
-    const B = mk({ skin: [205, 158, 120], skinColor: '#cc9a78', hairColor: '#3a2a1a' }, { top: '#b8352a', pants: '#1e2026', hair: '#3a2a1a' });
+    // B：站在我身后探头看
+    const B = mk('B');
     B.root.position.set(0.42, 0, 0.15); B.root.rotation.y = Math.PI / 2 - 0.3;
-    for (const ch of [me, C, A, B]) ch.root.traverse((o) => { if (o.isMesh) { o.castShadow = false; } });
-    me.setExpression('focus'); C.setExpression('focus'); A.setExpression('grin'); B.setExpression('grin');
-    this.people = { me, C, A, B };
+    // D：隔壁过来串门的，站在 C 身后抱着胳膊看他打，不说话（站在我身后的话，从后面拍过来会把我整个挡住）
+    const D = mk('D');
+    D.root.position.set(0.62, 0, -0.5); D.root.rotation.y = Math.PI / 2 + 0.15;
+    for (const ch of [me, C, A, B, D]) ch.root.traverse((o) => { if (o.isMesh) { o.castShadow = false; } });
+    me.setExpression('focus'); C.setExpression('focus'); A.setExpression('grin'); B.setExpression('grin'); D.setExpression('neutral');
+    this.people = { me, C, A, B, D };
     this.names = { me: S.name, A: S.mates[0], B: S.mates[1], C: S.mates[2] };
     // 键盘 / 鼠标 / 屏幕的位置（世界坐标，用来算手和视线）
     R.root.updateMatrixWorld(true);
@@ -177,6 +184,8 @@ export class PastDorm {
       scr2: R.monitor2.localToWorld(V(0, 0.3, 0)),
       shelf: root.localToWorld(V(-1.45, 1.75, -1.07)),
     };
+    // B 指的是我那块屏幕的左上角：胳膊从我脑袋左边过去，离得远一点
+    this.pts.scr1B = root.localToWorld(root.worldToLocal(this.pts.scr1.clone()).add(V(0, 0.14, -0.3)));
     // 各人的状态：A 可能会走到书架前面去；电脑前的我最后会停下来，转过身看着书架
     this.st = { A: { mode: 'watch', t: 0, pos: A.root.position.clone(), yaw: A.root.rotation.y }, me: { mode: 'type', k: 0 }, react: 0, cheerT: 0 };
     for (const ch of [me, A]) ch.prepare && ch.prepare(['warm', 'sad']);
@@ -247,21 +256,24 @@ export class PastDorm {
     }
     typer(P.C, pts.kb2, pts.ms2, 1.7, 0);
     // 站着的两个：指着屏幕比划，偶尔激动得举手
-    const pointer = (ch, target, s) => {
+    const pointer = (ch, target, s, reach = 0.56, side = 'R') => {
       const lk = startled ? this._look(ch, pts.shelf) : this._look(ch, target);
       const ph = Math.sin(t * 0.9 + s);
       const pointing = ph > -0.2 && !startled;
-      const sh = ch.J.shR.getWorldPosition(V());
+      const sh = ch.J[`sh${side}`].getWorldPosition(V());
       const dir = _a.copy(target).sub(sh).normalize();
-      const hand = sh.clone().addScaledVector(dir, 0.56).add(V(0, Math.sin(t * 7 + s) * 0.03, 0));
-      ch.update(dt, { ...lk, cheer: st.cheerT > 0 && s > 1 ? 1 : 0, ikR: { p: this._local(ch, hand), w: pointing ? 1 : 0, fing: 0.2 } });
+      const hand = sh.clone().addScaledVector(dir, reach).add(V(0, Math.sin(t * 7 + s) * 0.03, 0));
+      ch.update(dt, { ...lk, cheer: st.cheerT > 0 && s > 1 ? 1 : 0, [`ik${side}`]: { p: this._local(ch, hand), w: pointing ? 1 : 0, fing: 0.2 } });
     };
     if (st.cheerT > 0) st.cheerT -= dt;
     else if (Math.random() < dt * 0.08) st.cheerT = 1.2;
     const A = st.A;
     if (A.mode === 'watch') pointer(P.A, pts.scr2, 0.3);
     else this._updateA(dt);
-    pointer(P.B, pts.scr1, 2.1);
+    // B 就站在我正后面：用左手从我脑袋旁边指过去，别戳到我头上
+    pointer(P.B, pts.scr1B, 2.1, 0.5, 'L');
+    // D：抱着胳膊
+    P.D.update(dt, { ...(startled ? this._look(P.D, pts.shelf) : this._look(P.D, st.Dlook || pts.scr2)), ikL: { p: _c.set(-0.1, 0.3, 0.15), w: 1 }, ikR: { p: _d.set(0.1, 0.27, 0.17), w: 1 } });
   }
   _updateA(dt) {
     const A = this.st.A, ch = this.people.A, R = this.refs;
@@ -319,8 +331,13 @@ export class PastDorm {
     if (this.st.A.mode !== 'watch') { this.st.A.mode = 'watch'; this.people.A.root.position.copy(this.st.A.pos); this.people.A.root.rotation.y = this.st.A.yaw; }
   }
   get typing() { return this.st.me.mode === 'type'; }
-  // B 退到门那边去伸懒腰了（最后那几个镜头拍电脑前的我、望向书架，他原来站的地方正好挡着）
-  moveB() { const B = this.people.B; B.root.position.set(-0.3, 0, 1.0); B.root.rotation.y = Math.PI / 2 + 0.4; }
+  // B 退到门那边去伸懒腰了，D 跟过去跟他说话（最后那几个镜头拍电脑前的我、望向书架，他俩原来站的地方正好挡着）
+  moveB() {
+    const B = this.people.B, D = this.people.D;
+    B.root.position.set(-0.3, 0, 1.0); B.root.rotation.y = Math.PI / 2 + 0.4;
+    D.root.position.set(0.05, 0, 1.45); D.root.rotation.y = -2.48;
+    this.st.Dlook = this.refs.root.localToWorld(V(-0.3, 1.6, 1.0));
+  }
   // 结局：A 挪到 C 身后看他打（结算画面的镜头对着电脑前的我，A 原来站的地方在画面边上）
   moveA() { const A = this.people.A; this.st.A.mode = 'watch'; A.root.position.set(1.15, 0, -1.45); A.root.rotation.y = Math.PI / 2 - 0.2; }
   // 书缝里透出来的光：反向窗的亮度 + 书架那盏补光
@@ -365,4 +382,4 @@ export class PastDorm {
     });
   }
 }
-const _q = new THREE.Quaternion(), _b2 = new THREE.Vector2(), _col = new THREE.Color();
+const _q = new THREE.Quaternion(), _b2 = new THREE.Vector2(), _col = new THREE.Color(), _c = V(), _d = V();
