@@ -1350,3 +1350,94 @@ export function genServiceCoat(vAt, { base = '#4a4833', name = 'SMITH', ribbons 
   seam([[X(0.0) + 2, Y(0.13)], [X(0.0) + 2, 0]], 'rgba(20,20,10,0.3)', 2);
   return toTex(c);
 }
+
+// ---------- 短袖 T 恤 / 光膀子（躯干那张车床网格的贴图：u=0.5 是正前方，canvas 上沿是领口） ----------
+// 在胸前某个高度按"毫米"作画：横竖两个方向的像素密度不一样，这里换算好，字不会被拉扁
+function torsoPainter(ctx, W, H, vAt, rAt) {
+  const Y = (h) => (1 - vAt(h)) * H;
+  const at = (h, u, fn) => {
+    const px = W / (Math.PI * 2 * rAt(h)) / 1000, py = (H * (vAt(h + 0.005) - vAt(h - 0.005))) / 0.01 / 1000;
+    ctx.save(); ctx.translate(u * W, Y(h)); ctx.scale(px, py); fn(ctx); ctx.restore();
+  };
+  return { Y, at };
+}
+
+export function genTee(vAt, rAt, DZ, { base = '#e8e6e0', print = null } = {}) {
+  const W = 1024, H = 1024;
+  const c = makeCanvas(W, H), ctx = c.getContext('2d');
+  const { fbm } = createNoise(64);
+  const [br, bg, bb] = hexToRgb(base);
+  pixels(c, (x, y, d, i) => {
+    const n = fbm((x / W) * 48, (y / H) * 48, 2, 48, 48), n2 = fbm((x / W) * 5, (y / H) * 7, 3, 5, 7);
+    const u = x / W;
+    // 两侧、腋下略暗；随手的褶皱
+    const side = 1 - 0.07 * (1 - Math.abs(Math.cos(u * Math.PI * 2)));
+    const k = side * (0.95 + n * 0.07 + (n2 - 0.5) * 0.08) + (((x + y) & 1) ? 0.008 : -0.008);
+    d[i] = clamp(br * k, 0, 255); d[i + 1] = clamp(bg * k, 0, 255); d[i + 2] = clamp(bb * k, 0, 255); d[i + 3] = 255;
+  });
+  const { Y, at } = torsoPainter(ctx, W, H, vAt, rAt);
+  // 侧缝
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 2;
+  for (const u of [0.25, 0.75]) { ctx.beginPath(); ctx.moveTo(u * W, 0); ctx.lineTo(u * W, H); ctx.stroke(); }
+  // 胸前的几道斜褶
+  ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 10;
+  for (const [u0, h0, u1, h1] of [[0.4, 0.2, 0.46, 0.12], [0.6, 0.22, 0.54, 0.13], [0.36, 0.44, 0.42, 0.4], [0.64, 0.44, 0.58, 0.4]]) { ctx.beginPath(); ctx.moveTo(u0 * W, Y(h0)); ctx.lineTo(u1 * W, Y(h1)); ctx.stroke(); }
+  // 印花：墨稍微有点旧、有点裂
+  const ink = (fn) => {
+    const p = makeCanvas(W, H), px = p.getContext('2d');
+    fn(px);
+    px.globalCompositeOperation = 'destination-out';
+    const rnd = mulberry32(9);
+    for (let k = 0; k < 2600; k++) { px.fillStyle = `rgba(0,0,0,${0.25 + rnd() * 0.5})`; px.fillRect(rnd() * W, rnd() * H, 1 + rnd() * 2.5, 1 + rnd() * 1.5); }
+    ctx.globalAlpha = 0.92; ctx.drawImage(p, 0, 0); ctx.globalAlpha = 1;
+  };
+  if (print === 'tuss') {
+    ink((px) => {
+      const { at: at2 } = torsoPainter(px, W, H, vAt, rAt);
+      px.fillStyle = '#c3272b'; px.textAlign = 'center'; px.textBaseline = 'middle';
+      at2(0.4, 0.5, (x) => { x.font = '900 50px "Arial Black", Impact, sans-serif'; x.fillText('TUSSLE', 0, 0); });
+      at2(0.335, 0.5, (x) => { x.font = 'italic 700 58px Georgia, "Times New Roman", serif'; x.fillText('USA', 8, 0); x.fillRect(-70, 34, 150, 5); });
+    });
+  } else if (print === 'coco') {
+    ink((px) => {
+      const { at: at2 } = torsoPainter(px, W, H, vAt, rAt);
+      px.fillStyle = '#151515'; px.textAlign = 'center'; px.textBaseline = 'middle';
+      at2(0.3, 0.5, (x) => { x.font = '800 62px "Helvetica Neue", Arial, sans-serif'; x.letterSpacing = '6px'; x.fillText('COCO', 0, 0); });
+    });
+  }
+  return toTex(c, { wrap: false });
+}
+
+export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e' } = {}) {
+  const W = 1024, H = 1024;
+  const c = makeCanvas(W, H), ctx = c.getContext('2d');
+  const { fbm } = createNoise(66);
+  const [br, bg, bb] = hexToRgb(skin);
+  pixels(c, (x, y, d, i) => {
+    const n = fbm((x / W) * 20, (y / H) * 20, 3, 20, 20);
+    const u = x / W, side = 1 - Math.abs(Math.cos(u * Math.PI * 2));
+    const k = 0.97 + (n - 0.5) * 0.06 - side * 0.07;
+    d[i] = clamp(br * k, 0, 255); d[i + 1] = clamp(bg * k, 0, 255); d[i + 2] = clamp(bb * k * 0.98, 0, 255); d[i + 3] = 255;
+  });
+  const { Y, at } = torsoPainter(ctx, W, H, vAt, rAt);
+  const soft = (h, u, rx, ry, col) => at(h, u, (x) => {
+    const g = x.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, col); g.addColorStop(1, col.replace(/[\d.]+\)$/, '0)'));
+    x.save(); x.scale(1, ry / rx); x.fillStyle = g; x.beginPath(); x.arc(0, 0, rx, 0, Math.PI * 2); x.fill(); x.restore();
+  });
+  // 胸肌下沿、胸骨、腹部中线、两侧的肋部阴影——都很淡，只是让它看起来不像一个光滑的桶
+  for (const s of [-1, 1]) {
+    soft(0.378, 0.5 + s * 0.055, 70, 16, 'rgba(90,45,30,0.16)');
+    soft(0.43, 0.5 + s * 0.05, 80, 50, 'rgba(255,225,200,0.07)');
+    soft(0.405, 0.5 + s * 0.06, 7, 6, 'rgba(120,60,45,0.55)');
+    soft(0.22, 0.5 + s * 0.1, 60, 120, 'rgba(90,45,30,0.08)');
+    soft(0.2, 0.5 + s * 0.035, 30, 40, 'rgba(255,225,200,0.05)');
+  }
+  soft(0.42, 0.5, 10, 80, 'rgba(90,45,30,0.10)');
+  soft(0.22, 0.5, 6, 110, 'rgba(90,45,30,0.08)');
+  soft(0.105, 0.5, 6, 5, 'rgba(70,32,22,0.6)');
+  // 背后：脊柱那道沟、两块肩胛骨
+  for (const u of [0, 1]) soft(0.3, u, 12, 200, 'rgba(90,45,30,0.10)');
+  for (const s of [-1, 1]) soft(0.43, (s < 0 ? 0 : 1) + s * -0.07, 60, 60, 'rgba(255,225,200,0.06)');
+  return toTex(c, { wrap: false });
+}
