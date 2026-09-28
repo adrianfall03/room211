@@ -104,6 +104,11 @@ const ACH = [
   ['forge', '🔥 熔炉不灭', '让 EMBER 的暖炉重新烧起来'],
   ['laotie', '⚙️ 老铁没毛病', '给冻住的自动机「老铁」上了发条'],
   ['soup', '🥣 锯末汤', '在零下七十度喝了一碗热乎乎的锯末汤'],
+  ['whetstone', '⚔️ 铁匠的儿子', '在磨刀石上把一把锈剑磨得锃亮'],
+  ['lockpick', '🗝️ 妙手空空', '一根开锁器都没弄断，就撬开了箱子'],
+  ['mutt', '🐕 好狗狗', '摸了摸杂毛的脑袋'],
+  ['godwin', '🍺 戈德温神父', '在地堡里灌了一大口啤酒，天旋地转'],
+  ['saviour', '💾 救世主酒', '喝下自己熬的救世主酒，存了个档'],
   ['robot', '🤖 机器人救星', '救下失控的机器人小圆'],
   ['water', '💧 太空饮水机', '一口一口喝光了一整颗水球'],
   ['earth', '🌍 地球夜景', '看到城市灯光拼出的数字'],
@@ -112,7 +117,7 @@ const ACH = [
   ['stay', '📚 书架背后的幽灵', '隐藏结局：从书缝里看到了那天晚上的自己'],
   ['enlist', '🎖️ 新兵报到', '接过少校递来的军帽，回敬一个军礼'],
   ['penrose', '🌀 彭罗斯阶梯', '在同一间 211 里，推开门又从洗手间走回来三次'],
-  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部七个 211'],
+  ['loop', '🔁 轮回终结者', '从第一章开始，逃出全部八个 211'],
 ];
 
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
@@ -458,7 +463,7 @@ export class Game {
   }
 
   // ================== 每帧 ==================
-  // 主画面渲染之前的额外渲染（第七章彩蛋：书架背后的另一个时空）
+  // 主画面渲染之前的额外渲染（第八章彩蛋：书架背后的另一个时空）
   beforeRender() {
     if (this.CH && this.CH.secret) this.CH.secret.beforeRender();
     if (this.CH && this.CH.preRender) this.CH.preRender(this); // 第三章：镜头跟着船歪一点
@@ -1448,7 +1453,7 @@ export class Game {
     this.gfx.grade.flash = 0;
     D.pivot.rotation.y = D.base;
     if (R.doorLight) R.doorLight.remove();
-    // 洗手间的门先关好（第七章驾驶舱的门本来开着，也一样先关上、再被推开）
+    // 洗手间的门先关好（第八章驾驶舱的门本来开着，也一样先关上、再被推开）
     if (W.open || W.anim) {
       W.anim = false; W.open = false;
       W.pivot.rotation.y = W.base || 0;
@@ -1624,7 +1629,7 @@ export class Game {
   _switchWorld(theme) {
     const old = this.refs;
     if (this.CH && this.CH.leave) this.CH.leave(this); // 这一章自己加的界面（盖革计数器读数、防毒面具遮罩……）
-    // 第七章彩蛋里另搭的"那天晚上的 211"也一起释放
+    // 第八章彩蛋里另搭的"那天晚上的 211"也一起释放
     if (this.CH && this.CH.secret && this.CH.secret.past) { this.CH.secret.past.dispose(); this.CH.secret.past = null; this.CH.secret.needPast = false; }
     if (this.CH && this.CH.secret) this.CH.secret.dispose();
     this.gfx.viewScene = null;
@@ -1652,7 +1657,7 @@ export class Game {
     this._mirrorN = 0;
     // 上一间屋子出门时的自动走路 / 镜头 / 姿势都不要带过来；失重只在太空舱里
     this.auto = null; this._afterReach = null; this.cine = null; this._cutPose = null;
-    // 第七章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
+    // 第八章彩蛋的时空坍缩会开全局裁剪面，换屋子时一律清掉
     this.gfx.renderer.clippingPlanes = [];
     this._clipZ = Infinity;
     this.ctrl.float = 0; this.ctrl.pos.y = 0;
@@ -1736,7 +1741,7 @@ export class Game {
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="again">再来一局</button><button class="btn" data-a="admire">📚 再看一会儿</button></div>`, 'end');
       node.querySelector('[data-a=again]').addEventListener('click', () => reload(S.view ? 'view' : 'game'));
     } else if (S.view) {
-      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>七个 211 都逛完啦！<br>游戏模式里，每一间 211 都有一个任务——没完成就推门出去，只会从洗手间的门里走回来。</p>
+      node = this.ui.panel(`<h2>🎬 鉴赏结束</h2><p>八个 211 都逛完啦！<br>游戏模式里，每一间 211 都有一个任务——没完成就推门出去，只会从洗手间的门里走回来。</p>
         <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-a="play">开始游戏模式</button><button class="btn" data-a="again">再逛一遍</button>${admireBtn}</div>`, 'end');
       node.querySelector('[data-a=play]').addEventListener('click', () => reload('game'));
       node.querySelector('[data-a=again]').addEventListener('click', () => reload('view'));
@@ -1746,7 +1751,7 @@ export class Game {
       if (runs.every((r) => r.elapsed <= r.par)) S.ach.add('fast');
       if (hints === 0) S.ach.add('nohint');
       let rank, text;
-      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。七个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
+      if (hints <= 1) { rank = 'S'; text = '少校亲自向你敬礼、为你授帽。八个 211 一个比一个离谱，你却全都逃了出来——教官说，你是他见过最冷静的新兵。'; }
       else if (hints <= 4) { rank = 'A'; text = '你戴上军帽，回敬了一个标准的军礼，看台上的欢呼声响成一片。教官小声嘀咕：“刚才还在椅子上打呼噜呢，这会儿倒挺精神。”'; }
       else if (hints <= 8) { rank = 'B'; text = '军帽有点大，戴歪了。少校笑着帮你扶正：“欢迎入伍，新兵。”'; }
       else { rank = 'C'; text = '你差点在报到现场站着睡着……教官一嗓子“立——正！”把你彻底吵醒了。'; }
@@ -1754,7 +1759,7 @@ export class Game {
       const totalT = runs.reduce((a, r) => a + r.elapsed, 0);
       const chRows = runs.map((r) => `<div><b>${formatMMSS(r.elapsed)}</b><span>${chapterLabel(r.n)}</span></div>`).join('');
       node = this.ui.panel(`
-        <h2>七个 211，全部逃脱！</h2>
+        <h2>八个 211，全部逃脱！</h2>
         <div style="color:var(--muted)">一场梦醒来，${S.name} 戴上军帽，向少校回敬了一个军礼 🎖️</div>
         <div class="rank">${rank}</div>
         <p>${text}</p>
@@ -1981,6 +1986,7 @@ export class Game {
       metro: { n: 1100, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.5, 4.3], color: '#d8c8a8', size: 0.011 },
       jungle: { n: 320, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#d6dccb', size: 0.011 },
       frost: { n: 520, x: [-1.7, 1.7], y: [0.1, 2.8], z: [-3.4, 4.3], color: '#dde8ff', size: 0.011 },
+      castle: { n: 600, x: [-1.7, 1.7], y: [0.1, 2.9], z: [-3.4, 4.3], color: '#e8c89a', size: 0.011 },
       space: { n: 260, x: [-1.7, 1.7], y: [0.2, 2.8], z: [-3.4, 4.3], color: '#cfefff', size: 0.02 },
       finale: { n: 160, x: [-5, 5], y: [0.3, 4], z: [-3, 7], color: '#fff6d8', size: 0.025 },
     }[theme] || { n: 1, x: [0, 0], y: [0, 0], z: [0, 0], color: '#ffffff', size: 0.01 };

@@ -69,7 +69,7 @@ export class UI {
   // mode：'game' 游戏模式（每一间都有任务，完成了才走得出去）/ 'view' 鉴赏模式（没有任务，章节随便选）
   // 标题："游戏模式""鉴赏模式"都从第一章开始；
   // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩；
-  // 动画教程：挑一章（或七章连播），看主角自己把通关步骤走一遍（game/tutorial.js）
+  // 动画教程：挑一章（或八章连播），看主角自己把通关步骤走一遍（game/tutorial.js）
   // 更换人物：左右切换，画面里站着的那个人跟着换（onHero），选好了点"就他了"回到主菜单
   showTitle({ onStart, lastChapter = 1, heroes = [], hero = null, onHero = null }) {
     const t = h('div');
@@ -91,8 +91,8 @@ export class UI {
         </div>
         <div class="t-menu t-tut hidden">
           <p>主角自己把通关步骤走一遍：去哪、按什么、密码从哪来</p>
-          <div class="t-grid">${[1, 2, 3, 4, 5, 6, 7].map((n) => `<button data-a="tutCh" data-n="${n}">${chapterLabel(n)}</button>`).join('')}</div>
-          <button data-a="tutAll">七章连播</button>
+          <div class="t-grid">${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<button data-a="tutCh" data-n="${n}">${chapterLabel(n)}</button>`).join('')}</div>
+          <button data-a="tutAll">八章连播</button>
           <button data-a="back" class="t-back">返回</button>
         </div>
         <div class="t-menu t-hero hidden">
@@ -179,7 +179,7 @@ export class UI {
       b.addEventListener('mousedown', on); b.addEventListener('mouseup', off); b.addEventListener('mouseleave', off);
     });
   }
-  // 失重（第七章）：触屏按钮和键位提示换成上浮 / 下沉
+  // 失重（第八章）：触屏按钮和键位提示换成上浮 / 下沉
   setZeroG(v) { document.body.classList.toggle('zero-g', !!v); }
   setClock(time, sub) {
     this.el.ct.textContent = time;
@@ -190,7 +190,7 @@ export class UI {
   setChapterTag(text, lockName = '任务') { this.el.chap.textContent = text || ''; this.el.codeBox.querySelector('span').textContent = lockName; }
   // 每一章的画风：HUD 也换一套配色（body 上的 class）
   setTheme(theme) {
-    document.body.classList.remove('theme-ruin', 'theme-ship', 'theme-metro', 'theme-jungle', 'theme-frost', 'theme-space', 'theme-finale');
+    document.body.classList.remove('theme-ruin', 'theme-ship', 'theme-metro', 'theme-jungle', 'theme-frost', 'theme-castle', 'theme-space', 'theme-finale');
     if (theme !== 'normal') document.body.classList.add(`theme-${theme}`);
   }
   setCodes(digits, found, icons = null) {

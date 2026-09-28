@@ -512,3 +512,45 @@ body[class*="theme-"]:not(.theme-finale) #tut-card { border-radius: 4px; }
   #tut-key { top: 146px; bottom: auto; }
   #tut-bar { left: auto; }
 }
+
+/* ---------- 第七章：地堡 211（1403 年的波希米亚）—— 深褐色的皮子 + 暗金色的字，像《天国：拯救》的界面 ---------- */
+body.theme-castle { --accent: #d6a24a; --panel: rgba(16,11,7,0.74); --line: rgba(220,190,140,0.16); --warn: #e0703a; }
+body.theme-castle #hud-tl, body.theme-castle #hud-tr, body.theme-castle .slot { border-radius: 2px; box-shadow: none; }
+body.theme-castle #hud-tr .ct { color: #ecd8ae; text-shadow: 0 0 10px rgba(214,162,74,0.3); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, var(--font); }
+body.theme-castle #subtitle { border-radius: 2px; background: rgba(14,9,5,0.74); border: 1px solid rgba(220,190,140,0.14); box-shadow: none; }
+body.theme-castle #crosshair.active { border-color: #d6a24a; box-shadow: 0 0 8px rgba(214,162,74,0.45); }
+/* 炼金台：木头台面 + 黄铜刻度轮 */
+.lockbox.alchemy { background: linear-gradient(165deg, #2e2014, #140d07); border: 1px solid rgba(220,180,110,0.18); color: #ecd8ae; border-radius: 6px; box-shadow: inset 0 0 0 3px rgba(0,0,0,0.3), inset 0 0 50px rgba(120,70,20,0.18), 0 30px 80px rgba(0,0,0,0.8); }
+.lockbox.alchemy h3 { font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, var(--font); letter-spacing: 0.12em; color: #e8c880; }
+.lockbox.alchemy .hint { color: #b8a07a; line-height: 1.7; }
+.lockbox.alchemy .wheels { background: linear-gradient(180deg, #120a04, #3a2410 50%, #120a04); box-shadow: inset 0 4px 14px rgba(0,0,0,0.75), inset 0 0 0 1px rgba(220,180,110,0.2); border-radius: 4px; }
+.lockbox.alchemy .wheel button { background: #3a2818; color: #ecd8ae; border-radius: 3px; box-shadow: inset 0 1px 0 rgba(255,230,180,0.08), 0 2px 0 #0a0603; }
+.lockbox.alchemy .wheel .face { background: linear-gradient(180deg, #2a1a0a 0%, #9a7036 28%, #d8b06a 50%, #9a7036 72%, #2a1a0a 100%); }
+.lockbox.alchemy .wheel .strip div { color: #2a1808; text-shadow: 0 1px 0 rgba(255,230,170,0.4); font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif; }
+.lockbox.alchemy .btn.primary { background: #9a6a2a; color: #140c04; }
+/* 羊皮纸：信、配方、剑上的铭文、符木 */
+.paper.parchment { background: #d8c49a; background-image: radial-gradient(circle at 15% 10%, rgba(120,80,30,0.25), transparent 40%), radial-gradient(circle at 85% 90%, rgba(90,60,20,0.32), transparent 45%), radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(90,55,20,0.35) 100%); color: #33200e; font-family: "Kaiti SC", "STKaiti", "KaiTi", "Songti SC", "STSong", serif; font-size: 19px; line-height: 1.75; transform: rotate(-0.5deg); box-shadow: 0 30px 80px rgba(0,0,0,0.8), inset 0 0 70px rgba(90,55,20,0.4); border-radius: 3px; }
+.paper.parchment h3 { color: #7a2a14; font-family: "Songti SC", "STSong", "Palatino Linotype", serif; font-size: 20px; letter-spacing: 0.3em; }
+.paper.parchment .date { font-family: var(--font); font-size: 13px; color: #6a4a2a; letter-spacing: 0.1em; margin-bottom: 8px; }
+.paper.parchment .red { color: #8a1a10; }
+.paper.parchment .sig { color: #5a3a1a; }
+.paper.parchment .blank { display: inline-block; min-width: 1.4em; border-bottom: 2px solid rgba(40,24,10,0.6); color: transparent; }
+/* 撬锁 */
+.lockpick { position: relative; width: min(440px, 94vw); padding: 24px 22px 18px; border-radius: 6px; background: linear-gradient(165deg, #2a1c10, #120b06); border: 1px solid rgba(220,180,110,0.18); color: #ecd8ae; text-align: center; box-shadow: 0 30px 80px rgba(0,0,0,0.8); animation: paperIn 0.3s; }
+.lockpick h3 { margin: 0 0 6px; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, var(--font); letter-spacing: 0.1em; color: #e8c880; }
+.lockpick .lp-hint { color: #b8a07a; font-size: 13px; min-height: 36px; line-height: 1.5; }
+.lockpick .lp-hint b { color: #ffcf70; }
+.lockpick canvas { display: block; width: 100%; max-width: 360px; margin: 6px auto 0; touch-action: none; cursor: ew-resize; }
+.lockpick .lp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.lockpick .lp-picks { font-size: 14px; color: #d8c08a; }
+.lockpick .lp-btns { display: flex; gap: 8px; }
+.lockpick .lp-btns button { min-width: 52px; height: 40px; border: 0; border-radius: 4px; background: #3a2818; color: #ecd8ae; font-size: 16px; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none; }
+.lockpick .lp-btns button[data-a=turn] { background: #8a5a22; color: #140c04; font-weight: 700; min-width: 64px; }
+.lockpick.shake { animation: shake 0.4s; }
+/* 存档：右下角一枚十字 + "已存档"，淡入淡出 */
+#kcdsave { position: fixed; right: 28px; bottom: 96px; z-index: 40; display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 14px; background: rgba(14,9,5,0.8); border: 1px solid rgba(220,180,110,0.3); border-radius: 3px; color: #ecd8ae; opacity: 0; transform: translateY(10px); transition: opacity 0.6s, transform 0.6s; pointer-events: none; font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, var(--font); }
+#kcdsave.on { opacity: 1; transform: none; }
+#kcdsave .ks-ic { font-size: 28px; color: #d6a24a; animation: ksSpin 2.4s ease-in-out infinite; }
+#kcdsave b { display: block; font-size: 18px; letter-spacing: 0.3em; }
+#kcdsave small { display: block; font-size: 12px; color: #b8a07a; letter-spacing: 0.08em; margin-top: 2px; }
+@keyframes ksSpin { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(180deg); } }

@@ -241,6 +241,34 @@ const SCRIPTS = {
     ];
   },
   7: (g) => {
+    const S = g.S, CH = g.CH, R = g.refs, [a, b, c] = S.digits, [A, B, C] = S.mates;
+    const loaded = R.castle.dice[CH._loaded].style.name;
+    return [
+      { t: '读炼金台上匕首压着的信', d: '喝一口救世主酒就存档——配方上缺的三个数（🌿⏳🔥）被室友们藏了起来', run: async (T) => { await T.press('letter'); await T.read(6); } },
+      { t: `拿起靠在${A}床边的锈剑`, run: async (T) => { await T.press('sword'); await T.wait(1.2); } },
+      { t: '去澡堂拿起木桶', run: async (T) => { await T.press('bucket'); await T.wait(1.2); } },
+      { t: '从大浴桶里舀一桶水', run: async (T) => { await T.press('tub'); await T.wait(1.4); } },
+      { t: '把水倒进磨刀石的水槽', run: async (T) => { await T.press('grindstone', { reach: 0.35 }); await T.wait(1.8); } },
+      { t: '在磨刀石上把剑磨亮', d: `锈磨掉了，剑身上刻着"URTICA ${['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX'][a]}"（荨麻，罗马数字）→ 🌿 ${a}`, run: async (T) => { await T.press('grindstone', { go: false }); await T.until(() => !CH._grinding, 12); await T.read(3.4); await T.until(() => S.found[0], 3); } },
+      { t: '翻一翻墙角的皮靴', d: `${B}的靴筒里塞着一卷开锁器`, run: async (T) => { await T.press('boots'); await T.wait(1.4); } },
+      { t: `撬开${B}的箱子`, d: '左右拨动开锁器找到那个位置，再按住转动锁芯', run: async (T) => {
+        await T.press('chest'); await T.until(() => CH._lp, 3);
+        T.cast(g.input.isTouch ? '◀ ▶' : '← →', '拨动开锁器'); if (CH._lp) CH._lp.auto();
+        await T.wait(0.8); T.cast(g.input.isTouch ? '转' : '空格', '按住转动锁芯');
+        await T.until(() => S.f.chestOpen, 15); await T.wait(1.6);
+      } },
+      { t: '在骰子盘上掷三次骰子', d: `${loaded}那颗灌了铅，每次都停在 ${b} → ⏳ ${b}`, run: async (T) => {
+        for (let i = 0; i < 4 && !S.found[1]; i++) { await T.press('diceBoard', { go: i === 0 }); await T.until(() => !CH._rolling, 6); await T.wait(0.6); }
+        await T.until(() => S.found[1], 3);
+      } },
+      { t: '从门边的搁板桌上拿一根香肠', run: async (T) => { await T.press('sausage'); await T.wait(1.2); } },
+      { t: '把香肠喂给壁炉前的杂毛', d: `它钻到${C}的床底下，叼回来一根符木`, run: async (T) => { await T.press('mutt', { reach: 0.4 }); await T.until(() => S.f.tallyDropped, 30); await T.wait(1.2); } },
+      { t: '捡起符木，数上面的刻痕', d: `一共 ${c} 道 → 🔥 ${c}`, run: async (T) => { await T.press('tally'); await T.read(3); await T.until(() => S.found[2], 3); } },
+      { t: `在炼金台上熬救世主酒：${a}${b}${c}`, d: '捣荨麻、翻沙漏、拉风箱——熬好了喝一口，存档', run: async (T) => { await T.press('bench'); await T.code(`${a}${b}${c}`); await T.until(() => !CH._brewing && S.f.taskDone, 40); await T.wait(1.6); } },
+      { t: '推开橡木门', run: (T) => T.exit() },
+    ];
+  },
+  8: (g) => {
     const S = g.S, CH = g.CH, R = g.refs, [a, b, c] = S.digits;
     return [
       { t: '看看我的休眠舱里贴的纸条', d: '驾驶舱给主引擎点一次火（授权码 🤖💧🌍 三位），才落得回地球', run: async (T) => { await T.press('bedE1'); await T.read(5); } },
@@ -420,7 +448,7 @@ export class Tutorial {
     const end = document.createElement('div');
     end.id = 'tut-end';
     end.className = 'panel';
-    end.innerHTML = `<h2>${last ? (this.all || this.first === 1 ? '七个 211，全部演示完了' : '演示完了') : `${chapterNum(n)}演示完了`}</h2>
+    end.innerHTML = `<h2>${last ? (this.all || this.first === 1 ? '八个 211，全部演示完了' : '演示完了') : `${chapterNum(n)}演示完了`}</h2>
       <p>${last ? '最后那扇门后面的结局，留给你自己去推开。' : `下一间是${chapterLabel(n + 1)}。`}</p>
       <div class="row">${last ? '' : `<button class="btn primary" data-a="more">接着看${chapterNum(n + 1)}</button>`}<button class="btn${last ? ' primary' : ''}" data-a="title">返回标题</button></div>`;
     this.el.appendChild(end);
