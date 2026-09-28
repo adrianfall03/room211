@@ -4,7 +4,6 @@ export const HEROES = [
   {
     key: 'bingo',
     name: 'bingo',
-    desc: '通宵打排位的本尊：短碎发、深蓝牛仔夹克、黑色牛仔裤',
     look: {},
   },
   {
@@ -14,7 +13,6 @@ export const HEROES = [
     //         蓝白扎染的大裤衩松松垮垮，两只手从裤腰前面插进裤裆里
     key: 'jigo',
     name: 'jigo',
-    desc: '小麦色皮肤、稍微有点胖；光膀子光脚、蓝白扎染大裤衩，两只手插在裤裆里，一笑就 Hee-Haw',
     look: {
       outfit: 'shorts', pose: 'crotch', bubble: 'Hee-Haw!',
       skin: [200, 148, 112], skinColor: '#c79270', hair: [18, 15, 14], hairColor: '#120e0c', brow: '#15100d',
@@ -33,7 +31,6 @@ export const HEROES = [
     //   眼睛使劲闭着、眉头拧成一团，嘴张得老大哇哇地哭；黑色长袖运动衫，胸口一块白色印花，左手腕上一块黑色电子表
     key: 'neptune',
     name: 'neptune',
-    desc: '瘦瘦的、刺猬头湿漉漉的；黑色长袖运动衫，左手攥着一罐饮料——一激动就举过头顶往自己头上浇，哇地哭出来',
     laugh: 'sob', // 招牌动作的声音（见 game._onHeroLaugh）
     look: {
       outfit: 'sport', print: 'trident', pants: '#5d6068', watch: true, can: true, signature: 'pour',

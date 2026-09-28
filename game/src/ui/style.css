@@ -52,7 +52,6 @@ button { font-family: var(--font); }
 #title .t-menu .t-arrow:hover, #title .t-menu .t-arrow:focus-visible { border-color: rgba(236,235,228,0.6); background: rgba(255,255,255,0.06); }
 #title .t-pick-name { flex: 1; min-width: 0; padding: 4px 8px; }
 #title .t-pick-name b { display: block; font-size: 22px; letter-spacing: 0.1em; color: #f2f1ec; }
-#title .t-pick-name span { display: block; margin-top: 4px; font-size: 13px; line-height: 1.5; letter-spacing: 0.04em; color: rgba(236,235,228,0.62); }
 #title .t-dots { display: flex; gap: 6px; margin: 10px 0 4px 64px; }
 #title .t-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(236,235,228,0.25); }
 #title .t-dots i.on { background: #f2f1ec; }

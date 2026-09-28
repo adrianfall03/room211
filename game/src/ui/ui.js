@@ -99,7 +99,7 @@ export class UI {
           <p>选择人物</p>
           <div class="t-pick">
             <button data-a="prev" class="t-arrow" aria-label="上一个">‹</button>
-            <div class="t-pick-name"><b></b><span></span></div>
+            <div class="t-pick-name"><b></b></div>
             <button data-a="next" class="t-arrow" aria-label="下一个">›</button>
           </div>
           <div class="t-dots"></div>
@@ -118,7 +118,6 @@ export class UI {
       const x = heroes[hi];
       if (!x) return;
       $('.t-pick-name b', t).textContent = x.name;
-      $('.t-pick-name span', t).textContent = x.desc;
       const cur = $('.t-cur', t); if (cur) cur.textContent = x.name;
       dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === hi));
     };
