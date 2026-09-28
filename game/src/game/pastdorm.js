@@ -6,6 +6,7 @@
 //   里面是同一个镜头拍到的太空舱——隔着两个背靠背的书架，两边的人能互相看见。
 import * as THREE from 'three';
 import { createCharacter } from '../player/character.js';
+import { heroOf } from '../player/heroes.js';
 import * as TX from '../core/textures.js';
 import { FALLEN_BOOKS } from '../world/dorm.js';
 import { clamp, lerp, dampAngle, easeInOut } from '../core/util.js';
@@ -152,8 +153,9 @@ export class PastDorm {
   _buildPeople(R, K) {
     const root = R.root, S = this.g.S;
     const mk = (k) => { const ch = createCharacter(LOOKS[k]); root.add(ch.root); return ch; };
-    // 你自己（通宵打排位，就是第一章早上趴在桌上睡着的那身衣服）
-    const me = createCharacter(); root.add(me.root);
+    // 你自己（通宵打排位，就是第一章早上趴在桌上睡着的那身衣服；换了人物的话就是换上的那个人）
+    const me = createCharacter(heroOf(this.g.settings.hero).look); root.add(me.root);
+    me.onLaugh = () => false;
     me.root.position.set(R.sit.x, 0, R.sit.z); me.root.rotation.y = R.sit.yaw;
     // C：坐在自己的书桌前，戴着耳机
     const C = mk('C');

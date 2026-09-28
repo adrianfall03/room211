@@ -1,5 +1,6 @@
 // 主角：根据照片"捏"出来的程序化 3D 人物 + 程序化骨骼动画
 // 特征：瘦高、短碎发（两侧推短渐变）、浓眉、笑起来眼睛眯成月牙+露齿大笑、深色牛仔夹克、黑色牛仔裤、灰白运动鞋
+// 可以换的另一个主角（Hee-Haw，见 heroes.js）也是这里捏的：outfit 'shorts' 光膀子 + 扎染大裤衩 + 光脚，pose 'pockets' 两手插在裤腰里
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -47,7 +48,7 @@ function buildHeadGeometry() {
 // 发型参数：cap 发际线（正前的极角 / 两侧再往下 / 后脑再往下）、thick 头顶厚度、edge 发际线处的厚度（背头那种一刀切）、
 //   front 前额那一撮的隆起、ripple 发片起伏；n / len / rad 发束的数量、长度、粗细，lift 翘起（基础 / 前额额外）、
 //   sweep 梳的方向（头部坐标：x 往左、y 往上、z 往前）、side 两侧往外撇、jit 乱度，buzz 两侧推短处发茬的浓淡，
-//   ride 发束跟着前额那一撮一起抬高多少
+//   ride 发束跟着前额那一撮一起抬高多少，burn 鬓角往下留多长（默认 1）
 export const HAIR = {
   // 主角：短碎发，两侧推短
   crop: { cap: [1.0, 0.2, 0.26], thick: 0.02, edge: 0, front: 0.006, ripple: 0.003, n: 340, len: [0.011, 0.012], rad: [0.009, 0.008], lift: [0.16, 0.34], sweep: [0, 0.25, 1], side: 0.25, jit: [0.35, 0.2], buzz: 1, seed: 17 },
@@ -59,6 +60,8 @@ export const HAIR = {
   undercut: { cap: [0.98, -0.04, 0.14], thick: 0.02, edge: 0.006, front: 0.012, ripple: 0.0015, n: 220, len: [0.022, 0.014], rad: [0.011, 0.007], lift: [0.08, 0.14], sweep: [0.3, 0.3, -1], side: 0.1, jit: [0.15, 0.1], buzz: 0.6, ride: 0.7, seed: 31 },
   // 蓬松的厚刘海，盖住额头和耳朵上沿
   mop: { cap: [1.2, 0.14, 0.3], thick: 0.03, edge: 0.004, front: 0.004, ripple: 0.004, n: 460, len: [0.018, 0.016], rad: [0.011, 0.009], lift: [0.08, 0.1], sweep: [0, -0.8, 0.45], side: 0.35, jit: [0.5, 0.3], buzz: 1, ride: 0.7, seed: 37 },
+  // Hee-Haw（涂鸦）：头顶一大蓬，刘海斜着扫向一边、盖住半个额头，两侧推短
+  fringe: { cap: [1.1, 0.18, 0.26], thick: 0.03, edge: 0.002, front: 0.016, ripple: 0.002, n: 280, len: [0.017, 0.01], rad: [0.013, 0.007], lift: [0.02, 0.05], sweep: [0.85, -0.2, 0.6], side: 0.12, jit: [0.1, 0.06], buzz: 0.85, burn: 0.3, ride: 0.8, seed: 41 },
 };
 
 // 头发发型分界：返回某方位角（0=正前）处，头发盖到的最低极角
@@ -175,9 +178,9 @@ function faceMeta(yTop, yBot) {
   return { W, H, X, Y, yTop, yBot };
 }
 
-function buzzLine(aphi) {
+function buzzLine(aphi, burn = 1) {
   let line = lerp(0.062, 0.05, smoothstep(0.3, 0.8, aphi));
-  line = lerp(line, -0.014, gauss(aphi, 1.13, 0.07));
+  line = lerp(line, -0.014, gauss(aphi, 1.13, 0.07) * burn);
   line = lerp(line, 0.03, smoothstep(1.22, 1.35, aphi));
   line = lerp(line, -0.05, smoothstep(1.95, 2.7, aphi));
   return line;
@@ -202,7 +205,7 @@ function paintSkinBase(meta, O) {
       // 下颌/脖子略暗
       const jaw = smoothstep(-0.08, -0.125, y);
       r -= jaw * 16; g -= jaw * 16; b -= jaw * 10;
-      const line = buzzLine(aphi);
+      const line = buzzLine(aphi, O.hairStyle.burn ?? 1);
       const k = smoothstep(line - 0.004, line + 0.014, y) * O.hairStyle.buzz;
       if (k > 0) {
         const st = noise(px * 0.9, py * 0.9, 921, 460);
@@ -386,6 +389,31 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
     ctx.beginPath(); curve([-mw - 0.001, my + 0.002], [0, my + 0.0095], [mw + 0.001, my + 0.002]); ctx.stroke();
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(...P(-mw, my + 0.001)); ctx.quadraticCurveTo(...P(-mw * 0.9, my - 0.023), ...P(0, my - 0.027)); ctx.quadraticCurveTo(...P(mw * 0.9, my - 0.023), ...P(mw, my + 0.001)); ctx.stroke();
+  } else if (mouth === 'laugh') {
+    // 仰着头哈哈大笑（Hee-Haw）：嘴张成一个大 D 字，上排牙、舌头，嘴角往上咧，笑纹很深
+    ctx.strokeStyle = 'rgba(130,75,62,0.5)'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); curve([s * 0.017, -0.03], [s * 0.034, -0.044], [s * 0.035, -0.066]); ctx.stroke(); }
+    const mw = 0.029;
+    ctx.fillStyle = '#34100d';
+    ctx.beginPath();
+    curve([-mw, my + 0.006], [0, my + 0.008], [mw, my + 0.006]);
+    ctx.quadraticCurveTo(...P(mw * 0.95, my - 0.03), ...P(0, my - 0.033));
+    ctx.quadraticCurveTo(...P(-mw * 0.95, my - 0.03), ...P(-mw, my + 0.006));
+    ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = '#f5f1e9';
+    ctx.beginPath(); curve([-mw, my + 0.008], [0, my + 0.011], [mw, my + 0.008]); ctx.lineTo(...P(mw * 0.88, my - 0.0015)); ctx.quadraticCurveTo(...P(0, my - 0.0035), ...P(-mw * 0.88, my - 0.0015)); ctx.fill();
+    ctx.strokeStyle = 'rgba(160,150,140,0.7)'; ctx.lineWidth = 1.2;
+    for (let k = -3; k <= 3; k++) { const s = k * 0.0068; ctx.beginPath(); ctx.moveTo(...P(s, my + 0.009)); ctx.lineTo(...P(s * 1.02, my - 0.002)); ctx.stroke(); }
+    ctx.fillStyle = '#c0544e';
+    ctx.beginPath(); ctx.ellipse(...P(0, my - 0.027), 34, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = lip; ctx.lineWidth = 3;
+    ctx.beginPath(); curve([-mw - 0.001, my + 0.0065], [0, my + 0.0095], [mw + 0.001, my + 0.0065]); ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(...P(-mw, my + 0.005)); ctx.quadraticCurveTo(...P(-mw * 0.95, my - 0.031), ...P(0, my - 0.034)); ctx.quadraticCurveTo(...P(mw * 0.95, my - 0.031), ...P(mw, my + 0.005)); ctx.stroke();
+    ctx.fillStyle = 'rgba(120,60,50,0.45)';
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(...P(s * (mw + 0.003), my + 0.006), 3.2, 0, Math.PI * 2); ctx.fill(); }
   } else if (mouth === 'O') {
     ctx.fillStyle = '#3a110e';
     ctx.beginPath(); ctx.ellipse(...P(0, my - 0.004), 15, 20, 0, 0, Math.PI * 2); ctx.fill();
@@ -398,7 +426,8 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
 const IK_L1 = 0.285, IK_L2 = 0.31;
 const IK_DOWN = new THREE.Vector3(0, -1, 0), IK_POLE_R = new THREE.Vector3(-1, -0.2, -0.4).normalize(), IK_POLE_L = new THREE.Vector3(1, -0.2, -0.4).normalize();
 const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _ic = new THREE.Vector3(), _id = new THREE.Vector3(), _ie = new THREE.Vector3();
-const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new THREE.Quaternion(), _ieu = new THREE.Euler();
+const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new THREE.Quaternion(), _ieu = new THREE.Euler(), _pk = new THREE.Vector3();
+const POCKET_POLE_R = new THREE.Vector3(-0.85, -0.18, -0.5).normalize(), POCKET_POLE_L = new THREE.Vector3(0.85, -0.18, -0.5).normalize();
 function solveArmIK(sh, el, target, pole, w) {
   const S = sh.position;
   const d = _ia.subVectors(target, S);
@@ -417,19 +446,22 @@ function solveArmIK(sh, el, target, pole, w) {
 }
 
 // ---------------- 构建角色 ----------------
-// opts：skin / hair（RGB）、skinColor / hairColor / brow、outfit：'denim' 主角的牛仔夹克 / 'agsu' 美军常服 / 'tee' 短袖 T 恤 / 'bare' 光膀子、
+// opts：skin / hair（RGB）、skinColor / hairColor / brow、outfit：'denim' 主角的牛仔夹克 / 'agsu' 美军常服 / 'tee' 短袖 T 恤 / 'bare' 光膀子 /
+//   'shorts' 光膀子 + 蓝白扎染大裤衩 + 光脚（Hee-Haw）、
 //   tee T 恤颜色、print 胸前印的字（'tuss' / 'coco'）、hairStyle 发型（见 HAIR）、glasses 眼镜（见 buildGlasses）、
-//   headScale 头型 [宽, 高, 深]、necklace 项链、earring 耳钉、mustache 小胡子、name 名牌
+//   headScale 头型 [宽, 高, 深]、necklace 项链、earring 耳钉、mustache 小胡子、name 名牌、abs 腹肌、
+//   pose：'pockets' 站着 / 走路时两只手插在裤腰里、expr 改几种表情的画法（{ grin: {...} }）、
+//   bubble 咧嘴大笑时头顶冒出来的那句话（'Hee-Haw!'）
 export function createCharacter(opts = {}) {
   const O = { skin: [212, 160, 126], skinColor: '#d09a7a', hair: [34, 30, 30], hairColor: '#16110f', brow: '#1a1411', outfit: 'denim', mustache: false, name: 'SMITH', ...opts };
   O.hairStyle = HAIR[O.hairStyle] || HAIR.crop;
-  const agsu = O.outfit === 'agsu', tee = O.outfit === 'tee', bare = O.outfit === 'bare', casual = tee || bare;
+  const agsu = O.outfit === 'agsu', tee = O.outfit === 'tee', shorts = O.outfit === 'shorts', bare = O.outfit === 'bare' || shorts, casual = tee || bare;
   const root = new THREE.Group();
   root.name = opts.name ? `npc:${opts.name}` : 'player';
 
-  // 材质
-  const denim = agsu ? null : TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
-  const blackDenim = agsu ? null : TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
+  // 材质（牛仔布只有牛仔夹克 / 牛仔裤用得上）
+  const denim = agsu || casual ? null : TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
+  const blackDenim = agsu || shorts ? null : TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
   const skinMat = new THREE.MeshStandardMaterial({ color: O.skinColor, roughness: 0.55 });
   let sleeveMat, jeansMat;
   if (agsu) {
@@ -448,8 +480,14 @@ export function createCharacter(opts = {}) {
       sleeveMat = new THREE.MeshStandardMaterial({ map: denim.map, normalMap: denim.normalMap, roughness: 0.82 });
       sleeveMat.map.repeat.set(2, 2); sleeveMat.normalMap.repeat.set(2, 2);
     }
-    jeansMat = new THREE.MeshStandardMaterial({ map: blackDenim.map, normalMap: blackDenim.normalMap, roughness: 0.85 });
-    jeansMat.map.repeat.set(2, 3); jeansMat.normalMap.repeat.set(2, 3);
+    if (shorts) {
+      // 大裤衩：两面都画（裤管是开口的圆筒，从下面能看见里面）
+      const dye = TX.genTieDye(); dye.repeat.set(2, 1.4);
+      jeansMat = new THREE.MeshStandardMaterial({ map: dye, roughness: 0.9, side: THREE.DoubleSide });
+    } else {
+      jeansMat = new THREE.MeshStandardMaterial({ map: blackDenim.map, normalMap: blackDenim.normalMap, roughness: 0.85 });
+      jeansMat.map.repeat.set(2, 3); jeansMat.normalMap.repeat.set(2, 3);
+    }
   }
   const hairMat = new THREE.MeshStandardMaterial({ color: O.hairColor, roughness: 0.58 });
   const shoeMat = new THREE.MeshStandardMaterial({ color: agsu ? '#3a2214' : '#5a5e66', roughness: agsu ? 0.28 : 0.75 });
@@ -474,7 +512,8 @@ export function createCharacter(opts = {}) {
   const hips = grp('hips', root, 0, HIPS_Y, 0);
   // 胯部（牛仔裤）：上宽下收，接大腿
   const pelvisPts = [[0.0, -0.1], [0.07, -0.098], [0.11, -0.085], [0.135, -0.06], [0.145, -0.02], [0.148, 0.02], [0.146, 0.07]].map(([r, y]) => new THREE.Vector2(r, y));
-  addMesh(new THREE.LatheGeometry(pelvisPts, 24), jeansMat, hips, 0, 0, 0, 0, 0, 0, 1, 1, 0.62);
+  // 大裤衩松松垮垮，比牛仔裤宽一圈
+  addMesh(new THREE.LatheGeometry(pelvisPts, 24), jeansMat, hips, 0, 0, 0, 0, 0, 0, shorts ? 1.05 : 1, 1, shorts ? 0.68 : 0.62);
 
   // 躯干（牛仔夹克）
   const torso = grp('torso', hips, 0, 0.0, 0);
@@ -496,7 +535,7 @@ export function createCharacter(opts = {}) {
   const DZ = 0.6;
   let jacketMat;
   if (tee) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genTee(vAt, rAt, DZ, { base: O.tee || '#e8e6e0', print: O.print }), roughness: 0.92 });
-  else if (bare) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genBareTorso(vAt, rAt, DZ, { skin: O.skinColor }), roughness: 0.55 });
+  else if (bare) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genBareTorso(vAt, rAt, DZ, { skin: O.skinColor, abs: O.abs }), roughness: 0.55 });
   else if (agsu) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genServiceCoat(vAt, { name: O.name }), roughness: 0.9 });
   else jacketMat = new THREE.MeshStandardMaterial({ map: TX.genJacket(denim.canvas, vAt), normalMap: denim.normalMap, roughness: 0.82 });
   mats.jacketMat = jacketMat;
@@ -506,6 +545,16 @@ export function createCharacter(opts = {}) {
       // T 恤：下摆收一道边，圆领一圈罗纹
       addMesh(new THREE.TorusGeometry(0.161, 0.007, 6, 40), sleeveMat, torso, 0, 0.008, 0, Math.PI / 2, 0, 0, 1, DZ, 1);
       addMesh(new THREE.TorusGeometry(0.058, 0.007, 6, 28), sleeveMat, torso, 0, 0.552, 0.006, Math.PI / 2 - 0.12, 0, 0, 1, 0.9, 1);
+    } else if (shorts) {
+      // 大裤衩的松紧裤腰（手插在里面，撑得鼓鼓的）+ 前面垂下来两根白抽绳
+      addMesh(new THREE.TorusGeometry(0.161, 0.02, 8, 40), jeansMat, torso, 0, 0.03, 0, Math.PI / 2, 0, 0, 1, DZ + 0.05, 1);
+      const cord = new THREE.MeshStandardMaterial({ color: '#eceae4', roughness: 0.8 });
+      const fz = 0.161 * (DZ + 0.05) + 0.012;
+      addMesh(new THREE.SphereGeometry(0.009, 10, 8), cord, torso, 0, 0.024, fz);
+      for (const s2 of [-1, 1]) {
+        const cp = [new THREE.Vector3(0, 0.024, fz), new THREE.Vector3(s2 * 0.01, -0.01, fz + 0.004), new THREE.Vector3(s2 * 0.014, -0.05 - (s2 > 0 ? 0.012 : 0), fz + 0.002)];
+        addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 12, 0.0032, 5), cord, torso);
+      }
     } else {
       // 光膀子：只剩裤腰
       addMesh(new THREE.TorusGeometry(0.162, 0.022, 8, 40), jeansMat, torso, 0, 0.02, 0, Math.PI / 2, 0, 0, 1, DZ, 1);
@@ -582,6 +631,7 @@ export function createCharacter(opts = {}) {
     warm: { eyes: 'smile', mouth: 'smile', brows: 'relaxed' },
     sad: { eyes: 'open', mouth: 'neutral', brows: 'worried' },
   };
+  if (O.expr) for (const k of Object.keys(O.expr)) EXPR[k] = { ...EXPR[k], ...O.expr[k] };
   const LAZY = new Set(['shout', 'warm', 'sad']);
   const faceMat = new THREE.MeshStandardMaterial({ map: faceTex('neutral', EXPR.neutral), roughness: 0.55 });
   const headMesh = addMesh(headGeo, faceMat, head);
@@ -641,6 +691,7 @@ export function createCharacter(opts = {}) {
   // 腿
   const buildLeg = (side) => {
     const s = side === 'L' ? 1 : -1;
+    if (shorts) return buildBareLeg(side, s);
     const hp = grp(`hip${side}`, hips, s * 0.078, -0.03, 0);
     addMesh(new THREE.SphereGeometry(0.078, 16, 12), jeansMat, hp, s * 0.004, 0.0, 0, 0, 0, 0, 1, 1, 0.95);
     addMesh(new THREE.CylinderGeometry(0.078, 0.058, 0.4, 16), jeansMat, hp, 0, -0.2, 0);
@@ -656,6 +707,28 @@ export function createCharacter(opts = {}) {
     addMesh(new THREE.BoxGeometry(0.089, 0.012, 0.09), soleMat, an, 0, -0.026, 0.02);
     addMesh(new THREE.BoxGeometry(0.03, 0.004, 0.08), new THREE.MeshStandardMaterial({ color: '#e8e8e8', roughness: 0.8 }), an, 0, 0.028, 0.03, 0.25, 0, 0);
     return sole;
+  };
+  // 大裤衩 + 光腿光脚：宽宽的裤管罩到膝盖上面，下面露出小腿，脚是光着的
+  const calfGeo = new THREE.LatheGeometry([[0.046, 0.012], [0.05, -0.03], [0.054, -0.1], [0.052, -0.16], [0.045, -0.24], [0.036, -0.32], [0.031, -0.38], [0.032, -0.415]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
+  const buildBareLeg = (side, s) => {
+    const hp = grp(`hip${side}`, hips, s * 0.078, -0.03, 0);
+    addMesh(new THREE.SphereGeometry(0.086, 16, 12), jeansMat, hp, s * 0.008, 0.0, 0, 0, 0, 0, 1, 1, 0.95);
+    addMesh(new THREE.CylinderGeometry(0.086, 0.094, 0.33, 18, 1, true), jeansMat, hp, s * 0.008, -0.165, 0.004);
+    addMesh(new THREE.TorusGeometry(0.093, 0.0055, 5, 22), jeansMat, hp, s * 0.008, -0.33, 0.004, Math.PI / 2);
+    addMesh(new THREE.CylinderGeometry(0.07, 0.054, 0.4, 14), skinMat, hp, 0, -0.2, 0);
+    const kn = grp(`kn${side}`, hp, 0, -0.41, 0);
+    addMesh(new THREE.SphereGeometry(0.052, 14, 10), skinMat, kn, 0, 0.0, 0.004, 0, 0, 0, 1, 1.05, 1);
+    addMesh(calfGeo, skinMat, kn, 0, 0, -0.004);
+    const an = grp(`an${side}`, kn, 0, -0.41, 0);
+    // 脚踝 + 两侧的踝骨
+    addMesh(new THREE.SphereGeometry(0.033, 12, 10), skinMat, an, 0, -0.012, -0.006);
+    for (const k of [-1, 1]) addMesh(new THREE.SphereGeometry(0.012, 8, 6), skinMat, an, k * 0.028, -0.014 + (k === s ? 0 : 0.005), -0.008);
+    // 脚后跟、脚背（前面往下斜）、前脚掌、五个脚趾（大脚趾在里侧）
+    addMesh(new THREE.SphereGeometry(0.034, 12, 10), skinMat, an, 0, -0.038, -0.032, 0, 0, 0, 1, 0.92, 1.1);
+    addMesh(new RoundedBoxGeometry(0.074, 0.046, 0.15, 3, 0.02), skinMat, an, -s * 0.004, -0.046, 0.035, 0.14, -s * 0.06, 0);
+    addMesh(new RoundedBoxGeometry(0.088, 0.03, 0.064, 3, 0.013), skinMat, an, -s * 0.007, -0.056, 0.105, 0, -s * 0.08, 0);
+    const toes = [[-0.03, 0.0125, 0.157], [-0.01, 0.01, 0.152], [0.007, 0.0092, 0.146], [0.022, 0.0085, 0.139], [0.035, 0.0078, 0.13]];
+    for (const [x, r, z] of toes) addMesh(new THREE.SphereGeometry(1, 10, 8), skinMat, an, s * x - s * 0.004, -0.06, z, 0, 0, 0, r, r * 0.85, r * 1.35);
   };
   buildLeg('L'); buildLeg('R');
 
@@ -676,9 +749,26 @@ export function createCharacter(opts = {}) {
 
   root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
 
+  // 咧嘴大笑时头顶冒出来的一句话（Hee-Haw 那张涂鸦：嘴边拉出一根线，旁边歪歪扭扭写着 Hee-Haw）
+  let bubble = null;
+  if (O.bubble) {
+    bubble = new THREE.Sprite(new THREE.SpriteMaterial({ map: TX.toTex(paintBubble(O.bubble), { wrap: false }), transparent: true, depthWrite: false }));
+    bubble.center.set(0.16, 0.02);
+    bubble.position.set(0.07, 0.3, 0.02);
+    bubble.scale.setScalar(0.001);
+    bubble.visible = false;
+    bubble.renderOrder = 7;
+    bubble.castShadow = false; bubble.raycast = () => {};
+    J.neck.add(bubble);
+  }
+
+  // 人物本身的零件：换人物时，挂在关节上的其它东西（头盔、帽子、围巾……）要搬到新人物身上
+  const own = new Set();
+  root.traverse((o) => own.add(o));
+
   // ---------------- 动画状态 ----------------
   const st = {
-    phase: 0, t: 0, blinkT: 2, blinking: 0, expr: 'neutral', exprHold: 0,
+    phase: 0, t: 0, blinkT: 2, blinking: 0, expr: 'neutral', exprHold: 0, laughAt: -99, bubbleT: 0,
     w: { crouch: 0, sit: 0, sleep: 0, reach: 0, cheer: 0, stretch: 0, hold: 0, look: 1, walk: 0, run: 0 },
   };
   const joints = ['hips', 'torso', 'neck', 'head', 'shL', 'elL', 'wrL', 'shR', 'elR', 'wrR', 'hipL', 'knL', 'anL', 'hipR', 'knR', 'anR', 'fingL', 'fingR'];
@@ -687,12 +777,17 @@ export function createCharacter(opts = {}) {
 
   function setExpression(name, hold = 0) {
     if (!EXPR[name]) return;
+    const was = st.expr;
     st.expr = name;
     st.exprHold = hold;
     // 卡通章会把材质整体换掉，所以每次都改头上当前那一份材质
     const fm = headMesh.material;
     fm.map = faceTex(name, EXPR[name]);
     fm.needsUpdate = true;
+    // 笑出声来：冒一句 Hee-Haw!（隔几秒才会再冒；api.onLaugh 返回 false 的场合不笑出声，比如结局的仪式上）
+    if (bubble && name === 'grin' && was !== 'grin' && st.t - st.laughAt > 5 && (!api.onLaugh || api.onLaugh() !== false)) {
+      st.laughAt = st.t; st.bubbleT = 1.8; bubble.visible = true;
+    }
   }
   function blinkTex(on) {
     const e = EXPR[st.expr];
@@ -866,6 +961,21 @@ export function createCharacter(opts = {}) {
       if (j === 'fingL' || j === 'fingR') obj.rotation.set(-p.x, p.y, p.z);
       else obj.rotation.set(p.x, p.y, p.z);
     }
+    // 两只手插在裤腰里（Hee-Haw）：站着、走路时一直插着，跑起来、蹲下、坐下、伸手拿东西 / 拿手电、失重、欢呼、立正时才抽出来。
+    // 手心的位置比裤腰表面再往里一点，整只手就"揣"进了裤兜
+    if (O.pose === 'pockets') {
+      const base = (1 - W.run) * (1 - W.crouch) * (1 - W.sit) * (1 - W.sleep) * (1 - W.float) * (1 - W.cheer) * (1 - W.stretch) * (1 - W.attention);
+      for (const side of ['L', 'R']) {
+        const w = base * (side === 'R' ? (1 - W.reach) * (1 - W.hold) : 1);
+        if (w < 0.001) continue;
+        const sd = side === 'L' ? 1 : -1;
+        // 手肘微微往外、往后撑开，小臂从身体两侧斜着搭到肚子前面，手腕卡在裤腰上，
+        // 手掌往里一折、整只揣进裤腰里（照片）。这里的目标点是"手腕不折时"手心的位置
+        solveArmIK(J[`sh${side}`], J[`el${side}`], _pk.set(sd * 0.072, -0.02 + 0.004 * Math.sin(t * 1.7), 0.123), side === 'R' ? POCKET_POLE_R : POCKET_POLE_L, w);
+        J[`wr${side}`].rotation.x = lerp(J[`wr${side}`].rotation.x, 0.9, w);
+        J[`fing${side}`].rotation.x = lerp(J[`fing${side}`].rotation.x, -0.3, w);
+      }
+    }
     // 手臂 IK：prm.ikR / prm.ikL = { p: 躯干坐标系里的手心位置, pole, w }
     for (const [side, key] of [['R', 'ikR'], ['L', 'ikL']]) {
       const ik = prm[key];
@@ -890,14 +1000,78 @@ export function createCharacter(opts = {}) {
       st.exprHold -= dt;
       if (st.exprHold <= 0) setExpression('neutral');
     }
+    // Hee-Haw! 的气泡：弹出来、晃一晃、缩回去
+    if (bubble && bubble.visible) {
+      st.bubbleT -= dt;
+      const k = 1 - st.bubbleT / 1.8;
+      if (st.bubbleT <= 0) { bubble.visible = false; bubble.scale.setScalar(0.001); }
+      else {
+        const pop = k < 0.12 ? Math.sin((k / 0.12) * Math.PI * 0.5) * 1.12 : k > 0.85 ? (1 - k) / 0.15 : 1 + Math.sin(st.t * 9) * 0.03;
+        const sc = Math.max(0.001, pop);
+        bubble.scale.set(0.5 * sc, 0.25 * sc, 1);
+        bubble.material.rotation = Math.sin(st.t * 5) * 0.04;
+      }
+    }
     return events;
   }
 
   const setFirstPerson = (fp) => { J.neck.visible = !fp; };
 
-  return {
-    root, J, mats, update, setExpression, setFirstPerson, torch, torchTip, helmetSlot, headMesh, prepare,
+  // 后来挂到关节上的东西（不是人物自己的零件）：[关节, 物体]
+  const attachments = () => {
+    const out = [];
+    for (const [name, j] of Object.entries(J)) for (const c of j.children) if (!own.has(c)) out.push([name, c]);
+    for (const c of helmetSlot.children) if (!own.has(c)) out.push(['helmetSlot', c]);
+    return out;
+  };
+  // 换人物以后，旧的那个人把几何体、材质、贴图都释放掉（挂在身上的东西先搬走）
+  const dispose = () => {
+    const mats = new Set();
+    root.traverse((o) => {
+      if (!own.has(o)) return;
+      if (o.geometry && !o.isSprite) o.geometry.dispose(); // 精灵的几何体是 three.js 所有精灵共用的那一份
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => mats.add(m));
+    });
+    const texs = new Set(faceCache.values());
+    for (const m of mats) { for (const v of Object.values(m)) if (v && v.isTexture) texs.add(v); m.dispose(); }
+    for (const t of texs) t.dispose();
+  };
+
+  const api = {
+    root, J, mats, update, setExpression, setFirstPerson, torch, torchTip, helmetSlot, headMesh, prepare, attachments, dispose,
     get expression() { return st.expr; },
     faceTexture: () => headMesh.material.map,
+    // 返回 false：这一下别笑出声（见 setExpression）
+    onLaugh: null,
   };
+  return api;
+}
+
+// 把一个人身上后来挂上去的东西（头盔、毛线帽、围巾、军帽……）搬到另一个人身上，
+// 两个人的骨架是同一套（关节名字、位置都一样），挂在哪个关节、局部位置不变
+export function moveAttachments(from, to) {
+  for (const [name, obj] of from.attachments()) (name === 'helmetSlot' ? to.helmetSlot : to.J[name]).add(obj);
+}
+
+// 漫画式对话气泡：白底黑框、歪歪扭扭的手写字，左下角一根小尾巴指向嘴
+function paintBubble(text) {
+  const W = 512, H = 256, c = TX.makeCanvas(W, H), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, W, H);
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.fillStyle = '#fbfaf6'; ctx.strokeStyle = '#1a1714'; ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.ellipse(280, 110, 214, 88, -0.12, 0, Math.PI * 2);
+  ctx.moveTo(150, 176); ctx.lineTo(70, 244); ctx.lineTo(196, 188);
+  ctx.fill(); ctx.stroke();
+  // 尾巴和气泡接缝处补一块白，盖掉里面那段描边
+  ctx.beginPath(); ctx.moveTo(146, 170); ctx.lineTo(96, 222); ctx.lineTo(204, 180); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.translate(282, 116); ctx.rotate(-0.16);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'italic 900 84px "Marker Felt", "Chalkboard SE", "Comic Sans MS", "Segoe Print", cursive';
+  ctx.fillStyle = '#1a1714'; ctx.fillText(text, 0, 0);
+  // 字底下一道手画的下划线，末尾带个小箭头（涂鸦上就是这么画的）
+  ctx.lineWidth = 6; ctx.strokeStyle = '#1a1714';
+  ctx.beginPath(); ctx.moveTo(-150, 50); ctx.quadraticCurveTo(-20, 60, 140, 44); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-128, 36); ctx.lineTo(-152, 50); ctx.lineTo(-130, 64); ctx.stroke();
+  ctx.restore();
+  return c;
 }

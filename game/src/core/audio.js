@@ -301,6 +301,39 @@ export class Audio {
     g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.05, t0 + 0.05); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.95);
     o.connect(f).connect(g); this._out(g); o.start(t0); lfo.start(t0); o.stop(t0 + 1); lfo.stop(t0 + 1);
   }
+  // Hee-Haw 的笑声：学驴叫——吸气时尖着嗓子"嘿——"，呼气时粗着嗓子"哈——"，来两遍。
+  // 锯齿波过几个共振峰带通（"i" 和 "ɔ" 两个元音），"哈"再加一点颤动，听着更糙
+  heeHaw() {
+    const c = this.ctx; if (!c) return;
+    const voice = (delay, f0, f1, dur, formants, gain, rough) => {
+      const t0 = this.t + delay;
+      const o = c.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f1, t0 + dur * 0.8); o.frequency.linearRampToValueAtTime(f1 * 0.9, t0 + dur);
+      const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 6.5; vg.gain.value = f0 * 0.015; vib.connect(vg).connect(o.frequency);
+      const out = c.createGain();
+      out.gain.setValueAtTime(0.0001, t0); out.gain.exponentialRampToValueAtTime(gain, t0 + 0.04); out.gain.setValueAtTime(gain * 0.85, t0 + dur * 0.75); out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      let src = o;
+      if (rough) {
+        // 声带"咯咯"地抖：振幅按 ~28Hz 调制
+        const am = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+        am.gain.value = 0.6; lfo.frequency.value = rough; lg.gain.value = 0.4; lfo.connect(lg).connect(am.gain);
+        o.connect(am); src = am; lfo.start(t0); lfo.stop(t0 + dur + 0.05);
+      }
+      for (const [f, q, g] of formants) {
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+        const gg = c.createGain(); gg.gain.value = g;
+        src.connect(bp).connect(gg).connect(out);
+      }
+      this._out(out, true);
+      o.start(t0); vib.start(t0); o.stop(t0 + dur + 0.05); vib.stop(t0 + dur + 0.05);
+    };
+    const EE = [[340, 5, 1], [2250, 9, 0.8], [3000, 12, 0.35]], AW = [[620, 5, 1], [980, 6, 0.8], [2500, 10, 0.18]];
+    for (const [d, k] of [[0, 1], [0.72, 0.9]]) {
+      voice(d, 700, 980, 0.3, EE, 0.3 * k, 0);
+      this.noise({ dur: 0.28, gain: 0.05 * k, type: 'highpass', freq: 3200, delay: d }); // 吸气的气声
+      voice(d + 0.3, 300, 215, 0.4, AW, 0.34 * k, 28);
+    }
+  }
   giggle() { for (let i = 0; i < 4; i++) this.tone({ f: 520 + i * 30, f2: 380, dur: 0.1, type: 'triangle', gain: 0.04, delay: i * 0.13 }); }
   pew() { this.tone({ f: 1800, f2: 300, dur: 0.12, type: 'square', gain: 0.025, rev: false }); }
   poof() { this.noise({ dur: 0.5, gain: 0.3, type: 'bandpass', freq: 800, freq2: 3000, Q: 0.6, curve: [[0.05, 1], [1, 0]] }); }

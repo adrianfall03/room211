@@ -150,6 +150,28 @@ export class Game {
       if (this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked) this.input.requestLock();
     });
     this._bindAdmireControls();
+    this.ch.onLaugh = () => this._onHeroLaugh();
+  }
+
+  // ================== 更换人物 ==================
+  // setHero（main.js）换掉 this.ch；这里管换完以后的事
+  // 标题画面上左右切换：换好的人冲着镜头咧嘴一笑
+  previewHero(key) {
+    this.setHero(key);
+    this.ch.setExpression('grin');
+    this._titleExprT = 4;
+  }
+  // 暂停菜单里换人：新的人接着站在原地，视角（第一 / 第三人称）不变
+  switchHero(key) {
+    if (key === this.settings.hero) return;
+    this.setHero(key);
+    this.ctrl.setMode(this.ctrl.mode);
+  }
+  // Hee-Haw 笑出声来：标题画面、游戏里、出门的时候才笑；结局的仪式、彩蛋的过场里不笑
+  _onHeroLaugh() {
+    if (!['title', 'play', 'outro', 'cut'].includes(this.state)) return false;
+    this.audio.heeHaw();
+    return true;
   }
 
   // ================== 基础设施 ==================
@@ -1274,6 +1296,7 @@ export class Game {
       <div class="row"><span>音量</span><input type="range" min="0" max="1" step="0.05" value="${st.vol}" data-s="vol"></div>
       <div class="row"><span>画质</span><select data-s="q"><option value="low">流畅</option><option value="medium">均衡</option><option value="high">精美</option></select></div>
       <div class="row"><span>视角</span><select data-s="cam"><option value="third">第三人称</option><option value="first">第一人称</option></select></div>
+      ${this.heroes && this.heroes.length > 1 ? `<div class="row"><span>人物</span><select data-s="hero">${this.heroes.map((x) => `<option value="${x.key}">${x.name}</option>`).join('')}</select></div>` : ''}
       <div class="row"><span>反转 Y 轴</span><input type="checkbox" data-s="inv" ${st.invertY ? 'checked' : ''}></div>
       <div class="ctrls"><kbd>WASD</kbd><span>移动（Shift 跑，C 蹲）</span><kbd>E / 左键</kbd><span>互动</span><kbd>F</kbd><span>紫光手电</span><kbd>V</kbd><span>第一/第三人称</span><kbd>H</kbd><span>提示（计入评分）</span><kbd>J</kbd><span>线索本</span><kbd>P</kbd><span>手机</span><kbd>1-8</kbd><span>使用物品</span></div>
       <button class="btn" data-a="restart">重新开始</button>
@@ -1286,6 +1309,11 @@ export class Game {
     node.querySelector('[data-s=vol]').addEventListener('input', (e) => { st.vol = Number(e.target.value); this.audio.setVolume(st.vol); this.saveSettings(); });
     node.querySelector('[data-s=q]').addEventListener('change', (e) => { st.quality = e.target.value; this.gfx.setQuality(st.quality); this.saveSettings(); });
     node.querySelector('[data-s=cam]').addEventListener('change', (e) => this.ctrl.setMode(e.target.value));
+    const heroSel = node.querySelector('[data-s=hero]');
+    if (heroSel) {
+      heroSel.value = st.hero;
+      heroSel.addEventListener('change', (e) => this.switchHero(e.target.value));
+    }
     node.querySelector('[data-s=inv]').addEventListener('change', (e) => { st.invertY = e.target.checked; this.ctrl.invertY = st.invertY; this.saveSettings(); });
     this.suppressPause = true;
     this.input.exitLock();
