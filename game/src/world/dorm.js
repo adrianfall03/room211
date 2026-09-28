@@ -8,6 +8,7 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { beginMirror, endMirror } from './mirrorcull.js';
 import { Kit } from './kit.js';
+import { createBunkSticker } from './bunksticker.js';
 import { buildOutside } from './outside.js';
 import { LightShafts } from './fx.js';
 import * as TX from '../core/textures.js';
@@ -740,6 +741,13 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   place(W1, -1.325, 0, 0.21);
   mark('bedW1', W1);
   refs.beds = { W1 };
+  // W1 is the west-side bunk nearest the entrance; its south end faces the door.
+  if (theme === 'normal' || theme === 'ruin') {
+    const sticker = createBunkSticker(theme === 'ruin');
+    sticker.position.set(0, 2.05, 1.025);
+    W1.add(sticker);
+    refs.bunkSticker = sticker;
+  }
   block(-1.8, -0.84, -0.8, 1.22, '', 2.8);
   const W2 = K.bunkBed({ aisle: 1, ladderEnd: 1, lower: 'blue', upperNet: true, lowerNet: true, seed: 2 });
   place(W2, -1.325, 0, -2.34);
