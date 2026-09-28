@@ -74,6 +74,7 @@ export const HAIR = {
   // neptune（照片上刚把一罐水浇在头上）：短短的刺猬头，湿了以后一撮一撮往上支棱，乱七八糟；两侧推短
   spiky: { cap: [1.0, 0.2, 0.26], thick: 0.016, edge: 0, front: 0.005, ripple: 0.003, n: 480, len: [0.014, 0.013], rad: [0.0072, 0.005], lift: [0.5, 0.3], sweep: [0, 1, 0.35], side: 0.35, jit: [0.75, 0.55], buzz: 0.9, ride: 0.5, hat: 1.05, seed: 43 },
   wetCrop: { cap: [0.94, 0.31, 0.3], thick: 0.006, edge: 0, front: 0.002, ripple: 0.0015, n: 850, len: [0.006, 0.017], rad: [0.0013, 0.0018], lift: [0.66, 0.16], sweep: [0.15, 1, -0.15], side: 0.18, jit: [0.65, 0.42], buzz: 0.8, burn: 0.35, ride: 0.25, hat: 1, seed: 43 },
+  sideSweep: { cap: [1.04, 0.22, 0.27], thick: 0.015, edge: 0.001, front: 0.01, ripple: 0.0015, n: 440, len: [0.013, 0.01], rad: [0.003, 0.003], lift: [0.06, 0.07], sweep: [0.9, -0.18, 0.35], side: 0.1, jit: [0.12, 0.08], buzz: 0.9, burn: 0.4, ride: 0.7, heap: 0.012, heapAt: -0.85, hat: 1.04, seed: 41 },
 };
 
 // 头发发型分界：返回某方位角（0=正前）处，头发盖到的最低极角
@@ -553,6 +554,7 @@ const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new TH
 // 两只手插进裤裆（照片上那个姿势）：手肘往外、稍微往前撑，小臂斜着搭过肚子前面，手腕从裤腰正前方插进去。
 // 这组数是在躯干坐标系里数值搜出来的：小臂整段在身体（连小肚子）外面、手腕卡在裤腰上、手心和指尖都在裤子里
 const TUCK_POLE_R = new THREE.Vector3(-0.981, -0.163, 0.109).normalize(), TUCK_POLE_L = new THREE.Vector3(0.981, -0.163, 0.109).normalize();
+const PHOTO_TUCK_R = new THREE.Vector3(-0.12, -0.2, 1).normalize(), PHOTO_TUCK_L = new THREE.Vector3(0.12, -0.2, 1).normalize();
 const _pq = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _wd = new THREE.Vector3();
 // 举罐子往头上浇水（neptune）：左胳膊肘往外、往后撑开，手举到头顶斜上方
 const POUR_POLE = new THREE.Vector3(1, 0.3, -0.6).normalize(), _Y = new THREE.Vector3(0, 1, 0);
@@ -585,6 +587,7 @@ function solveArmIK(sh, el, target, pole, w) {
 //   bubble 咧嘴大笑时头顶冒出来的那句话（'Hee-Haw!'）、face 脸型（见 FACE）、
 //   build 身材（见下面的 B；关节的位置、胳膊腿的长短不变，只改粗细和宽窄，所有动画、IK、挂在身上的东西都照样能用）、
 //   pants 运动裤的颜色（不给就是黑色牛仔裤）、watch 左手腕上一块黑色电子表、hairGloss 头发的粗糙度（湿头发亮一点）、
+//   shortsCut 'loose' 照片中的及膝宽松裤型和收肘姿势；dye 传入扎染贴图选项；
 //   preciseFace 按头部曲面映射五官；featureScale、browWidth、browThickness、browY 微调五官；
 //   can 左手攥着一罐饮料；signature 'pour'：咧嘴笑（grin）的时候把那罐水举过头顶浇下去（neptune 那张照片）
 export function createCharacter(opts = {}) {
@@ -625,7 +628,7 @@ export function createCharacter(opts = {}) {
     }
     if (shorts) {
       // 大裤衩：两面都画（裤管是开口的圆筒，从下面能看见里面）
-      const dye = TX.genTieDye(); dye.repeat.set(2, 1.4);
+      const dye = TX.genTieDye(O.dye); dye.repeat.set(2, 1.4);
       jeansMat = new THREE.MeshStandardMaterial({ map: dye, roughness: 0.9, side: THREE.DoubleSide });
     } else if (O.pants) {
       // 运动裤（neptune）：灰色针织布
@@ -659,7 +662,8 @@ export function createCharacter(opts = {}) {
   const hips = grp('hips', root, 0, HIPS_Y, 0);
   // 胯部（牛仔裤）：上宽下收，接大腿
   // 大裤衩比牛仔裤松、前后更厚，上沿要收在裤腰底下（不然从背后看会从裤腰上面露出来一截）
-  const pelvisPts = [[0.0, -0.1], [0.07, -0.098], [0.11, -0.085], [0.135, -0.06], [0.145, -0.02], [0.148, 0.02], [0.146, shorts ? 0.034 : 0.07]].map(([r, y]) => new THREE.Vector2(r, y));
+  const pelvisProfile = O.shortsCut === 'loose' ? [[0, -0.21], [0.04, -0.205], [0.08, -0.18], [0.11, -0.14], [0.145, -0.08], [0.153, 0], [0.149, 0.034]] : [[0.0, -0.1], [0.07, -0.098], [0.11, -0.085], [0.135, -0.06], [0.145, -0.02], [0.148, 0.02], [0.146, shorts ? 0.034 : 0.07]];
+  const pelvisPts = pelvisProfile.map(([r, y]) => new THREE.Vector2(r, y));
   // 大裤衩松松垮垮，比牛仔裤宽一圈
   addMesh(new THREE.LatheGeometry(pelvisPts, 24), jeansMat, hips, 0, 0, 0, 0, 0, 0, (shorts ? 1.05 : 1) * B.hip, 1, (shorts ? 0.68 : 0.62) * B.hip);
 
@@ -710,7 +714,8 @@ export function createCharacter(opts = {}) {
       addMesh(new THREE.TorusGeometry(0.058, 0.007, 6, 28), sleeveMat, torso, 0, 0.552, 0.006, Math.PI / 2 - 0.12, 0, 0, 1, 0.9, 1);
     } else if (shorts) {
       // 大裤衩的松紧裤腰（手插在里面，撑得鼓鼓的）+ 前面垂下来两根白抽绳
-      addMesh(new THREE.TorusGeometry(0.161 * B.waist, 0.023, 8, 40), jeansMat, torso, 0, 0.021, 0, Math.PI / 2, 0, 0, 1, DZ + 0.05, 1); // 往下盖住躯干的下沿
+      addMesh(new THREE.TorusGeometry(0.161 * B.waist, O.shortsCut === 'loose' ? 0.013 : 0.023, 8, 40), jeansMat, torso, 0, 0.021, 0, Math.PI / 2, 0, 0, 1, DZ + 0.05, 1); // 往下盖住躯干的下沿
+      if (O.shortsCut !== 'loose') {
       const cord = new THREE.MeshStandardMaterial({ color: '#eceae4', roughness: 0.8 });
       const fz = 0.161 * B.waist * (DZ + 0.05) + 0.012;
       addMesh(new THREE.SphereGeometry(0.009, 10, 8), cord, torso, 0, 0.024, fz);
@@ -718,12 +723,13 @@ export function createCharacter(opts = {}) {
         const cp = [new THREE.Vector3(0, 0.024, fz), new THREE.Vector3(s2 * 0.01, -0.01, fz + 0.004), new THREE.Vector3(s2 * 0.014, -0.05 - (s2 > 0 ? 0.012 : 0), fz + 0.002)];
         addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 12, 0.0032, 5), cord, torso);
       }
+      }
       if (O.pose === 'crotch') {
         // 两只手插在裤裆里：裤腰前面被手腕撑出来一截，裤裆前面被两只手撑出两个鼓包（手抽出来就瘪下去，见 update）
         for (const s2 of [-1, 1]) {
           const side = s2 > 0 ? 'L' : 'R', bumps = [];
-          bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, torso, s2 * 0.058 * B.waist, 0.03, 0.106 * B.waist, 0, s2 * 0.3, 0, 0.034, 0.024, 0.02));
-          bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, hips, s2 * 0.038 * B.hip, -0.04, 0.083 * B.hip, -0.45, 0, s2 * 0.3, 0.03, 0.058, 0.02));
+          bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, torso, s2 * 0.058 * B.waist, 0.03, 0.106 * B.waist, 0, s2 * 0.3, 0, 0.034, O.shortsCut === 'loose' ? 0.013 : 0.024, 0.014));
+          if (O.shortsCut !== 'loose') bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, hips, s2 * 0.038 * B.hip, -0.04, 0.083 * B.hip, -0.45, 0, s2 * 0.3, 0.03, 0.058, 0.02));
           for (const b of bumps) b.userData.base = b.scale.clone();
           J[`tuck${side}`] = bumps;
         }
@@ -894,8 +900,26 @@ export function createCharacter(opts = {}) {
     const L = B.leg, P = lerp(1, B.hip, 0.5), la = lerp(1, L, 0.5);
     const hp = grp(`hip${side}`, hips, s * 0.078 * B.hip, -0.03, 0);
     addMesh(new THREE.SphereGeometry(0.086 * P, 16, 12), jeansMat, hp, s * 0.008, 0.0, 0, 0, 0, 0, 1, 1, 0.95);
-    addMesh(new THREE.CylinderGeometry(0.086 * P, 0.094 * P, 0.33, 18, 1, true), jeansMat, hp, s * 0.008, -0.165, 0.004);
-    addMesh(new THREE.TorusGeometry(0.093 * P, 0.0055, 5, 22), jeansMat, hp, s * 0.008, -0.33, 0.004, Math.PI / 2);
+    if (O.shortsCut === 'loose') {
+      // Long, flared cloth legs, with shallow vertical folds rather than rigid tubes.
+      const length = 0.375;
+      const cloth = new THREE.CylinderGeometry(0.089 * P, 0.108 * P, length, 48, 12, true);
+      const vertices = cloth.attributes.position;
+      for (let i = 0; i < vertices.count; i++) {
+        const x = vertices.getX(i), z = vertices.getZ(i), y = vertices.getY(i);
+        const a = Math.atan2(z, x), t = (length / 2 - y) / length;
+        const fold = 1 + (0.025 + 0.025 * t) * Math.sin(a * 7 + t * 0.8 + s);
+        vertices.setXYZ(i, x * fold, y + 0.003 * t * Math.sin(a * 3 + s), z * fold);
+      }
+      const uv = cloth.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) + (s > 0 ? 0.37 : 0), uv.getY(i) + (s > 0 ? 0.13 : 0));
+      cloth.computeVertexNormals();
+      addMesh(cloth, jeansMat, hp, s * 0.008, -length / 2, 0.004);
+      addMesh(new THREE.TorusGeometry(0.107 * P, 0.0035, 6, 48), jeansMat, hp, s * 0.008, -length, 0.004, Math.PI / 2);
+    } else {
+      addMesh(new THREE.CylinderGeometry(0.086 * P, 0.094 * P, 0.33, 18, 1, true), jeansMat, hp, s * 0.008, -0.165, 0.004);
+      addMesh(new THREE.TorusGeometry(0.093 * P, 0.0055, 5, 22), jeansMat, hp, s * 0.008, -0.33, 0.004, Math.PI / 2);
+    }
     addMesh(new THREE.CylinderGeometry(0.07 * L, 0.054 * L, 0.4, 14), skinMat, hp, 0, -0.2, 0);
     const kn = grp(`kn${side}`, hp, 0, -0.41, 0);
     addMesh(new THREE.SphereGeometry(0.052 * L, 14, 10), skinMat, kn, 0, 0.0, 0.004, 0, 0, 0, 1, 1.05, 1);
@@ -1193,8 +1217,9 @@ export function createCharacter(opts = {}) {
         if (w < 0.001) continue;
         const sd = side === 'L' ? 1 : -1;
         // IK 目标是"手腕不折时"手心的位置（胯部坐标）：解出来手腕正好卡在裤腰正前方
-        _pk.set(sd * 0.01, -0.015 + 0.003 * Math.sin(t * 1.7), 0.109 * B.waist).applyQuaternion(_pq);
-        solveArmIK(J[`sh${side}`], J[`el${side}`], _pk, side === 'R' ? TUCK_POLE_R : TUCK_POLE_L, w);
+        _pk.set(sd * (O.shortsCut === 'loose' ? 0.055 : 0.01), -0.015 + 0.003 * Math.sin(t * 1.7), 0.109 * B.waist).applyQuaternion(_pq);
+        const pole = O.shortsCut === 'loose' ? (side === 'R' ? PHOTO_TUCK_R : PHOTO_TUCK_L) : (side === 'R' ? TUCK_POLE_R : TUCK_POLE_L);
+        solveArmIK(J[`sh${side}`], J[`el${side}`], _pk, pole, w);
         // 手腕一折：手掌往下、往中间、往里插进裤裆（不折的话手顺着小臂从裤腰上面伸出去）
         _wd.set(-sd * 0.2, -1, -0.45).normalize().applyQuaternion(_pq);
         _wq.copy(J[`sh${side}`].quaternion).multiply(J[`el${side}`].quaternion).invert().multiply(_iq.setFromUnitVectors(IK_DOWN, _wd));

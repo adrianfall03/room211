@@ -1469,18 +1469,21 @@ export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e', abs = false } = {
 
 // 蓝白扎染大裤衩（照片）：白底上一团一团晕开的湖蓝、靛蓝，边缘是水洗过的浅蓝，布纹细细的；
 // 再撒几颗深蓝的小星星（涂鸦里裤衩上画的是星星）。四方连续，可以随便平铺
-export function genTieDye({ S = 512, seed = 88, stars = 3 } = {}) {
+export function genTieDye({ S = 512, seed = 88, stars = 3, muted = false } = {}) {
   const c = makeCanvas(S, S), ctx = c.getContext('2d');
   const { fbm } = createNoise(seed);
   const { fbm: fbm2 } = createNoise(seed + 7);
-  const white = [236, 238, 236], wash = [150, 198, 214], dye = [52, 150, 184], deep = [28, 92, 138];
+  const white = muted ? [231, 229, 215] : [236, 238, 236];
+  const wash = muted ? [153, 188, 181] : [150, 198, 214];
+  const dye = muted ? [54, 129, 133] : [52, 150, 184];
+  const deep = muted ? [42, 85, 98] : [28, 92, 138];
   const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
   pixels(c, (x, y, d, i) => {
     const u = x / S, v = y / S;
     // 两层噪声叠出扎染的大色团，再用细噪声把边缘"洇"开
     const n = fbm(u * 3 + fbm2(u * 6, v * 6, 2, 6, 6) * 0.6, v * 3, 5, 3, 3);
     const fine = fbm2(u * 24, v * 24, 3, 24, 24);
-    const k = n + (fine - 0.5) * 0.12;
+    const k = n + (fine - 0.5) * (muted ? 0.42 : 0.12) + (muted ? 0.005 : 0);
     let col = white;
     col = mix(col, wash, smoothstep(0.43, 0.5, k));
     col = mix(col, dye, smoothstep(0.49, 0.56, k));
