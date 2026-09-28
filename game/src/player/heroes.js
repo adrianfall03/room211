@@ -9,23 +9,21 @@ export const HEROES = [
   {
     // 照着一张课本上的涂鸦和一张宿舍里的照片捏的：
     //   涂鸦：头发往一边堆起一大蓬，眯着眼张大嘴笑，两只手插在画满星星的大裤衩里，嘴边写着 "Hee-Haw"；
-    //   照片：光着膀子光着脚站在宿舍里，皮肤偏小麦色，腹部较平坦，
+    //   照片：光着膀子光着脚站在宿舍里，皮肤晒得偏黑（小麦色），稍微有点胖、有点小肚子，
     //         蓝白扎染的大裤衩松松垮垮，两只手从裤腰前面插进裤裆里
     key: 'jigo',
     name: 'jigo',
     look: {
       outfit: 'shorts', pose: 'crotch', bubble: 'Hee-Haw!',
       skin: [200, 148, 112], skinColor: '#c79270', hair: [18, 15, 14], hairColor: '#120e0c', brow: '#15100d',
-      hairStyle: 'sideSweep',
-      preciseFace: true, featureScale: 0.98, browWidth: 0.9, browThickness: 0.65,
-      shortsCut: 'loose', dye: { stars: 0, muted: true },
-      // 真人照未露脸：只按涂鸦还原较宽的脸和不尖的下巴。
-      headScale: [1.07, 0.98, 1.02],
-      face: { jaw: 0.19, chin: 0.08, drop: 0.004, cheek: 0.004, long: 0, full: 0.003 },
+      hairStyle: 'fringe',
+      // 脸：比 bingo 圆一点，腮帮子有肉，下巴不尖
+      headScale: [1.03, 1, 1.02],
+      face: { jaw: 0.24, chin: 0.13, drop: 0.007, cheek: 0.006, long: 0.02, full: 0.007 },
       // 身材：比 bingo 壮一圈——腰和胯最明显，有个小肚子；胳膊腿粗一点，脖子粗短
-      build: { shoulder: 1.01, chest: 1, waist: 0.98, hip: 1.02, arm: 0.94, leg: 1.02, neck: 0.008, neckR: 0.98, belly: 0.006 },
+      build: { shoulder: 1.03, chest: 1.04, waist: 1.1, hip: 1.07, arm: 1.08, leg: 1.1, neck: 0, neckR: 1.12, belly: 0.03 },
       // 笑起来就是涂鸦上那样：眼睛眯成两道缝、嘴张得老大
-      expr: { neutral: { eyes: 'squint', mouth: 'neutral' }, grin: { eyes: 'squint', mouth: 'laugh', brows: 'raised' } },
+      expr: { grin: { eyes: 'smile', mouth: 'laugh', brows: 'raised' } },
     },
   },
   {
