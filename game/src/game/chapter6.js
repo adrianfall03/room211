@@ -7,6 +7,7 @@
 //   ⚙️ 我的书桌前坐着宿舍的蒸汽自动机「老铁」，冻成了铁疙瘩 → 屋里暖和起来之后，天花板上那根大冰柱化了，掉下一把发条钥匙
 //      → 等老铁也化开了，给它上发条 → 它醒过来，在打字机上敲出最后一位
 //   暖炉点着之后，炉子周围出现一圈"热区"，越烧越大：霜一圈圈化开，冰柱滴水，镜子、压力表、老铁身上的霜也跟着化
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, easeOutBack } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -25,7 +26,7 @@ const CLOCK_D = Math.hypot(1.22 + 1.47, 4.5 - 2.02);
 
 export const CH6 = {
   n: 6, theme: 'frost',
-  title: '第六章 · 冰封 211', sub: '21:30 · 零下 70°C · 暴风雪将至', tag: '第六章 · 冰封 211',
+  title: CHAPTER_NAMES[6], sub: '21:30 · 零下 70°C · 暴风雪将至', tag: chapterLabel(6),
   clock: [21, 30], lockName: '领路口令', doorName: '防寒铁门', codeLen: 3, codeIcons: ['🏭', '🔥', '⚙️'],
   taskName: '请熔炉给你亮一条路',
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）

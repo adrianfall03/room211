@@ -7,6 +7,7 @@
 //   👻 洗手间成了毒气间，里面浮着一团噼啪放电的"异常" → 门边挂着防毒面具（滤罐是空的）→ 新滤罐在某只弹药箱里 → 戴上面具走进去，
 //      靠近那团光：灯全灭了，墙上走过去一串人影——数一数有几个
 //   手电筒一开始就在身上（F）；故事钟：空气滤网的效率在慢慢往下掉（永远掉不到零）
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, easeOutBack, smoothstep } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -20,7 +21,7 @@ const CRANKS = 8; // 手摇发电机摇几圈才亮
 
 export const CH4 = {
   n: 4, theme: 'metro',
-  title: '第四章 · 地铁 211', sub: '2077 · 地下 60 米 · 末班车早就停了', tag: '第四章 · 地铁 211',
+  title: CHAPTER_NAMES[4], sub: '2077 · 地下 60 米 · 末班车早就停了', tag: chapterLabel(4),
   clock: [23, 11], lockName: '调度分机', doorName: '气密门', codeLen: 3, codeIcons: ['☢️', '🚂', '👻'],
   taskName: '拦下那趟幽灵列车',
   loopStart: { x: -0.05, z: 5.9 },

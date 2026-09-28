@@ -4,7 +4,7 @@ import * as TX from '../core/textures.js';
 import { clamp, lerp, damp, easeInOut, easeOut, easeIn, easeOutBack, formatMMSS, mulberry32, wrapAngle, dampAngle, nextFrame } from '../core/util.js';
 import { FX } from '../world/fx.js';
 import { CHAPTERS, LAST_CHAPTER } from './chapters.js';
-import { chapterLabel } from './chapternames.js';
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight, addWcLight } from './doorway.js';
@@ -99,9 +99,9 @@ const ACH = [
   ['whale', '🐋 深海来客', '在船舱的舷窗外看见了跃出海面的鲸'],
   ['leak', '🔧 老水手', '拧紧了船舱里漏水的法兰'],
   ['mask', '😷 呼吸管制', '戴上防毒面具，走进毒气里'],
-  ['guitar', '🎸 地下的吉他', '在地铁 211 里弹了一段吉他'],
-  ['bullet', '💰 硬通货', '在地铁 211 里翻到了军用子弹'],
-  ['forge', '🔥 熔炉不灭', '让冰封 211 的暖炉重新烧起来'],
+  ['guitar', '🎸 地下的吉他', '在 BELOW 中弹了一段吉他'],
+  ['bullet', '💰 硬通货', '在 BELOW 中翻到了军用子弹'],
+  ['forge', '🔥 熔炉不灭', '让 EMBER 的暖炉重新烧起来'],
   ['laotie', '⚙️ 老铁没毛病', '给冻住的自动机「老铁」上了发条'],
   ['soup', '🥣 锯末汤', '在零下七十度喝了一碗热乎乎的锯末汤'],
   ['robot', '🤖 机器人救星', '救下失控的机器人小圆'],
@@ -271,7 +271,7 @@ export class Game {
     this.msgs = this._initialMessages();
     // 学生证被{C}塞进了空调：桌上那本先藏起来，开空调时从出风口飘下来
     if (!this.S.view && chapter === 1) R.studentId.visible = false;
-    this.ui.setChapterTag('', '考试用品');
+    this.ui.setChapterTag(chapterLabel(1), '考试用品');
   }
 
   _initialMessages() {
@@ -354,7 +354,7 @@ export class Game {
     this.audio.startLoop('room', { freq: 160, gain: 0.05 });
     this._cineSet(new THREE.Vector3(1.62, 1.28, 0.92), new THREE.Vector3(1.18, 0.98, 0.3));
     this._cineTo(new THREE.Vector3(1.5, 1.18, 0.85), new THREE.Vector3(1.15, 0.98, 0.28), 5.2);
-    this.ui.fade(1, { dur: 0.01, card: `期末考试当天<small>早上 07:28 · 211 宿舍</small>` });
+    this.ui.fade(1, { dur: 0.01, card: `${CHAPTER_NAMES[1]}<small>早上 07:28 · 期末考试当天</small>` });
     const skipBtn = document.createElement('button');
     skipBtn.id = 'skip'; skipBtn.textContent = '跳过 ▶▶';
     document.body.appendChild(skipBtn);
@@ -362,7 +362,7 @@ export class Game {
     skipBtn.addEventListener('click', () => this._skipIntro());
     this._introTimers = true;
     const seq = [
-      [2.2, () => this.ui.fade(0, { dur: 1.6, card: `期末考试当天<small>早上 07:28 · 211 宿舍</small>` })],
+      [2.2, () => this.ui.fade(0, { dur: 1.6, card: `${CHAPTER_NAMES[1]}<small>早上 07:28 · 期末考试当天</small>` })],
       [3.9, () => { this.audio.doorSlam(); this._shake(0.35); }],
       [4.5, () => { this.ctrl.overrides = { sit: 1, sleep: 0 }; this.ch.setExpression('shock'); this.ui.subtitle('！！！', 1.2); }],
       [5.3, () => { this.ctrl.overrides = { sit: 1, lookYaw: -1.0, lookPitch: 0.05 }; this.ui.subtitle('……什么声音？门？', 2.2, this.S.name); this._cineTo(new THREE.Vector3(-0.35, 1.55, 1.35), new THREE.Vector3(0.95, 1.05, 0.25), 2.6); }],

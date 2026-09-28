@@ -4,6 +4,7 @@
 //   🐔 两只鸡沉迷打游戏 → 关掉桌下的插线板，鸡毛满天飞，骂够了趴在键盘上睡着
 //   🐴 三匹马躺床上刷手机 → 打开大灯晃它们一下，"啊我的眼睛！"，手机放下了 → 再把灯关掉，睡着了
 //   🐵 照镜子的猴子想要个时尚单品 → 把凳子上的红白头盔送给它，心满意足，站着就睡着了
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import { lerp, easeOutBack } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -13,7 +14,7 @@ const _p = V(), _c = new THREE.Color();
 
 export const CH5 = {
   n: 5, theme: 'jungle',
-  title: '第五章 · 雨林 211', sub: '22:30 · 暴雨夜', tag: '第五章 · 雨林 211',
+  title: CHAPTER_NAMES[5], sub: '22:30 · 暴雨夜', tag: chapterLabel(5),
   clock: [22, 30], lockName: '睡着了', codeLen: 3, codeIcons: ['🐔', '🐴', '🐵'],
   taskName: '熄灯前，让全宿舍都睡着',
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）

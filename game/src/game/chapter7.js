@@ -6,6 +6,7 @@
 //   💧 驾驶舱（原来的洗手间）里飘着一颗大水球，里面泡着一张纸条 → 一口一口把水球喝掉
 //   🌍 室友说第三位"写在地球上" → 打开遮光板，等太空舱绕到地球背面（地球"关灯"），城市灯光拼出了数字
 //   另外还有一条隐藏任务线（索引卡 → 信息接收站的频道 211 → 储藏室的货柜 G → 卡冈图雅），见 secret.js
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, smoothstep } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -22,7 +23,7 @@ const thetaOf = (p) => Math.PI * 2 * p - 0.4 * Math.sin(Math.PI * 4 * p);
 
 export const CH7 = {
   n: 7, theme: 'space',
-  title: '第七章 · 太空舱 211', sub: '近地轨道 408 km · 失重', tag: '第七章 · 太空舱 211',
+  title: CHAPTER_NAMES[7], sub: '近地轨道 408 km · 失重', tag: chapterLabel(7),
   clock: [3, 0], lockName: '点火授权码', doorName: '气闸舱门', doorVerb: '出舱', codeLen: 3, codeIcons: ['🤖', '💧', '🌍'],
   taskName: '变轨点火，落回地球',
   loopStart: { x: -0.3, z: 5.66 },

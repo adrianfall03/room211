@@ -3,6 +3,7 @@
 //   日记（未来的自己写的）：钟不走，这一天就过不完；得让收音机报一次整点。电台频率拆成三份：
 //   ① 拉电闸，老显示器的雪花屏里闪出数字 → ② 找块布擦干净穿衣镜，口红写的数字 → ③ 数洗手间窗外枯树上的乌鸦
 //   → 旧收音机调到"①②.③ MHz"：嘀、嘀、嘀、嘀、嘀——嗒，北京时间八点整，挂钟的秒针终于走过了 7:59
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import * as TX from '../core/textures.js';
 import * as TR from '../core/tex_ruin.js';
@@ -13,7 +14,7 @@ const CN = '一二三四五六七八九';
 
 export const CH2 = {
   n: 2, theme: 'ruin',
-  title: '第二章 · 废弃的 211', sub: '17:30 · 三十年后的黄昏', tag: '第二章 · 废弃的 211',
+  title: CHAPTER_NAMES[2], sub: '17:30 · 三十年后的黄昏', tag: chapterLabel(2),
   clock: [17, 30], lockName: '电台频率', codeLen: 3, codeIcons: ['①', '②', '③'],
   taskName: '让停在 7:59 的钟走起来',
   tau: 5 * 60, par: 5 * 60, // 故事钟的快慢、⚡ 速通线（见 game.js）

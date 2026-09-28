@@ -6,6 +6,7 @@
 //   🗼 桌上滑来滑去的扳手 → 拧开舷窗的铁盖 → 北边海上有座灯塔，每 12 秒闪一组——一组闪几下
 //   📻 我的书桌成了电报台：打开电子管收音机 → 天线没接（线头耷拉在墙边）→ 接上以后收到室友发的摩尔斯电码，纸带上一串点划 → 对照墙上的电码表
 //   整间屋子一直在晃（横摇 + 纵摇）：马灯来回摆、地上的积水晃到一边又晃回来、人也跟着歪；舷窗打开之后，窗外的海平线也跟着斜
+import { CHAPTER_NAMES, chapterLabel } from './chapternames.js';
 import * as THREE from 'three';
 import { clamp, lerp, easeInOut, easeOut, easeOutBack, smoothstep } from '../core/util.js';
 import { untoonify } from '../world/toonkit.js';
@@ -23,7 +24,7 @@ const STROKES = 6;
 
 export const CH3 = {
   n: 3, theme: 'ship',
-  title: '第三章 · 船舱 211', sub: '04:10 · 北大西洋 · 天亮之前', tag: '第三章 · 船舱 211',
+  title: CHAPTER_NAMES[3], sub: '04:10 · 北大西洋 · 天亮之前', tag: chapterLabel(3),
   clock: [4, 10], lockName: '新航向', doorName: '水密门', codeLen: 3, codeIcons: ['⚓', '🗼', '📻'],
   taskName: '让船不再原地打转',
   loopStart: { x: 0.12, z: 5.85 },
