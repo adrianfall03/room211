@@ -126,7 +126,7 @@ const SCRIPTS = {
       { t: '打开床边的行李箱', d: `三位密码：台历上的日期 → ${S.suitCode}`, run: async (T) => { await T.press('suitcase'); await T.code(S.suitCode); await T.wait(1.8); } },
       { t: '拿上准考证', run: async (T) => { await T.press('ticket', { go: false }); await T.read(2.6); } },
       { t: '拿上紫光手电', d: '准考证旁边就是', run: async (T) => { await T.press('uvLight', { go: false }); await T.wait(1.2); } },
-      { t: '打开手电，照一照键盘', d: `${g.input.isTouch ? '点「手电」' : '按 F '}开手电——紫光下，四个键帽上的荧光标记就是开机密码 ${S.pcPass}`, run: async (T) => { await T.go('keyboard'); await T.torch(); await T.press('keyboard', { go: false }); await T.read(3.4); await T.torch(); } },
+      { t: '打开手电，照一照键盘', d: `${g.input.isTouch ? '点「手电」' : '按 F '}开手电——紫光下，四个键帽上的荧光标记就是登录密码 ${S.pcPass}`, run: async (T) => { await T.go('keyboard'); await T.torch(); await T.press('keyboard', { go: false }); await T.read(3.4); await T.torch(); } },
       { t: '用密码登录电脑', d: `输入 ${S.pcPass}，桌面上${B}的 txt 说抽屉钥匙在他的袜子里`, run: async (T) => { await T.press('monitor', { go: false }); await T.type(S.pcPass); await T.wait(1.4); await T.read(3.4); } },
       { t: '翻窗边的脏衣篓', d: `${B}的袜子里掉出一把小钥匙`, run: async (T) => { await T.press('basket'); await T.until(() => S.inv.includes('key'), 5); await T.wait(1.6); } },
       { t: '用小钥匙打开书桌抽屉', run: async (T) => { await T.press('drawer'); await T.wait(1.6); } },
@@ -611,7 +611,7 @@ export class Tutorial {
     key('Enter');
     await this.wait(0.4);
   }
-  // 电脑开机密码：一个字母一个字母地敲进输入框
+  // 电脑登录密码：一个字母一个字母地敲进输入框
   async type(str) {
     await this.until(() => document.querySelector('#modal .pc input'), 3);
     await this.wait(0.8);

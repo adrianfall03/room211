@@ -47,7 +47,7 @@ void main(){
 
 // theme：'normal' 原版 / 'ruin' 几十年后的废弃 211 / 'jungle' 暴雨夜里长在树洞底下的雨林 211 / 'space' 失重太空舱 211。
 //   三个版本共用同一套布局；decorate(ctx) 在布局搭好之后替换材质、增减道具（见 ruin.js / jungle.js / space.js）
-export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null, outside: outsideFn = null } = {}) {
+export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal', decorate = null, outside: outsideFn = null, monitorState = 'lock' } = {}) {
   RectAreaLightUniformsLib.init();
   const K = new Kit(T);
   const M = K.M;
@@ -874,9 +874,10 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   mark('drawer', D1.userData.drawer);
   const DT = 0.76;
   const dl = (o, lx, lz, ry = 0, y = DT) => { o.position.set(lx, y, lz); o.rotation.y = ry; D1.add(o); return o; };
-  // 显示器（胜利画面）
+  // 当前时空从登录界面开始；隐藏结局的过去时空仍显示游戏画面。
   const scrC = TX.makeCanvas(1024, 576);
-  TX.drawMobaScreen(scrC);
+  if (theme === 'normal' && monitorState === 'lock') TX.drawLockScreen(scrC, { hint: '提示：紫光之下，键盘会说话' });
+  else TX.drawMobaScreen(scrC);
   const scrTex = TX.toTex(scrC, { wrap: false });
   const mon = K.monitor(scrTex, { bright: 1.0 });
   dl(mon, 0.05, -0.14);

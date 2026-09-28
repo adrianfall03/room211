@@ -27,7 +27,7 @@ const MATE_NAMES = [
 ];
 // 三个室友戏份固定、名字随机（S.mates = [A, B, C]，下面的文案里用 {A}{B}{C} 占位）：
 //   A：W1 的床（黄色碎花被），把准考证锁进行李箱（密码"他最怕的那一天"），窗户上哈口气是他写的"加油"
-//   B：W2 的床（蓝被子），把文具袋锁进抽屉；抽屉钥匙在他袜子里，这句话写在电脑里（开机密码要紫光手电照键盘）
+//   B：W2 的床（蓝被子），把文具袋锁进抽屉；抽屉钥匙在他袜子里，这句话写在电脑里（登录密码要紫光手电照键盘）
 //   C：E2 的床（粉色床帘）和旁边的书桌，把学生证塞进了空调（遥控器电池在头盔里）
 // 第一章的任务：带齐考试用品（准考证 · 学生证 · 文具袋）。门没有锁——可东西没带齐就出门，门外的光只会把人从洗手间的门里送回来
 const CH1_ICONS = ['🎫', '🪪', '✏️'];
@@ -272,6 +272,7 @@ export class Game {
     // 学生证被{C}塞进了空调：桌上那本先藏起来，开空调时从出风口飘下来
     if (!this.S.view && chapter === 1) R.studentId.visible = false;
     this.ui.setChapterTag(chapterLabel(1), '考试用品');
+    if (chapter === 1) this._drawMonitor('lock');
   }
 
   _initialMessages() {
@@ -283,7 +284,7 @@ export class Game {
       { time: '07:03', who: A, text: '那就给他留点“惊喜” 😏 考试要带的三样东西，咱们一人藏一样！' },
       { who: A, text: '准考证和紫光手电我塞他行李箱里了，箱子密码是“他最怕的那一天” 📅' },
       { time: '07:08', who: C, text: '学生证我塞空调里了，一开空调它自己就飞出来 ❄️ 遥控器电池？藏他宝贝头盔里了 🪖' },
-      { who: B, text: '文具袋我锁他抽屉里了。钥匙在哪？写在他电脑里——开机密码？用紫光手电照照他天天敲的东西 😎' },
+      { who: B, text: '文具袋我锁他抽屉里了。钥匙在哪？写在他电脑里——登录密码？用紫光手电照照他天天敲的东西 😎' },
       { who: C, text: `${B}你是魔鬼吧 🤮` },
       { time: '07:12', who: A, text: '窗户上我还给他留了句话，对着玻璃哈口气就能看见 🌫️' },
       { time: '07:20', who: A, text: '三样少一样都进不了考场。8点开考，他要是出不来就等着重修吧 🙏' },
@@ -922,9 +923,8 @@ export class Game {
     if (!S.f.pcSeen) {
       S.f.pcSeen = true;
       this._drawMonitor('lock');
-      this.audio.bootChime();
     }
-    this.clue('pc', `电脑锁屏了。密码提示：<b>紫光之下，键盘会说话</b>`);
+    if (!S.f.pcUnlocked) this.clue('pc', `电脑停在登录界面。密码提示：<b>紫光之下，键盘会说话</b>`);
     const node = this.ui.pc({
       name: S.name, time: this.clockText, unlocked: !!S.f.pcUnlocked,
       hint: '密码提示：紫光之下，键盘会说话',
@@ -961,7 +961,7 @@ export class Game {
     node.querySelector('.content').appendChild(c);
     c.style.width = '100%';
     this.openModal(node, { closeKeys: ['Escape', 'KeyE'] });
-    this.clue('kb', `紫光照键盘：荧光标记按顺序是 <b>${[...S.pcPass].join(' → ')}</b>（电脑开机密码？）`);
+    this.clue('kb', `紫光照键盘：荧光标记按顺序是 <b>${[...S.pcPass].join(' → ')}</b>（电脑登录密码？）`);
   }
 
   _drawMonitor(kind) {
@@ -993,7 +993,7 @@ export class Game {
     const node = this.ui.phone({ messages: this.msgs, time: this.clockText, battery: Math.round(12 + S.phoneCharge * 8) });
     this._phoneNode = node;
     this.openModal(node, { onClose: () => (this._phoneNode = null) });
-    this.clue('chat', `宿舍群：🎫 准考证在<b>行李箱</b>（密码：他最怕的那一天）　🪪 学生证在<b>空调</b>里（遥控器电池在头盔里）　✏️ 文具袋锁在<b>抽屉</b>里（钥匙的下落写在电脑里，开机密码用紫光照键盘）`);
+    this.clue('chat', `宿舍群：🎫 准考证在<b>行李箱</b>（密码：他最怕的那一天）　🪪 学生证在<b>空调</b>里（遥控器电池在头盔里）　✏️ 文具袋锁在<b>抽屉</b>里（钥匙的下落写在电脑里，登录密码用紫光照键盘）`);
   }
 
   showCalendar() {
@@ -1281,10 +1281,10 @@ export class Game {
       if (f.drawerOpen) return '抽屉开了，把文具袋拿上。';
       if (f.key) return '用小钥匙打开你书桌的抽屉。';
       if (f.pcUnlocked) return `抽屉钥匙在${S.mates[1]}的袜子里——找找那个蓝色的脏衣篓（窗边右侧）。`;
-      if (!inv.includes('uv')) return '文具袋锁在抽屉里，钥匙的下落写在电脑里。开机密码得用紫光手电照键盘——手电在行李箱里。';
+      if (!inv.includes('uv')) return '文具袋锁在抽屉里，钥匙的下落写在电脑里。登录密码得用紫光手电照键盘——手电在行李箱里。';
       if (!f.pcSeen) return '去你的电脑前看看，文具袋的线索在电脑里。';
       if (!S.uvOn) return '电脑密码提示“紫光之下，键盘会说话”——按 F 打开紫光手电，照照键盘。';
-      return `紫光照亮的键帽顺序就是开机密码（${S.pcPass.length}个字母），去电脑上输入。`;
+      return `紫光照亮的键帽顺序就是登录密码（${S.pcPass.length}个字母），去电脑上输入。`;
     }
     return '三样都齐了！出门，冲向考场！';
   }

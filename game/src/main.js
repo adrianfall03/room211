@@ -330,7 +330,7 @@ async function boot() {
   const buildPast = () => {
     const sc = new THREE.Scene();
     sc.background = new THREE.Color('#050608');
-    const pastRefs = buildDorm(sc, T, new CollisionWorld(), { faceImg, theme: 'normal' });
+    const pastRefs = buildDorm(sc, T, new CollisionWorld(), { faceImg, theme: 'normal', monitorState: 'moba' });
     for (const m of pastRefs.mirrors) m.enabled = () => false;
     return { scene: sc, refs: pastRefs };
   };
