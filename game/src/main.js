@@ -400,8 +400,10 @@ async function boot() {
     lastChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
     heroes: HEROES, hero: settings.hero,
     onHero: (key) => game.previewHero(key),
-    onStart: ({ mode, chapter }) => {
+    onStart: ({ mode, chapter, all }) => {
       audio.init();
+      // 动画教程：不改存档里的模式 / 章节
+      if (mode === 'tutorial') { game.startTutorial({ name: settings.name || '', chapter, all }); return; }
       settings.mode = mode;
       if (mode === 'game') settings.chapter = chapter;
       saveSettings();
@@ -435,7 +437,8 @@ async function boot() {
       if (gfx.dirty) { game.beforeRender(); gfx.render(0, game.time); }
       return;
     }
-    game.update(dt);
+    // 动画教程的倍速 / 快进：一帧里多推进几次游戏逻辑，只画一次
+    for (let i = 0, n = game.timeScale || 1; i < n; i++) game.update(dt);
     game.beforeRender();
     gfx.render(dt, game.time);
   };

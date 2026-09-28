@@ -8,6 +8,7 @@ import { chapterLabel } from './chapternames.js';
 import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight, addWcLight } from './doorway.js';
+import { Tutorial } from './tutorial.js';
 
 // 不限时：故事里的钟从开局时间往后走，越走越慢，永远差一点才到点（8:00 开考 / 18:00 天黑 / 23:00 熄灯）
 // 走到一半所需的时间 ≈ TAU × 0.7；第二、三章用 CH.tau
@@ -143,11 +144,11 @@ export class Game {
     this._buildDust();
     this.input.onLockChange = (locked) => this._onLockChange(locked);
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape' && this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked) this.openPause();
+      if (e.code === 'Escape' && this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked && !this.demo) this.openPause();
       if (e.code === 'Escape' && this._admiring) this.showResults();
     });
     this.gfx.canvas.addEventListener('click', () => {
-      if (this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked) this.input.requestLock();
+      if (this.state === 'play' && !this.ui.modalOpen && !this.paused && !this.input.locked && !this.demo) this.input.requestLock();
     });
     this._bindAdmireControls();
     this.ch.onLaugh = () => this._onHeroLaugh();
@@ -231,7 +232,7 @@ export class Game {
   // ================== 新的一局 ==================
   // view：鉴赏模式——没有任务，走到门口就去下一关
   // 游戏模式：门都没有锁，可每一间 211 都有一个任务；任务没完成就出门，只会从洗手间的门里走回这间屋子
-  newRun({ name, chapter = 1, view = false }) {
+  newRun({ name, chapter = 1, view = false, demo = false }) {
     const rnd = mulberry32((Date.now() ^ 0x5f3759df) >>> 0);
     this.rnd = rnd;
     const r = (n) => Math.floor(rnd() * n);
@@ -245,7 +246,7 @@ export class Game {
       // 第一章：三样考试用品（HUD 上的三个格子，拿到一样打一个勾）
       digits: CH1_ICONS.map(() => '✓'), found: CH1_ICONS.map(() => false), month, day, suitCode: `${month}${day}`, pcPass: words[r(words.length)],
       f: {}, inv: [], clues: new Map(), ach: new Set(), phoneCharge: 0, msgSent: {}, newItem: null, helmetOn: false,
-      lastSec: -1, chapter, done: [], view: !!view, loops: 0, loopsTotal: 0,
+      lastSec: -1, chapter, done: [], view: !!view, loops: 0, loopsTotal: 0, demo: !!demo,
     };
     this.handlers = this._handlers();
     this.ui.setViewMode(this.S.view);
@@ -369,6 +370,13 @@ export class Game {
     ];
     for (const [t, fn] of seq) this.after(t, () => { if (this.state === 'intro') fn(); });
   }
+  // 动画教程：游戏模式的一局，只是手交给了程序（game/tutorial.js）——不存档、不解锁章节，鼠标不锁定
+  startTutorial({ name, chapter = 1, all = false }) {
+    this.input.enabled = false;
+    this.input.requestLock = () => {};
+    this.demo = new Tutorial(this, { chapter, all });
+    this.startIntro({ name, chapter, view: false, demo: true });
+  }
   _showSkip(fn) {
     if (this._skipBtn) this._skipBtn.remove();
     const b = document.createElement('button');
@@ -428,12 +436,13 @@ export class Game {
     this.ctrl.sitting = false;
     this.ui.letterbox(false);
     this.ui.showHUD(true);
-    if (this.input.isTouch) this.ui.showTouch(true);
-    this._touchUI = this.input.isTouch;
+    if (this.input.isTouch && !this.demo) this.ui.showTouch(true);
+    this._touchUI = this.input.isTouch && !this.demo;
     this.auto = null;
     this._refreshHUD(true);
     this.audio.startMusic(this.CH ? this.CH.theme : 'normal');
-    if (this.S.view) {
+    if (this.demo) { if (this.CH && this.CH.onPlay) this.CH.onPlay(this); this.demo.onPlay(); }
+    else if (this.S.view) {
       this.ui.toast(`鉴赏模式：随便逛，走到${this._doorName()}口按 <kbd>E</kbd>（或随时按 <kbd>N</kbd>）${this.chapter < LAST_CHAPTER ? '去下一关' : '看结局'}`, '', '🎬');
       if (this.CH && this.CH.onViewPlay) this.CH.onViewPlay(this);
     } else if (this.CH) { if (this.CH.onPlay) this.CH.onPlay(this); }
@@ -454,6 +463,7 @@ export class Game {
     this.time += dt;
     const S = this.S;
     if (!this.paused) this._tick(dt);
+    if (this.demo) this.demo.update(dt);
     switch (this.state) {
       case 'title': this._updateTitle(dt); break;
       case 'intro': this.ctrl.update(dt, { allowMove: false }); this._saveGameCam(); this._updateCine(dt); break;
@@ -494,9 +504,9 @@ export class Game {
     this._saveGameCam();
     if (this.cine) this._updateCine(dt);
     this._updateHover();
-    this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine);
+    this.ui.setClickToPlay(!inp.locked && !modal && !this.paused && !inp.isTouch && !this.cine && !this.demo);
     // 触屏：游戏里播小过场（凑到舷窗前、看望远镜……）的时候，摇杆和按钮先收起来，不挡画面
-    const touchUI = inp.isTouch && !this.cine;
+    const touchUI = inp.isTouch && !this.cine && !this.demo;
     if (touchUI !== this._touchUI) { this._touchUI = touchUI; this.ui.showTouch(touchUI); }
     this._refreshHUD();
     this._storyEvents();
@@ -599,6 +609,14 @@ export class Game {
   // ================== 交互 ==================
   _updateHover() {
     if (this.ui.modalOpen || this.paused || this.cine || this.auto) { this._setHover(null); return; }
+    // 动画教程：只高亮它正要去按的那个东西（紫光手电也照着它）
+    if (this.demo) {
+      const hv = this.demo.hover;
+      this._setHover(hv);
+      if (hv) this.aim.copy(hv.point);
+      else { this.camera.getWorldDirection(_v3); this.aim.copy(this.camera.position).addScaledVector(_v3, 5); }
+      return;
+    }
     const chest = _v1.set(this.ctrl.pos.x, 1.1 + this.ctrl.pos.y, this.ctrl.pos.z);
     this.raycaster.setFromCamera(this.center, this.camera);
     const camD = this.camera.position.distanceTo(chest);
@@ -1547,6 +1565,7 @@ export class Game {
   _chapterDone({ throughDoor = false } = {}) {
     const S = this.S;
     S.done.push({ n: this.chapter, elapsed: S.elapsed, par: this.CH ? this.CH.par : PAR1, hints: S.hints, loops: S.loops || 0 });
+    if (this.demo && this.demo.chapterDone(this.chapter)) return;
     if (this.chapter < LAST_CHAPTER) this.goChapter(this.chapter + 1, { throughDoor });
     else this.finale();
   }
@@ -1649,7 +1668,7 @@ export class Game {
     this.handlers = this._handlers();
     this._invDirty = true;
     this._removeDoorLock();
-    if (!S.view) {
+    if (!S.view && !S.demo) {
       this.settings.unlocked = Math.max(this.settings.unlocked || 1, CH.n);
       this.settings.chapter = CH.n;
       this.saveSettings();

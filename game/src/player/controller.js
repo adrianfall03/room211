@@ -30,6 +30,7 @@ export class Controller {
     this.bob = 0;
     this.anim = { speed: 0 };
     this.overrides = null; // 由过场动画接管
+    this.bot = null; // 动画教程接管走路（见 game/tutorial.js）
     this.sitting = false;
     this.fpBlend = 0;
     this.sensitivity = 1;
@@ -93,9 +94,11 @@ export class Controller {
     const floating = this.float > 0.5;
     const crouching = !floating && (this.crouch || (allowMove && (inp.down('ControlLeft') || inp.down('ControlRight'))));
     const maxSpeed = floating ? (wantRun ? 2.2 : 1.15) : crouching ? 0.85 : wantRun ? 3.0 : 1.55;
-    const l = Math.hypot(wishX, wishZ);
-    const tx = l > 0.01 ? (wishX / Math.max(1, l)) * maxSpeed : 0;
-    const tz = l > 0.01 ? (wishZ / Math.max(1, l)) * maxSpeed : 0;
+    let l = Math.hypot(wishX, wishZ);
+    let tx = l > 0.01 ? (wishX / Math.max(1, l)) * maxSpeed : 0;
+    let tz = l > 0.01 ? (wishZ / Math.max(1, l)) * maxSpeed : 0;
+    // 动画教程：程序替玩家走路，bot = { vx, vz } 是想要的水平速度（世界坐标）
+    if (this.bot && allowMove && !this.sitting) { tx = this.bot.vx; tz = this.bot.vz; l = Math.hypot(tx, tz) > 0.01 ? 1 : 0; }
     // 失重时有惯性：起步慢、停下来还会往前飘一段
     const accel = floating ? (l > 0.01 ? 2.6 : 1.1) : l > 0.01 ? 10 : 14;
     this.vel.x = damp(this.vel.x, tx, accel, dt);

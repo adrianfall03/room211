@@ -38,7 +38,10 @@ button { font-family: var(--font); }
 #title .t-menu button::before { content: ''; position: absolute; left: 0; top: 50%; width: 2px; height: 0; background: #f2f1ec; transform: translateY(-50%); transition: height 0.15s; }
 #title .t-menu button:hover, #title .t-menu button:focus-visible { color: #fff; outline: none; }
 #title .t-menu button:hover::before, #title .t-menu button:focus-visible::before { height: 18px; }
-#title .t-resume p { margin: 0 0 6px 16px; color: rgba(236,235,228,0.6); font-size: 14px; letter-spacing: 0.08em; }
+#title .t-menu p { margin: 0 0 6px 16px; color: rgba(236,235,228,0.6); font-size: 14px; letter-spacing: 0.08em; line-height: 1.6; }
+#title .t-grid { display: grid; grid-template-columns: 1fr; margin-bottom: 4px; }
+#title .t-grid button { padding: 7px 0 7px 16px; font-size: 16px; letter-spacing: 0.1em; text-align: left; }
+@media (max-height: 640px) { #title .t-grid { grid-template-columns: 1fr 1fr; column-gap: 12px; } #title .t-grid button { font-size: 14px; padding: 6px 0 6px 16px; } }
 #title .t-menu .t-back { margin-top: 10px; font-size: 14px; color: rgba(236,235,228,0.5); }
 #title .t-menu button small { margin-left: 12px; font-size: 13px; letter-spacing: 0.06em; color: rgba(236,235,228,0.45); }
 /* 更换人物：‹ 名字 › + 一行介绍，下面几个小圆点 */
@@ -440,4 +443,73 @@ body.is-touch #keyhints { display: none; }
   .tbtns { bottom: 14px; right: 68px; }
   .slot { width: 44px; height: 44px; font-size: 20px; }
   body.touch-ui #subtitle { left: 170px; right: 222px; bottom: 70px; } /* 物品栏上面、互动按钮左边 */
+}
+
+/* ---------- 动画教程 ---------- */
+/* 演示的时候：左上角的"当前目标"换成步骤清单；弹窗、物品栏不接鼠标（免得点乱了演示），键位提示收起来 */
+body.tut #hud-tl, body.tut #keyhints, body.tut #clickToPlay { display: none !important; }
+body.tut-auto #modal, body.tut #hud-inventory { pointer-events: none; }
+body.tut-auto #modal .m-close { display: none; }
+#tut { position: fixed; inset: 0; z-index: 57; pointer-events: none; }
+#tut-card { position: absolute; left: 18px; top: 16px; width: min(340px, 44vw); padding: 12px 16px 10px; border-radius: 14px; background: var(--panel); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid var(--line); }
+#tut-card .h { display: flex; justify-content: space-between; font-size: 11px; letter-spacing: 0.3em; color: var(--accent); font-weight: 800; }
+#tut-card .h .n { font-family: 'SF Mono', Menlo, monospace; font-weight: 600; letter-spacing: 0.04em; color: var(--muted); }
+#tut-card .ch { margin: 3px 0 8px; font-size: 13px; color: var(--muted); letter-spacing: 0.08em; }
+#tut-card ol { list-style: none; margin: 0; padding: 0; max-height: min(52vh, 440px); overflow: hidden; counter-reset: st; position: relative; }
+#tut-card li { counter-increment: st; position: relative; padding: 4px 0 4px 26px; font-size: 14px; line-height: 1.45; color: rgba(230,234,241,0.42); transition: color 0.3s; }
+#tut-card li::before { content: counter(st); position: absolute; left: 0; top: 5px; width: 18px; font-family: 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 18px; text-align: right; color: inherit; }
+#tut-card li small { display: none; margin-top: 3px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+#tut-card li.done { color: rgba(230,234,241,0.5); text-decoration: line-through; text-decoration-color: rgba(230,234,241,0.3); }
+#tut-card li.cur { color: #fff; }
+#tut-card li.cur::before { color: var(--accent); }
+#tut-card li.cur::after { content: ''; position: absolute; left: -16px; top: 6px; bottom: 6px; width: 2px; background: var(--accent); }
+#tut-card li.cur small { display: block; }
+body[class*="theme-"]:not(.theme-finale) #tut-card { border-radius: 4px; }
+#tut-bar { position: absolute; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+#tut-bar button { padding: 8px 12px; border-radius: 9px; border: 1px solid var(--line); background: rgba(8,10,14,0.62); color: #e6eaf1; font-size: 13px; letter-spacing: 0.06em; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#tut-bar button:hover { background: rgba(255,255,255,0.12); }
+#tut-bar .ff { margin-right: 4px; font-size: 12px; color: var(--muted); letter-spacing: 0.1em; opacity: 0; transition: opacity 0.3s; }
+#tut-bar.ffing .ff { opacity: 1; animation: pulse 1.2s infinite; }
+#tut.paused #tut-card .h::after { content: ' · 已暂停'; color: var(--muted); }
+#tut-key { position: absolute; right: 18px; bottom: calc(66px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; padding: 7px 12px 7px 8px; border-radius: 10px; background: rgba(8,10,14,0.7); border: 1px solid var(--line); font-size: 14px; color: #e6eaf1; opacity: 0; transform: translateY(6px); transition: opacity 0.25s, transform 0.25s; }
+#tut-key.on { opacity: 1; transform: none; }
+#tut-key kbd { font-size: 15px; min-width: 2em; }
+#tut-key.on kbd { animation: keyPress 0.35s; }
+@keyframes keyPress { 0% { transform: translateY(0); } 35% { transform: translateY(2px); border-bottom-width: 1px; background: rgba(255,255,255,0.3); } 100% { transform: none; } }
+#prompt kbd.press { animation: keyPress 0.35s; }
+.slot.press { animation: keyPress 0.35s; border-color: var(--accent); }
+#tut-end { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 32px)); pointer-events: auto; text-align: center; animation: fadeIn 0.4s; }
+#tut-end h2 { font-family: var(--font); font-size: 24px; letter-spacing: 0.06em; }
+#tut-end p { color: var(--muted); line-height: 1.7; margin: 0 0 20px; }
+#tut-end .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; border: 0; padding: 0; }
+@media (max-width: 720px) {
+  #tut-card { left: 10px; top: 10px; padding: 8px 10px; width: 56vw; }
+  #tut-card li { font-size: 12px; padding: 3px 0 3px 22px; }
+  #tut-card li small { font-size: 11px; }
+  #tut-card ol { max-height: 38vh; }
+  #tut-bar { right: 10px; left: 10px; justify-content: flex-end; bottom: calc(10px + env(safe-area-inset-bottom)); }
+  #tut-bar button { padding: 7px 10px; font-size: 12px; }
+  #tut-key { right: 10px; bottom: calc(52px + env(safe-area-inset-bottom)); font-size: 12px; }
+  body.tut #hud-inventory { bottom: 58px; }
+  body.tut #subtitle { bottom: 132px; }
+}
+/* 竖屏手机：清单只留正在做的这一步（左上角和时间框各占一半宽），提示气泡挪到卡片下面 */
+@media (max-width: 520px) {
+  #tut-card { width: calc(52vw - 10px); }
+  #tut-card li:not(.cur) { display: none; }
+  #tut-card li { padding-left: 0; }
+  #tut-card li::before, #tut-card li.cur::after { display: none; }
+  body.tut #toasts { top: 190px; width: calc(100vw - 20px); }
+}
+/* 横着拿的手机：左边一列是步骤清单 + 物品栏，右边一列是时间框 + 按键回显，中间是提示气泡、字幕，控制条在右下角 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #tut-card { width: 34vw; }
+  #tut-card ol { max-height: 44vh; }
+  body.tut #hud-tr { right: 10px; }
+  body.tut #hud-inventory { left: 10px; right: auto; transform: none; bottom: 24px; }
+  body.tut #subtitle { bottom: 54px; left: 36vw; right: 10px; transform: none; max-width: none; font-size: 13px; }
+  body.tut #toasts { left: calc(34vw + 20px); right: 206px; transform: none; top: 10px; }
+  body.tut .toast { font-size: 12px; padding: 7px 10px; }
+  #tut-key { top: 146px; bottom: auto; }
+  #tut-bar { left: auto; }
 }
