@@ -741,11 +741,12 @@ export function buildDorm(scene, T, collision, { faceImg = null, theme = 'normal
   place(W1, -1.325, 0, 0.21);
   mark('bedW1', W1);
   refs.beds = { W1 };
-  // W1 is the west-side bunk nearest the entrance; its south end faces the door.
+  // Portrait on the west wall inside W1 upper bunk, above the rail toward the window end.
   if (theme === 'normal' || theme === 'ruin') {
     const sticker = createBunkSticker(theme === 'ruin');
-    sticker.position.set(0, 2.05, 1.025);
-    W1.add(sticker);
+    sticker.position.set(ROOM.minX + 0.012, 2.21, -0.35);
+    sticker.rotation.y = Math.PI / 2;
+    root.add(sticker);
     refs.bunkSticker = sticker;
   }
   block(-1.8, -0.84, -0.8, 1.22, '', 2.8);
