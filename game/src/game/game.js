@@ -9,6 +9,7 @@ import { FinaleDirector } from './finale.js';
 import { untoonify } from '../world/toonkit.js';
 import { addDoorLight, addWcLight } from './doorway.js';
 import { Tutorial } from './tutorial.js';
+import { heroOf } from '../player/heroes.js';
 
 // 不限时：故事里的钟从开局时间往后走，越走越慢，永远差一点才到点（8:00 开考 / 18:00 天黑 / 23:00 熄灯）
 // 走到一半所需的时间 ≈ TAU × 0.7；第二、三章用 CH.tau
@@ -168,10 +169,12 @@ export class Game {
     this.setHero(key);
     this.ctrl.setMode(this.ctrl.mode);
   }
-  // jigo 笑出声来（Hee-Haw!）：标题画面、游戏里、出门的时候才笑；结局的仪式、彩蛋的过场里不笑
+  // 主角的招牌动作出声：jigo 笑出声来（Hee-Haw!），neptune 把水浇在头上哇地哭出来。
+  // 标题画面、游戏里、出门的时候才出声；结局的仪式、彩蛋的过场里不笑也不浇
   _onHeroLaugh() {
     if (!['title', 'play', 'outro', 'cut'].includes(this.state)) return false;
-    this.audio.heeHaw();
+    const snd = heroOf(this.settings.hero).laugh || 'heeHaw';
+    if (this.audio[snd]) this.audio[snd]();
     return true;
   }
 

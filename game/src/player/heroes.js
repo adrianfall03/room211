@@ -28,6 +28,29 @@ export const HEROES = [
       expr: { grin: { eyes: 'smile', mouth: 'laugh', brows: 'raised' } },
     },
   },
+  {
+    // 照着一张黑白照片捏的：瘦瘦的男生，刚把一罐水举过头顶往自己头上浇，短短的刺猬头湿成一撮一撮往上支棱，
+    //   眼睛使劲闭着、眉头拧成一团，嘴张得老大哇哇地哭；黑色长袖运动衫，胸口一块白色印花，左手腕上一块黑色电子表
+    key: 'neptune',
+    name: 'neptune',
+    desc: '瘦瘦的、刺猬头湿漉漉的；黑色长袖运动衫，左手攥着一罐饮料——一激动就举过头顶往自己头上浇，哇地哭出来',
+    laugh: 'sob', // 招牌动作的声音（见 game._onHeroLaugh）
+    look: {
+      outfit: 'sport', print: 'trident', pants: '#5d6068', watch: true, can: true, signature: 'pour',
+      skin: [218, 168, 138], skinColor: '#d6a386', hair: [22, 19, 18], hairColor: '#141011', brow: '#17110e',
+      hairStyle: 'spiky', hairGloss: 0.32, // 刚浇过水，头发湿亮
+      // 脸：比 bingo 瘦长一点，下巴窄
+      headScale: [0.97, 1.02, 1],
+      face: { jaw: 0.33, chin: 0.13, drop: 0.007, cheek: 0.004, long: 0.03, full: 0 },
+      // 身材：比 bingo 单薄一圈
+      build: { shoulder: 0.96, chest: 0.94, waist: 0.92, hip: 0.95, arm: 0.92, leg: 0.93, neck: 0.01, neckR: 0.95 },
+      // 平时眉头也有点往上挑（一副要哭不哭的样子）；"笑"起来就是照片上那样：眼睛挤成一条缝、嘴张得老大，两道眼泪
+      expr: {
+        neutral: { brows: 'worried' },
+        grin: { eyes: 'squeeze', mouth: 'cry', brows: 'worried', tears: true },
+      },
+    },
+  },
 ];
 
 // 以前存档里的旧名字
