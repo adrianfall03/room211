@@ -1,6 +1,7 @@
 // 主角：根据照片"捏"出来的程序化 3D 人物 + 程序化骨骼动画
 // 特征：瘦高、短碎发（两侧推短渐变）、浓眉、笑起来眼睛眯成月牙+露齿大笑、深色牛仔夹克、黑色牛仔裤、灰白运动鞋
 // 可以换的另一个主角（jigo，见 heroes.js）也是这里捏的：outfit 'shorts' 光膀子 + 扎染大裤衩 + 光脚，pose 'crotch' 两只手从裤腰前面插进裤裆里
+// 第三个主角 neptune：outfit 'sport' 黑色长袖运动衫 + 灰运动裤、湿漉漉的刺猬头（HAIR.spiky），左手攥着一罐饮料，signature 'pour' 一"笑"就举过头顶往自己头上浇、哇地哭出来
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -70,6 +71,8 @@ export const HAIR = {
   // jigo（涂鸦）：头顶一大蓬，刘海斜着扫向一边、盖住半个额头，两侧推短
   //   涂鸦上头发往右边（他自己的右手边）高高堆起一大蓬，再朝另一边扫过去
   fringe: { cap: [1.1, 0.18, 0.26], thick: 0.03, edge: 0.002, front: 0.016, ripple: 0.002, n: 280, len: [0.017, 0.01], rad: [0.013, 0.007], lift: [0.02, 0.05], sweep: [0.85, -0.2, 0.6], side: 0.12, jit: [0.1, 0.06], buzz: 0.85, burn: 0.3, ride: 0.8, heap: 0.016, heapAt: -0.75, hat: 1.1, seed: 41 },
+  // neptune（照片上刚把一罐水浇在头上）：短短的刺猬头，湿了以后一撮一撮往上支棱，乱七八糟；两侧推短
+  spiky: { cap: [1.0, 0.2, 0.26], thick: 0.016, edge: 0, front: 0.005, ripple: 0.003, n: 480, len: [0.014, 0.013], rad: [0.0072, 0.005], lift: [0.5, 0.3], sweep: [0, 1, 0.35], side: 0.35, jit: [0.75, 0.55], buzz: 0.9, ride: 0.5, hat: 1.05, seed: 43 },
 };
 
 // 头发发型分界：返回某方位角（0=正前）处，头发盖到的最低极角
@@ -247,7 +250,7 @@ function paintSkinBase(meta, O) {
   return c;
 }
 
-function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'normal' }, O = { brow: '#1a1411' }) {
+function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'normal', tears = false }, O = { brow: '#1a1411' }) {
   const { W, H, X, Y } = meta;
   const c = TX.makeCanvas(W, H);
   const ctx = c.getContext('2d');
@@ -321,11 +324,43 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
       ctx.beginPath(); curve([ex - hw * 0.8, ey - 0.0045], [ex, ey - 0.0022], [ex + hw * 0.9, ey - 0.004]); ctx.stroke();
       ctx.strokeStyle = 'rgba(140,85,70,0.35)'; ctx.lineWidth = 1.3;
       for (let k = 0; k < 3; k++) { ctx.beginPath(); curve([ex + s * (hw + 0.002), ey - 0.001 - k * 0.0032], [ex + s * (hw + 0.006), ey - 0.0015 - k * 0.004], [ex + s * (hw + 0.01), ey - 0.004 - k * 0.005]); ctx.stroke(); }
+    } else if (eyes === 'squeeze') {
+      // 哭的时候眼睛使劲闭着：眼皮挤成一道往外耷拉的粗线，上面压出一道褶，下面鼓起两道眼袋，眼角挤出鱼尾纹
+      const ix = ex - s * hw, ox = ex + s * hw;
+      ctx.strokeStyle = '#140d0a'; ctx.lineWidth = 4.6; ctx.lineCap = 'round';
+      ctx.beginPath(); curve([ix, ey + 0.0015], [ex, ey + 0.0048], [ox + s * 0.001, ey - 0.0038]); ctx.stroke();
+      ctx.strokeStyle = 'rgba(120,70,56,0.5)'; ctx.lineWidth = 1.7;
+      ctx.beginPath(); curve([ex - s * hw * 0.6, ey + 0.0068], [ex, ey + 0.0092], [ox, ey + 0.0015]); ctx.stroke();
+      for (const [dy, a] of [[0.0045, 0.42], [0.0085, 0.28]]) { ctx.strokeStyle = `rgba(120,70,56,${a})`; ctx.beginPath(); curve([ex - s * hw * 0.55, ey - dy + 0.001], [ex, ey - dy - 0.003], [ex + s * hw * 0.95, ey - dy - 0.0015]); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(120,70,56,0.4)'; ctx.lineWidth = 1.4;
+      for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(...P(ox + s * 0.0015, ey - 0.0035 + k * 0.0032)); ctx.lineTo(...P(ox + s * 0.0075, ey - 0.005 + k * 0.0048)); ctx.stroke(); }
     } else if (eyes === 'closed') {
       ctx.strokeStyle = '#140d0a'; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
       ctx.beginPath(); curve([ex - hw, ey + 0.0005], [ex, ey - 0.004], [ex + hw, ey + 0.0008]); ctx.stroke();
       ctx.lineWidth = 1.5;
       for (let k = 0; k < 5; k++) { const t = (k + 0.5) / 5; const ss = ex - hw + t * hw * 2; ctx.beginPath(); ctx.moveTo(...P(ss, ey - 0.0028)); ctx.lineTo(...P(ss + s * 0.001, ey - 0.0048)); ctx.stroke(); }
+    }
+  }
+
+  if (eyes === 'squeeze') {
+    // 眉心、鼻梁皱成一团
+    ctx.strokeStyle = 'rgba(120,70,56,0.4)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); curve([s * 0.004, 0.026], [s * 0.0065, 0.021], [s * 0.004, 0.016]); ctx.stroke(); }
+    for (const y of [0.012, 0.0085]) { ctx.beginPath(); curve([-0.007, y], [0, y + 0.0015], [0.007, y]); ctx.stroke(); }
+  }
+  if (tears) {
+    // 眼泪：从眼角挤出来，顺着脸颊一路淌到下巴——亮晶晶的两道
+    for (const s of [-1, 1]) {
+      const pts = [[s * 0.041, 0.004], [s * 0.046, -0.012], [s * 0.043, -0.03], [s * 0.047, -0.05], [s * 0.042, -0.072]];
+      for (const [w, col] of [[6, 'rgba(170,200,222,0.4)'], [2, 'rgba(255,255,255,0.75)']]) {
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(...P(...pts[0]));
+        for (let k = 1; k < pts.length - 1; k++) { const m = [(pts[k][0] + pts[k + 1][0]) / 2, (pts[k][1] + pts[k + 1][1]) / 2]; ctx.quadraticCurveTo(...P(...pts[k]), ...P(...m)); }
+        ctx.lineTo(...P(...pts[pts.length - 1])); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(205,228,242,0.75)';
+      ctx.beginPath(); ctx.ellipse(...P(s * 0.042, -0.076), 5, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(...P(s * 0.0412, -0.074), 1.8, 0, Math.PI * 2); ctx.fill();
     }
   }
 
@@ -424,6 +459,36 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
     ctx.beginPath(); ctx.moveTo(...P(-mw, my + 0.005)); ctx.quadraticCurveTo(...P(-mw * 0.95, my - 0.031), ...P(0, my - 0.034)); ctx.quadraticCurveTo(...P(mw * 0.95, my - 0.031), ...P(mw, my + 0.005)); ctx.stroke();
     ctx.fillStyle = 'rgba(120,60,50,0.45)';
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(...P(s * (mw + 0.003), my + 0.006), 3.2, 0, Math.PI * 2); ctx.fill(); }
+  } else if (mouth === 'cry') {
+    // 哇地一声哭出来（neptune）：嘴张成一个下宽上窄的大口子，嘴角往下耷拉，露出上排牙和舌头，下巴皱成一团
+    ctx.strokeStyle = 'rgba(130,75,62,0.5)'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
+    for (const s of [-1, 1]) { ctx.beginPath(); curve([s * 0.016, -0.029], [s * 0.033, -0.046], [s * 0.034, -0.072]); ctx.stroke(); }
+    const mw = 0.032, top = my + 0.006, cy = my - 0.012, bot = my - 0.04;
+    const outline = () => {
+      ctx.beginPath();
+      ctx.moveTo(...P(-mw, cy));
+      ctx.quadraticCurveTo(...P(-mw * 0.55, top + 0.004), ...P(0, top));
+      ctx.quadraticCurveTo(...P(mw * 0.55, top + 0.004), ...P(mw, cy));
+      ctx.quadraticCurveTo(...P(mw * 0.8, bot), ...P(0, bot));
+      ctx.quadraticCurveTo(...P(-mw * 0.8, bot), ...P(-mw, cy));
+    };
+    ctx.fillStyle = '#2e0c0a';
+    outline(); ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = '#f2ede4';
+    ctx.beginPath(); ctx.moveTo(...P(-mw, cy + 0.006)); ctx.quadraticCurveTo(...P(0, top + 0.008), ...P(mw, cy + 0.006));
+    ctx.lineTo(...P(mw * 0.8, cy - 0.001)); ctx.quadraticCurveTo(...P(0, top - 0.009), ...P(-mw * 0.8, cy - 0.001)); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(160,150,140,0.7)'; ctx.lineWidth = 1.2;
+    for (let k = -3; k <= 3; k++) { const x = k * 0.0062; ctx.beginPath(); ctx.moveTo(...P(x, top + 0.002)); ctx.lineTo(...P(x * 1.02, top - 0.007 + Math.abs(k) * 0.0012)); ctx.stroke(); }
+    ctx.fillStyle = '#b04a44';
+    ctx.beginPath(); ctx.ellipse(...P(0, bot + 0.008), 38, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = lip; ctx.lineWidth = 3.6; outline(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,70,58,0.4)'; ctx.lineWidth = 1.7;
+    for (const s of [-1, 1]) { ctx.beginPath(); curve([s * (mw + 0.001), cy], [s * (mw + 0.005), cy - 0.008], [s * (mw + 0.003), cy - 0.017]); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(120,70,58,0.32)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); curve([-0.013, bot - 0.009], [0, bot - 0.013], [0.013, bot - 0.009]); ctx.stroke();
+    for (const [x, y] of [[-0.006, bot - 0.017], [0.005, bot - 0.018], [0, bot - 0.022]]) { ctx.beginPath(); ctx.arc(...P(x, y), 2.2, 0, Math.PI * 2); ctx.stroke(); }
   } else if (mouth === 'O') {
     ctx.fillStyle = '#3a110e';
     ctx.beginPath(); ctx.ellipse(...P(0, my - 0.004), 15, 20, 0, 0, Math.PI * 2); ctx.fill();
@@ -441,6 +506,11 @@ const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new TH
 // 这组数是在躯干坐标系里数值搜出来的：小臂整段在身体（连小肚子）外面、手腕卡在裤腰上、手心和指尖都在裤子里
 const TUCK_POLE_R = new THREE.Vector3(-0.981, -0.163, 0.109).normalize(), TUCK_POLE_L = new THREE.Vector3(0.981, -0.163, 0.109).normalize();
 const _pq = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _wd = new THREE.Vector3();
+// 举罐子往头上浇水（neptune）：左胳膊肘往外、往后撑开，手举到头顶斜上方
+const POUR_POLE = new THREE.Vector3(1, 0.3, -0.6).normalize(), _Y = new THREE.Vector3(0, 1, 0);
+const _ht = new THREE.Vector3(), _hc = new THREE.Vector3(), _cp = new THREE.Vector3(), _cm = new THREE.Vector3(), _cd = new THREE.Vector3(), _cq = new THREE.Quaternion(), _cq2 = new THREE.Quaternion();
+// 子物体里的一个点 → 躯干坐标（动画刚改完关节，世界矩阵还没更新，自己一级一级乘上去）
+const toTorso = (v, obj, torso) => { for (let o = obj; o && o !== torso; o = o.parent) { o.updateMatrix(); v.applyMatrix4(o.matrix); } return v; };
 function solveArmIK(sh, el, target, pole, w) {
   const S = sh.position;
   const d = _ia.subVectors(target, S);
@@ -460,12 +530,14 @@ function solveArmIK(sh, el, target, pole, w) {
 
 // ---------------- 构建角色 ----------------
 // opts：skin / hair（RGB）、skinColor / hairColor / brow、outfit：'denim' 主角的牛仔夹克 / 'agsu' 美军常服 / 'tee' 短袖 T 恤 / 'bare' 光膀子 /
-//   'shorts' 光膀子 + 蓝白扎染大裤衩 + 光脚（jigo）、
+//   'shorts' 光膀子 + 蓝白扎染大裤衩 + 光脚（jigo）/ 'sport' 黑色长袖运动衫（neptune，胸前印 print）、
 //   tee T 恤颜色、print 胸前印的字（'tuss' / 'coco'）、hairStyle 发型（见 HAIR）、glasses 眼镜（见 buildGlasses）、
 //   headScale 头型 [宽, 高, 深]、necklace 项链、earring 耳钉、mustache 小胡子、name 名牌、abs 腹肌、
 //   pose：'crotch' 站着 / 走路时两只手从裤腰前面插进裤裆里、expr 改几种表情的画法（{ grin: {...} }）、
 //   bubble 咧嘴大笑时头顶冒出来的那句话（'Hee-Haw!'）、face 脸型（见 FACE）、
-//   build 身材（见下面的 B；关节的位置、胳膊腿的长短不变，只改粗细和宽窄，所有动画、IK、挂在身上的东西都照样能用）
+//   build 身材（见下面的 B；关节的位置、胳膊腿的长短不变，只改粗细和宽窄，所有动画、IK、挂在身上的东西都照样能用）、
+//   pants 运动裤的颜色（不给就是黑色牛仔裤）、watch 左手腕上一块黑色电子表、hairGloss 头发的粗糙度（湿头发亮一点）、
+//   can 左手攥着一罐饮料；signature 'pour'：咧嘴笑（grin）的时候把那罐水举过头顶浇下去（neptune 那张照片）
 export function createCharacter(opts = {}) {
   const O = { skin: [212, 160, 126], skinColor: '#d09a7a', hair: [34, 30, 30], hairColor: '#16110f', brow: '#1a1411', outfit: 'denim', mustache: false, name: 'SMITH', ...opts };
   O.hairStyle = HAIR[O.hairStyle] || HAIR.crop;
@@ -474,12 +546,13 @@ export function createCharacter(opts = {}) {
   const B = { shoulder: 1, chest: 1, waist: 1, hip: 1, arm: 1, leg: 1, neck: 0, neckR: 1, belly: 0, ...O.build };
   const F = { ...FACE, ...O.face };
   const agsu = O.outfit === 'agsu', tee = O.outfit === 'tee', shorts = O.outfit === 'shorts', bare = O.outfit === 'bare' || shorts, casual = tee || bare;
+  const sport = O.outfit === 'sport'; // 长袖运动衫：袖子到手腕（像夹克那样），身上是针织布（像 T 恤那样）
   const root = new THREE.Group();
   root.name = opts.name ? `npc:${opts.name}` : 'player';
 
   // 材质（牛仔布只有牛仔夹克 / 牛仔裤用得上）
-  const denim = agsu || casual ? null : TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
-  const blackDenim = agsu || shorts ? null : TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
+  const denim = agsu || casual || sport ? null : TX.genDenim({ base: '#1d2840', light: '#33445f', S: 256, seed: 55 });
+  const blackDenim = agsu || shorts || O.pants ? null : TX.genDenim({ base: '#1b1c20', light: '#2c2e35', S: 256, seed: 56 });
   const skinMat = new THREE.MeshStandardMaterial({ color: O.skinColor, roughness: 0.55 });
   let sleeveMat, jeansMat;
   if (agsu) {
@@ -494,7 +567,10 @@ export function createCharacter(opts = {}) {
       const cot = TX.genCloth({ base: O.tee || '#e8e6e0', seed: 63, vertical: false, contrast: 0.25, slub: 0.35 }); cot.repeat.set(2, 2);
       sleeveMat = new THREE.MeshStandardMaterial({ map: cot, roughness: 0.92, side: THREE.DoubleSide });
     } else if (bare) sleeveMat = skinMat;
-    else {
+    else if (sport) {
+      const knit = TX.genCloth({ base: O.tee || '#1b1b1f', seed: 67, vertical: false, contrast: 0.3, slub: 0.3 }); knit.repeat.set(2, 3);
+      sleeveMat = new THREE.MeshStandardMaterial({ map: knit, roughness: 0.88 });
+    } else {
       sleeveMat = new THREE.MeshStandardMaterial({ map: denim.map, normalMap: denim.normalMap, roughness: 0.82 });
       sleeveMat.map.repeat.set(2, 2); sleeveMat.normalMap.repeat.set(2, 2);
     }
@@ -502,12 +578,16 @@ export function createCharacter(opts = {}) {
       // 大裤衩：两面都画（裤管是开口的圆筒，从下面能看见里面）
       const dye = TX.genTieDye(); dye.repeat.set(2, 1.4);
       jeansMat = new THREE.MeshStandardMaterial({ map: dye, roughness: 0.9, side: THREE.DoubleSide });
+    } else if (O.pants) {
+      // 运动裤（neptune）：灰色针织布
+      const knit = TX.genCloth({ base: O.pants, seed: 69, vertical: true, contrast: 0.3, slub: 0.35 }); knit.repeat.set(2, 3);
+      jeansMat = new THREE.MeshStandardMaterial({ map: knit, roughness: 0.92 });
     } else {
       jeansMat = new THREE.MeshStandardMaterial({ map: blackDenim.map, normalMap: blackDenim.normalMap, roughness: 0.85 });
       jeansMat.map.repeat.set(2, 3); jeansMat.normalMap.repeat.set(2, 3);
     }
   }
-  const hairMat = new THREE.MeshStandardMaterial({ color: O.hairColor, roughness: 0.58 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: O.hairColor, roughness: O.hairGloss ?? 0.58 });
   const shoeMat = new THREE.MeshStandardMaterial({ color: agsu ? '#3a2214' : '#5a5e66', roughness: agsu ? 0.28 : 0.75 });
   const soleMat = new THREE.MeshStandardMaterial({ color: agsu ? '#1a120c' : '#efefea', roughness: 0.7 });
   const btnMat = new THREE.MeshStandardMaterial({ color: agsu ? '#c9a23a' : '#b07a3e', roughness: 0.3, metalness: 0.9 });
@@ -556,7 +636,7 @@ export function createCharacter(opts = {}) {
   };
   const DZ = 0.6;
   let jacketMat;
-  if (tee) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genTee(vAt, rAt, DZ, { base: O.tee || '#e8e6e0', print: O.print }), roughness: 0.92 });
+  if (tee || sport) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genTee(vAt, rAt, DZ, { base: O.tee || (sport ? '#1b1b1f' : '#e8e6e0'), print: O.print }), roughness: 0.92 });
   else if (bare) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genBareTorso(vAt, rAt, DZ, { skin: O.skinColor, abs: O.abs }), roughness: 0.55 });
   else if (agsu) jacketMat = new THREE.MeshStandardMaterial({ map: TX.genServiceCoat(vAt, { name: O.name }), roughness: 0.9 });
   else jacketMat = new THREE.MeshStandardMaterial({ map: TX.genJacket(denim.canvas, vAt), normalMap: denim.normalMap, roughness: 0.82 });
@@ -615,6 +695,10 @@ export function createCharacter(opts = {}) {
       const chain = new THREE.MeshStandardMaterial({ color: '#5a5650', roughness: 0.35, metalness: 0.7 });
       addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 80, 0.0017, 5), chain, torso);
     }
+  } else if (sport) {
+    // 运动衫：下摆收一道边，圆领一圈罗纹
+    addMesh(new THREE.TorusGeometry(0.161 * B.waist, 0.008, 6, 40), sleeveMat, torso, 0, 0.008, 0, Math.PI / 2, 0, 0, 1, DZ, 1);
+    addMesh(new THREE.TorusGeometry(0.057, 0.008, 6, 28), sleeveMat, torso, 0, 0.552, 0.006, Math.PI / 2 - 0.12, 0, 0, 1, 0.9, 1);
   } else {
   // 下摆松紧带
   addMesh(new THREE.TorusGeometry(0.162 * B.waist, 0.012, 6, 40), sleeveMat, torso, 0, 0.012, 0, Math.PI / 2, 0, 0, 1, DZ, 1);
@@ -630,7 +714,7 @@ export function createCharacter(opts = {}) {
   addMesh(new THREE.TorusGeometry(0.066, 0.017, 8, 28, Math.PI * 1.35), sleeveMat, torso, 0, 0.548, -0.004, Math.PI / 2, 0, Math.PI * 0.825, 1, 0.82, 1);
   for (const s of [-1, 1]) addMesh(new RoundedBoxGeometry(0.055, 0.075, 0.012, 2, 0.005), sleeveMat, torso, s * 0.04, 0.5, 0.083, -0.35, s * 0.55, s * 0.5);
   }
-  if (!bare) addMesh(new THREE.CylinderGeometry(0.058, 0.06, 0.03, 16), tee ? sleeveMat : shirtMat, torso, 0, 0.545, 0.004);
+  if (!bare) addMesh(new THREE.CylinderGeometry(0.058, 0.06, 0.03, 16), tee || sport ? sleeveMat : shirtMat, torso, 0, 0.545, 0.004);
   if (agsu) {
     // 常服领口露出的卡其衬衫 + 棕色领带、肩章（少校的金色橡树叶）、领口的“U.S.”铜徽
     const vs = new THREE.Shape(); vs.moveTo(-0.045, 0); vs.lineTo(0.045, 0); vs.lineTo(0, -0.12); vs.closePath();
@@ -719,7 +803,7 @@ export function createCharacter(opts = {}) {
       el = grp(`el${side}`, sh, 0, -0.285, 0);
       addMesh(new THREE.CapsuleGeometry(0.043 * A, 0.19, 6, 14), sleeveMat, el, 0, -0.115, 0);
       addMesh(new THREE.CylinderGeometry(0.046 * A, 0.045 * A, 0.045, 14), sleeveMat, el, 0, -0.225, 0);
-      addMesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 10), btnMat, el, s * 0.035 * A, -0.225, 0.036 * A, Math.PI / 2, 0, 0);
+      if (!sport) addMesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 10), btnMat, el, s * 0.035 * A, -0.225, 0.036 * A, Math.PI / 2, 0, 0);
     }
     const wr = grp(`wr${side}`, el, 0, -0.255, 0);
     J[`wrist${side}`] = addMesh(new THREE.CylinderGeometry(0.03 * wa, 0.033 * wa, 0.04, 12), skinMat, wr, 0, 0.01, 0, 0, 0, 0, 1, 1, 0.8);
@@ -795,7 +879,35 @@ export function createCharacter(opts = {}) {
   // 头盔挂点（戴头盔彩蛋）
   const helmetSlot = new THREE.Group(); helmetSlot.position.set(0, 0.045, -0.005); helmetSlot.scale.setScalar(O.hairStyle.hat || 1); J.head.add(helmetSlot);
 
+  // neptune：左手腕上一块黑色电子表；左手攥着一罐饮料（照片上他正把它举过头顶往自己头上浇），浇的时候有一股水流、头上往下滴水
+  if (O.watch) {
+    const band = new THREE.MeshStandardMaterial({ color: '#141416', roughness: 0.5 });
+    const glass = new THREE.MeshStandardMaterial({ color: '#0b0c0e', roughness: 0.12, metalness: 0.3 });
+    addMesh(new THREE.TorusGeometry(0.031, 0.0055, 6, 22), band, J.wrL, 0, -0.004, 0, Math.PI / 2, 0, 0, 1.05, 0.84, 1);
+    addMesh(new RoundedBoxGeometry(0.011, 0.034, 0.03, 2, 0.004), band, J.wrL, 0.033, -0.004, 0);
+    addMesh(new THREE.BoxGeometry(0.002, 0.024, 0.021), glass, J.wrL, 0.039, -0.004, 0);
+  }
+  let can = null, stream = null;
+  const drips = [];
+  if (O.can) {
+    // 罐子贴着手心（手心朝 +z），罐身顺着手指的方向
+    can = new THREE.Group(); can.position.set(0, -0.058, 0.048); J.handL.add(can); J.can = can;
+    const alu = new THREE.MeshStandardMaterial({ color: '#c9ccd0', roughness: 0.28, metalness: 0.9 });
+    addMesh(new THREE.CylinderGeometry(0.033, 0.033, 0.098, 28, 1, true), new THREE.MeshStandardMaterial({ map: TX.toTex(paintCan(), { wrap: false }), roughness: 0.3, metalness: 0.55 }), can, 0, -0.001, 0);
+    const lathe = (pts) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), 28);
+    addMesh(lathe([[0.033, 0.048], [0.028, 0.057], [0.027, 0.061], [0.0001, 0.061]]), alu, can);
+    addMesh(lathe([[0.0001, -0.061], [0.026, -0.061], [0.031, -0.057], [0.033, -0.05]]), alu, can);
+    addMesh(new THREE.BoxGeometry(0.012, 0.0015, 0.022), alu, can, 0, 0.0625, -0.004);
+    addMesh(new THREE.CircleGeometry(0.0065, 14), new THREE.MeshBasicMaterial({ color: '#141414' }), can, 0, 0.0615, 0.012, -Math.PI / 2);
+    const wet = new THREE.MeshStandardMaterial({ color: '#dcedf6', roughness: 0.04, metalness: 0.1, transparent: true, opacity: 0.45, depthWrite: false, emissive: '#6a8898', emissiveIntensity: 0.12 });
+    const sg = new THREE.CylinderGeometry(0.0045, 0.008, 1, 8, 1, true); sg.translate(0, 0.5, 0);
+    stream = addMesh(sg, wet, J.torso); stream.visible = false;
+    const dg = new THREE.SphereGeometry(0.0055, 8, 6);
+    for (let i = 0; i < 9; i++) { const d = addMesh(dg, wet, J.torso); d.visible = false; drips.push(d); }
+  }
+
   root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  if (stream) for (const o of [stream, ...drips]) { o.castShadow = false; o.receiveShadow = false; o.raycast = () => {}; }
 
   // 咧嘴大笑时头顶冒出来的一句话（jigo 那张涂鸦：嘴边拉出一根线，旁边歪歪扭扭写着 Hee-Haw）
   let bubble = null;
@@ -816,7 +928,7 @@ export function createCharacter(opts = {}) {
 
   // ---------------- 动画状态 ----------------
   const st = {
-    phase: 0, t: 0, blinkT: 2, blinking: 0, expr: 'neutral', exprHold: 0, laughAt: -99, bubbleT: 0,
+    phase: 0, t: 0, blinkT: 2, blinking: 0, expr: 'neutral', exprHold: 0, laughAt: -99, bubbleT: 0, pourT: -1,
     w: { crouch: 0, sit: 0, sleep: 0, reach: 0, cheer: 0, stretch: 0, hold: 0, look: 1, walk: 0, run: 0 },
   };
   const joints = ['hips', 'torso', 'neck', 'head', 'shL', 'elL', 'wrL', 'shR', 'elR', 'wrR', 'hipL', 'knL', 'anL', 'hipR', 'knR', 'anR', 'fingL', 'fingR'];
@@ -833,13 +945,17 @@ export function createCharacter(opts = {}) {
     fm.map = faceTex(name, EXPR[name]);
     fm.needsUpdate = true;
     // 笑出声来：冒一句 Hee-Haw!（隔几秒才会再冒；api.onLaugh 返回 false 的场合不笑出声，比如结局的仪式上）
-    if (bubble && name === 'grin' && was !== 'grin' && st.t - st.laughAt > 5 && (!api.onLaugh || api.onLaugh() !== false)) {
-      st.laughAt = st.t; st.bubbleT = 1.8; bubble.visible = true;
+    // neptune 不笑：一"笑"就把手里那罐水举过头顶浇下去，哇地哭出来（浇完要缓一会儿才会再浇）
+    const pour = O.signature === 'pour';
+    if ((bubble || pour) && name === 'grin' && was !== 'grin' && st.t - st.laughAt > (pour ? 7 : 5) && (!api.onLaugh || api.onLaugh() !== false)) {
+      st.laughAt = st.t;
+      if (bubble) { st.bubbleT = 1.8; bubble.visible = true; }
+      if (pour) st.pourT = 0;
     }
   }
   function blinkTex(on) {
     const e = EXPR[st.expr];
-    if (e.eyes === 'closed' || e.eyes === 'smile' || e.eyes === 'squint') return;
+    if (e.eyes === 'closed' || e.eyes === 'smile' || e.eyes === 'squint' || e.eyes === 'squeeze') return;
     headMesh.material.map = on ? faceTex(`${st.expr}_blink`, { ...e, eyes: 'closed' }) : faceTex(st.expr, e);
   }
   // 预生成常用表情，避免运行时卡顿
@@ -875,7 +991,7 @@ export function createCharacter(opts = {}) {
     // --- 站立基础 ---
     tgt('shL', 0.03, 0, 0.1); tgt('shR', 0.03, 0, -0.1);
     tgt('elL', -0.14, 0, 0); tgt('elR', -0.14, 0, 0);
-    tgt('fingL', 0.35, 0, 0); tgt('fingR', 0.35, 0, 0);
+    tgt('fingL', can ? 1.0 : 0.35, 0, 0); tgt('fingR', 0.35, 0, 0); // 手里攥着罐子（neptune）：左手手指弯过去握住它
     addp('torso', 0.012 * Math.sin(t * 1.7));
     addp('neck', -0.01 * Math.sin(t * 1.7));
     addp('shL', 0.02 * Math.sin(t * 1.7 + 0.5)); addp('shR', 0.02 * Math.sin(t * 1.7 + 0.5));
@@ -1000,6 +1116,12 @@ export function createCharacter(opts = {}) {
     addp('head', lpit * 0.6, lyaw * 0.65);
     if (W.sit < 0.5 && wk < 0.2) addp('head', 0.02 * Math.sin(t * 0.7), 0.05 * Math.sin(t * 0.37));
 
+    // 边浇边哭：肩膀一抽一抽的
+    if (can && st.pourT > 0.5) {
+      const sob = (1 - smoothstep(2.8, 3.4, st.pourT)) * (0.6 + 0.4 * Math.sin(t * 2.3));
+      addp('torso', 0.018 * Math.sin(t * 15) * sob, 0, 0.01 * Math.sin(t * 7.5) * sob);
+      addp('head', -0.06 * sob + 0.03 * Math.sin(t * 15 + 1) * sob);
+    }
     // 应用
     J.hips.position.y = hipsY;
     J.hips.position.z = hipsZoff;
@@ -1040,6 +1162,47 @@ export function createCharacter(opts = {}) {
         if (ik.wr) J[`wr${side}`].quaternion.slerp(_iq.setFromEuler(_ieu.set(ik.wr[0], ik.wr[1], ik.wr[2])), ik.w);
         if (ik.fing !== undefined) J[`fing${side}`].rotation.x = lerp(J[`fing${side}`].rotation.x, ik.fing, ik.w);
       }
+    }
+    // 把罐子里的水举过头顶浇下去（neptune）：举手 → 罐口慢慢对准头顶 → 一股水浇下来、顺着头发往下滴 → 放下手
+    //   坐着、趴着、蹲着、跑着、失重、欢呼、立正的时候不浇（只哭）
+    if (can) {
+      if (st.pourT >= 0) { st.pourT += dt; if (st.pourT > 3.6) st.pourT = -1; }
+      const pt = st.pourT;
+      const allow = (1 - W.sit) * (1 - W.sleep) * (1 - W.float) * (1 - W.run) * (1 - W.crouch) * (1 - W.cheer) * (1 - W.stretch) * (1 - W.attention);
+      const w = pt < 0 ? 0 : smoothstep(0, 0.55, pt) * (1 - smoothstep(2.9, 3.5, pt)) * allow;
+      let flow = 0;
+      if (w > 0.001) {
+        _pk.set(0.12 * B.shoulder, 0.93 + B.neck, 0.08);
+        solveArmIK(J.shL, J.elL, _pk, POUR_POLE, w);
+        toTorso(_ht.set(0, 0.1, 0.012), J.head, J.torso); // 头顶（躯干坐标）
+        toTorso(_cp.copy(can.position), can.parent, J.torso); // 罐子
+        _cd.subVectors(_ht, _cp).normalize();
+        _cq.identity();
+        for (let o = can.parent; o !== J.torso; o = o.parent) _cq.premultiply(o.quaternion);
+        _cq.invert().multiply(_cq2.setFromUnitVectors(_Y, _cd));
+        can.quaternion.identity().slerp(_cq, smoothstep(0.45, 0.85, pt) * w);
+        flow = smoothstep(0.75, 0.9, pt) * (1 - smoothstep(2.5, 2.75, pt)) * smoothstep(0.85, 0.98, w);
+        if (flow > 0.01) {
+          toTorso(_cm.set(0, 0.062, 0.012), can, J.torso); // 罐口
+          _cd.subVectors(_ht, _cm);
+          const L = _cd.length(), wob = 1 + Math.sin(st.t * 43) * 0.15;
+          stream.position.copy(_cm);
+          stream.quaternion.setFromUnitVectors(_Y, _cd.normalize());
+          stream.scale.set(flow * wob, L + 0.015, flow * wob);
+        }
+      } else can.quaternion.identity();
+      stream.visible = flow > 0.01;
+      // 水顺着头发往下滴：一圈水珠从头的四周往下掉，前面几颗顺着脸淌下去
+      const dripOn = pt > 0.95 && pt < 3.4 && allow > 0.5;
+      if (dripOn) toTorso(_hc.set(0, 0.01, 0.006), J.head, J.torso);
+      drips.forEach((d, i) => {
+        const cyc = 0.36 + (i % 3) * 0.05, ph = ((st.t + i * 0.137) % cyc) / cyc;
+        d.visible = dripOn && ph > 0.04;
+        if (!d.visible) return;
+        const a = i * 2.39 + 0.4;
+        d.position.set(_hc.x + Math.sin(a) * 0.092, _hc.y - 0.015 - ph * ph * 0.3, _hc.z + Math.cos(a) * 0.116);
+        d.scale.set(0.8, 1 + ph * 1.6, 0.8);
+      });
     }
     // 眨眼
     st.blinkT -= dt;
@@ -1106,6 +1269,21 @@ export function createCharacter(opts = {}) {
 // 两个人的骨架是同一套（关节名字、位置都一样），挂在哪个关节、局部位置不变
 export function moveAttachments(from, to) {
   for (const [name, obj] of from.attachments()) (name === 'helmetSlot' ? to.helmetSlot : to.J[name]).add(obj);
+}
+
+// neptune 手里那罐饮料的罐身：深海蓝，中间一道白浪，上下两道细银线（不是哪个真牌子）
+function paintCan() {
+  const W = 256, H = 128, c = TX.makeCanvas(W, H), ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#1d5aa3'); g.addColorStop(0.55, '#123d74'); g.addColorStop(1, '#0c2b55');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#eef3f6';
+  ctx.beginPath(); ctx.moveTo(0, 70);
+  for (let x = 0; x <= W; x += 4) ctx.lineTo(x, 66 + Math.sin((x / W) * Math.PI * 6) * 9);
+  for (let x = W; x >= 0; x -= 4) ctx.lineTo(x, 80 + Math.sin((x / W) * Math.PI * 6 + 0.6) * 7);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#c9ccd0'; ctx.fillRect(0, 12, W, 3); ctx.fillRect(0, H - 15, W, 3);
+  return c;
 }
 
 // 漫画式对话气泡：白底黑框、歪歪扭扭的手写字，左下角一根小尾巴指向嘴

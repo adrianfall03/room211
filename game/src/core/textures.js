@@ -1400,6 +1400,22 @@ export function genTee(vAt, rAt, DZ, { base = '#e8e6e0', print = null } = {}) {
       px.fillStyle = '#151515'; px.textAlign = 'center'; px.textBaseline = 'middle';
       at2(0.3, 0.5, (x) => { x.font = '800 62px "Helvetica Neue", Arial, sans-serif'; x.letterSpacing = '6px'; x.fillText('COCO', 0, 0); });
     });
+  } else if (print === 'trident') {
+    // neptune 的黑色长袖运动衫：左胸下面一块白色印花——一把三叉戟，底下一行小字
+    ink((px) => {
+      const { at: at2 } = torsoPainter(px, W, H, vAt, rAt);
+      px.fillStyle = '#ecebe6'; px.strokeStyle = '#ecebe6'; px.lineCap = 'round'; px.lineJoin = 'round';
+      at2(0.3, 0.565, (x) => {
+        x.lineWidth = 7;
+        x.beginPath(); x.moveTo(0, 46); x.lineTo(0, -40); x.stroke(); // 杆
+        x.beginPath(); x.moveTo(-26, -40); x.quadraticCurveTo(-26, -8, 0, -8); x.quadraticCurveTo(26, -8, 26, -40); x.stroke(); // 两边的叉
+        for (const [tx, ty] of [[-26, -40], [0, -48], [26, -40]]) { x.beginPath(); x.moveTo(tx - 8, ty + 8); x.lineTo(tx, ty - 6); x.lineTo(tx + 8, ty + 8); x.closePath(); x.fill(); }
+        x.fillRect(-14, 10, 28, 6);
+        x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.font = 'italic 800 19px "Helvetica Neue", Arial, sans-serif'; x.letterSpacing = '3px';
+        x.fillText('NEPTUNE', 0, 66);
+      });
+    });
   }
   return toTex(c, { wrap: false });
 }

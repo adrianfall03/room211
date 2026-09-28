@@ -303,6 +303,38 @@ export class Audio {
   }
   // jigo 的笑声（Hee-Haw!）：学驴叫——吸气时尖着嗓子"嘿——"，呼气时粗着嗓子"哈——"，来两遍。
   // 锯齿波过几个共振峰带通（"i" 和 "ɔ" 两个元音），"哈"再加一点颤动，听着更糙
+  // neptune 的招牌动作：一罐水"哗"地浇在头上，接着抽两下鼻子，"呜——哇——"地哭出来
+  sob() {
+    const c = this.ctx; if (!c) return;
+    // 浇水：先是罐口倒出来的一股细水，落到头上变成哗啦啦的一片
+    this.noise({ dur: 1.9, gain: 0.12, type: 'bandpass', freq: 2600, freq2: 1700, Q: 0.5, delay: 0.75, curve: [[0.08, 1], [0.8, 0.85], [1, 0]] });
+    this.noise({ dur: 1.7, gain: 0.07, type: 'lowpass', freq: 700, delay: 0.85, curve: [[0.1, 1], [0.7, 0.8], [1, 0]] });
+    const voice = (delay, f0, f1, dur, formants, gain, trem) => {
+      const t0 = this.t + delay;
+      const o = c.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t0); o.frequency.linearRampToValueAtTime(f1, t0 + dur);
+      // 哭腔：音高一抖一抖的
+      const vib = c.createOscillator(), vg = c.createGain(); vib.frequency.value = 7.5; vg.gain.value = f0 * 0.035; vib.connect(vg).connect(o.frequency);
+      const out = c.createGain();
+      out.gain.setValueAtTime(0.0001, t0); out.gain.exponentialRampToValueAtTime(gain, t0 + 0.08); out.gain.setValueAtTime(gain * 0.8, t0 + dur * 0.7); out.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      const am = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+      am.gain.value = 0.7; lfo.frequency.value = trem; lg.gain.value = 0.3; lfo.connect(lg).connect(am.gain);
+      o.connect(am);
+      for (const [f, q, g] of formants) {
+        const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+        const gg = c.createGain(); gg.gain.value = g;
+        am.connect(bp).connect(gg).connect(out);
+      }
+      this._out(out, true);
+      for (const x of [o, vib, lfo]) { x.start(t0); x.stop(t0 + dur + 0.05); }
+    };
+    // 抽鼻子（吸气的气声）
+    for (const d of [0.25, 0.5]) this.noise({ dur: 0.16, gain: 0.05, type: 'highpass', freq: 2800, delay: d });
+    const UU = [[340, 5, 1], [760, 6, 0.45], [2300, 10, 0.1]], WA = [[720, 5, 1], [1150, 6, 0.75], [2600, 10, 0.2]];
+    voice(0.75, 470, 520, 0.45, UU, 0.22, 5);
+    voice(1.2, 560, 430, 1.2, WA, 0.3, 6.5);
+    voice(2.55, 500, 380, 0.9, WA, 0.2, 7);
+  }
   heeHaw() {
     const c = this.ctx; if (!c) return;
     const voice = (delay, f0, f1, dur, formants, gain, rough) => {
