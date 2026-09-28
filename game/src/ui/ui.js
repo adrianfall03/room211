@@ -67,10 +67,11 @@ export class UI {
 
   // ---------- 标题 ----------
   // mode：'game' 游戏模式（每一间都有任务，完成了才走得出去）/ 'view' 鉴赏模式（没有任务，章节随便选）
-  // 标题：只有"游戏模式""鉴赏模式""动画教程"三个按钮；前两个都从第一章开始，
+  // 标题："游戏模式""鉴赏模式"都从第一章开始；
   // 游戏模式如果上次玩到了后面的章节（lastChapter > 1），先问一句要不要从那一章接着玩；
   // 动画教程：挑一章（或七章连播），看主角自己把通关步骤走一遍（game/tutorial.js）
-  showTitle({ onStart, lastChapter = 1 }) {
+  // 更换人物：左右切换，画面里站着的那个人跟着换（onHero），选好了点"就他了"回到主菜单
+  showTitle({ onStart, lastChapter = 1, heroes = [], hero = null, onHero = null }) {
     const t = h('div');
     t.id = 'title';
     t.innerHTML = `
@@ -80,6 +81,7 @@ export class UI {
           <button data-a="game">游戏模式</button>
           <button data-a="view">鉴赏模式</button>
           <button data-a="tut">动画教程</button>
+          ${heroes.length > 1 ? '<button data-a="hero">更换人物<small class="t-cur"></small></button>' : ''}
         </div>
         <div class="t-menu t-resume hidden">
           <p>上次玩到${chapterLabel(lastChapter)}</p>
@@ -93,12 +95,35 @@ export class UI {
           <button data-a="tutAll">七章连播</button>
           <button data-a="back" class="t-back">返回</button>
         </div>
+        <div class="t-menu t-hero hidden">
+          <p>选择人物</p>
+          <div class="t-pick">
+            <button data-a="prev" class="t-arrow" aria-label="上一个">‹</button>
+            <div class="t-pick-name"><b></b><span></span></div>
+            <button data-a="next" class="t-arrow" aria-label="下一个">›</button>
+          </div>
+          <div class="t-dots"></div>
+          <button data-a="heroOk">就他了</button>
+        </div>
       </div>`;
     document.body.appendChild(t);
     this.titleEl = t;
     const menus = [...t.querySelectorAll('.t-menu')];
-    const [main, resume, tut] = menus;
+    const [main] = menus, resume = $('.t-resume', t), tut = $('.t-tut', t), pick = $('.t-hero', t);
     const show = (el) => menus.forEach((m) => m.classList.toggle('hidden', m !== el));
+    let hi = Math.max(0, heroes.findIndex((x) => x.key === hero));
+    const dots = $('.t-dots', t);
+    dots.innerHTML = heroes.map(() => '<i></i>').join('');
+    const paintHero = () => {
+      const x = heroes[hi];
+      if (!x) return;
+      $('.t-pick-name b', t).textContent = x.name;
+      $('.t-pick-name span', t).textContent = x.desc;
+      const cur = $('.t-cur', t); if (cur) cur.textContent = x.name;
+      dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === hi));
+    };
+    const step = (d) => { hi = (hi + d + heroes.length) % heroes.length; paintHero(); onHero && onHero(heroes[hi].key); };
+    paintHero();
     const act = {
       game: () => { if (lastChapter > 1) show(resume); else onStart({ mode: 'game', chapter: 1 }); },
       view: () => onStart({ mode: 'view', chapter: 1 }),
@@ -108,14 +133,27 @@ export class UI {
       resume: () => onStart({ mode: 'game', chapter: lastChapter }),
       restart: () => onStart({ mode: 'game', chapter: 1 }),
       back: () => show(main),
+      hero: () => show(pick),
+      prev: () => step(-1),
+      next: () => step(1),
+      heroOk: () => show(main),
     };
     t.querySelectorAll('button[data-a]').forEach((b) => b.addEventListener('click', () => {
       if (!this.titleEl) return; // 已经点过开始了
       this.audio.click();
       act[b.dataset.a](b);
     }));
+    // 选人物时：← → 换人，Enter / Esc 选好
+    this._titleKeys = (e) => {
+      if (!this.titleEl || pick.classList.contains('hidden')) return;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') { this.audio.click(); step(-1); }
+      else if (e.code === 'ArrowRight' || e.code === 'KeyD') { this.audio.click(); step(1); }
+      else if (e.code === 'Enter' || e.code === 'Escape') { e.preventDefault(); this.audio.click(); show(main); }
+    };
+    window.addEventListener('keydown', this._titleKeys);
   }
   hideTitle() {
+    if (this._titleKeys) { window.removeEventListener('keydown', this._titleKeys); this._titleKeys = null; }
     if (!this.titleEl) return;
     this.titleEl.style.transition = 'opacity 0.6s';
     this.titleEl.style.opacity = '0';

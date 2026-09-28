@@ -25,7 +25,8 @@ import { buildFrostTextures, decorateFrost } from './world/frost.js';
 import { buildSpaceTextures, decorateSpace, buildSpaceOutside } from './world/space.js';
 import { buildFinale } from './world/finale.js';
 import { GradePass, CSS_GRADES } from './core/grade.js';
-import { createCharacter } from './player/character.js';
+import { createCharacter, moveAttachments } from './player/character.js';
+import { HEROES, heroOf } from './player/heroes.js';
 import { Controller } from './player/controller.js';
 import { UI } from './ui/ui.js';
 import { Game } from './game/game.js';
@@ -36,7 +37,7 @@ const faceUrl = import.meta.env.MODE === 'production' ? null
 
 // ---------- 设置（本地记忆，失败时用默认值）----------
 const isMobile = matchMedia('(pointer: coarse)').matches;
-const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game' };
+const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game', hero: 'bingo' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}')); } catch (e) { /* 忽略 */ }
 // 存档升级：原来的第四章（太空舱）挪到了第五章，中间插进来一章「冰封 211」——以前打到第四章的，第四、五章都算解锁
 if ((settings.v || 1) < 2) { if (settings.unlocked >= 4) settings.unlocked += 1; if (settings.chapter >= 4) settings.chapter += 1; settings.v = 2; }
@@ -336,7 +337,8 @@ async function boot() {
 
   ui.loading(0.82, '照着照片捏主角……');
   await nextFrame();
-  ch = createCharacter();
+  settings.hero = heroOf(settings.hero).key;
+  ch = createCharacter(heroOf(settings.hero).look);
   scene.add(ch.root);
 
   const input = new Input(gfx.canvas);
@@ -349,7 +351,32 @@ async function boot() {
   gfx.setQuality(settings.quality);
   audio.setVolume(settings.vol);
 
-  const game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings, buildWorld, buildPast });
+  // 更换人物：标题画面上边选边换，游戏里在暂停菜单换——新捏一个人，站到旧的那个人的位置上，
+  // 身上后来挂的东西（头盔、毛线帽、围巾……）搬过去，表情、手电照旧，旧的那个人释放掉
+  let game = null;
+  const setHero = (key) => {
+    const hero = heroOf(key);
+    settings.hero = hero.key; saveSettings();
+    const old = ch;
+    const next = createCharacter(hero.look);
+    moveAttachments(old, next);
+    next.root.position.copy(old.root.position);
+    next.root.quaternion.copy(old.root.quaternion);
+    next.root.visible = old.root.visible;
+    next.torch.visible = old.torch.visible;
+    next.setFirstPerson(!old.J.neck.visible);
+    next.onLaugh = old.onLaugh;
+    (old.root.parent || scene).add(next.root);
+    old.root.removeFromParent();
+    ch = next; ctrl.ch = next; game.ch = next;
+    next.setExpression(old.expression);
+    next.update(0.5, { speed: 0 }); // 先摆好站姿（暂停中换人时，画面上补画的那一帧不是木头人）
+    old.dispose();
+    gfx.dirty = true;
+    return next;
+  };
+
+  game = new Game({ gfx, scene, camera, refs, ch, ctrl, input, ui, audio, collision, faceImg, settings, saveSettings, buildWorld, buildPast, setHero, heroes: HEROES });
   game.enterTitle();
   game.update(0.016);
 
@@ -371,6 +398,8 @@ async function boot() {
   // 名字、画质不放在标题上了：名字沿用以前存下的（没有就叫"我"），画质在暂停菜单里改
   ui.showTitle({
     lastChapter: Math.min(settings.chapter || 1, settings.unlocked || 1),
+    heroes: HEROES, hero: settings.hero,
+    onHero: (key) => game.previewHero(key),
     onStart: ({ mode, chapter, all }) => {
       audio.init();
       // 动画教程：不改存档里的模式 / 章节
@@ -418,7 +447,7 @@ async function boot() {
   // 调试接口（方便测试）
   // ff(秒)：不渲染、只推进游戏逻辑（自动化测试时用，软件渲染一帧要好几秒）
   const ff = async (sec) => { for (let i = 0; i < sec / 0.05; i++) { game.update(0.05); if (i % 10 === 9) await new Promise((r) => setTimeout(r, 0)); } };
-  window.__game = { game, gfx, scene, camera, get refs() { return game.refs; }, ch, ctrl, input, ui, audio, THREE, ff, render: () => { game.beforeRender(); gfx.render(0.016, game.time); } };
+  window.__game = { game, gfx, scene, camera, get refs() { return game.refs; }, get ch() { return game.ch; }, setHero, ctrl, input, ui, audio, THREE, ff, render: () => { game.beforeRender(); gfx.render(0.016, game.time); } };
 }
 
 boot().catch((e) => {

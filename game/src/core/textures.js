@@ -1404,7 +1404,8 @@ export function genTee(vAt, rAt, DZ, { base = '#e8e6e0', print = null } = {}) {
   return toTex(c, { wrap: false });
 }
 
-export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e' } = {}) {
+// abs：瘦出来的一点腹肌（jigo 那张涂鸦上画了三道横线）
+export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e', abs = false } = {}) {
   const W = 1024, H = 1024;
   const c = makeCanvas(W, H), ctx = c.getContext('2d');
   const { fbm } = createNoise(66);
@@ -1432,8 +1433,62 @@ export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e' } = {}) {
   soft(0.42, 0.5, 10, 80, 'rgba(90,45,30,0.10)');
   soft(0.22, 0.5, 6, 110, 'rgba(90,45,30,0.08)');
   soft(0.105, 0.5, 6, 5, 'rgba(70,32,22,0.6)');
+  if (abs) {
+    // 腹直肌：三道横着的腱划把它分成六块，每块中间略亮；两侧的腹外斜肌往胯骨收出一道斜线
+    for (const h of [0.3, 0.245, 0.19]) soft(h, 0.5, 34, 5, 'rgba(90,45,30,0.16)');
+    for (const s of [-1, 1]) {
+      for (const h of [0.325, 0.272, 0.217, 0.16]) soft(h, 0.5 + s * 0.026, 22, 20, 'rgba(255,228,205,0.09)');
+      soft(0.24, 0.5 + s * 0.058, 8, 90, 'rgba(90,45,30,0.10)');
+      at(0.085, 0.5 + s * 0.05, (x) => {
+        x.strokeStyle = 'rgba(90,45,30,0.07)'; x.lineWidth = 12; x.lineCap = 'round';
+        x.beginPath(); x.moveTo(s * 18, -70); x.quadraticCurveTo(s * 4, -20, -s * 22, 25); x.stroke();
+      });
+    }
+  }
   // 背后：脊柱那道沟、两块肩胛骨
   for (const u of [0, 1]) soft(0.3, u, 12, 200, 'rgba(90,45,30,0.10)');
   for (const s of [-1, 1]) soft(0.43, (s < 0 ? 0 : 1) + s * -0.07, 60, 60, 'rgba(255,225,200,0.06)');
   return toTex(c, { wrap: false });
+}
+
+// 蓝白扎染大裤衩（照片）：白底上一团一团晕开的湖蓝、靛蓝，边缘是水洗过的浅蓝，布纹细细的；
+// 再撒几颗深蓝的小星星（涂鸦里裤衩上画的是星星）。四方连续，可以随便平铺
+export function genTieDye({ S = 512, seed = 88, stars = 3 } = {}) {
+  const c = makeCanvas(S, S), ctx = c.getContext('2d');
+  const { fbm } = createNoise(seed);
+  const { fbm: fbm2 } = createNoise(seed + 7);
+  const white = [236, 238, 236], wash = [150, 198, 214], dye = [52, 150, 184], deep = [28, 92, 138];
+  const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  pixels(c, (x, y, d, i) => {
+    const u = x / S, v = y / S;
+    // 两层噪声叠出扎染的大色团，再用细噪声把边缘"洇"开
+    const n = fbm(u * 3 + fbm2(u * 6, v * 6, 2, 6, 6) * 0.6, v * 3, 5, 3, 3);
+    const fine = fbm2(u * 24, v * 24, 3, 24, 24);
+    const k = n + (fine - 0.5) * 0.12;
+    let col = white;
+    col = mix(col, wash, smoothstep(0.43, 0.5, k));
+    col = mix(col, dye, smoothstep(0.49, 0.56, k));
+    col = mix(col, deep, smoothstep(0.6, 0.7, k) * 0.8);
+    // 白底里也零星溅着几点浅蓝
+    const sp = fbm2(u * 40 + 3, v * 40, 2, 40, 40);
+    col = mix(col, wash, smoothstep(0.66, 0.72, sp) * (1 - smoothstep(0.45, 0.5, k)) * 0.7);
+    // 布纹：细细的经纬线 + 一点起伏
+    const weave = ((x % 3) === 0 ? -5 : 0) + ((y % 3) === 0 ? -4 : 0) + (fine - 0.5) * 10;
+    d[i] = clamp(col[0] + weave, 0, 255); d[i + 1] = clamp(col[1] + weave, 0, 255); d[i + 2] = clamp(col[2] + weave, 0, 255); d[i + 3] = 255;
+  });
+  // 小星星：五角星、米字星，墨色有点晕
+  const rnd = mulberry32(seed + 3);
+  ctx.fillStyle = 'rgba(22,30,58,0.9)'; ctx.strokeStyle = 'rgba(22,30,58,0.9)'; ctx.lineCap = 'round';
+  for (let k = 0; k < stars; k++) {
+    const cx = S * (0.12 + 0.76 * rnd()), cy = S * (0.12 + 0.76 * rnd()), r = S * (0.035 + rnd() * 0.012), a0 = rnd() * 1.2;
+    if (k % 3 === 2) {
+      ctx.lineWidth = r * 0.22;
+      for (let j = 0; j < 4; j++) { const a = a0 + (j * Math.PI) / 4; ctx.beginPath(); ctx.moveTo(cx - Math.cos(a) * r, cy - Math.sin(a) * r); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke(); }
+    } else {
+      ctx.beginPath();
+      for (let j = 0; j < 10; j++) { const a = a0 - Math.PI / 2 + (j * Math.PI) / 5, rr = j % 2 ? r * 0.42 : r; ctx.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); }
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  return toTex(c);
 }
