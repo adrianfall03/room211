@@ -1413,7 +1413,7 @@ export function genTee(vAt, rAt, DZ, { base = '#e8e6e0', print = null } = {}) {
         x.fillRect(-14, 10, 28, 6);
         x.textAlign = 'center'; x.textBaseline = 'middle';
         x.font = 'italic 800 19px "Helvetica Neue", Arial, sans-serif'; x.letterSpacing = '3px';
-        x.fillText('NEPTUNE', 0, 66);
+        x.fillText('ALIN', 0, 66);
       });
     });
   }

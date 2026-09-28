@@ -3,7 +3,7 @@
 export const HEROES = [
   {
     key: 'bingo',
-    name: 'bingo',
+    name: '阿宵',
     look: {},
   },
   {
@@ -12,7 +12,7 @@ export const HEROES = [
     //   照片：光着膀子光着脚站在宿舍里，皮肤晒得偏黑（小麦色），稍微有点胖、有点小肚子，
     //         蓝白扎染的大裤衩松松垮垮，两只手从裤腰前面插进裤裆里
     key: 'jigo',
-    name: 'jigo',
+    name: '大乐',
     look: {
       outfit: 'shorts', pose: 'crotch', bubble: 'Hee-Haw!',
       skin: [200, 148, 112], skinColor: '#c79270', hair: [18, 15, 14], hairColor: '#120e0c', brow: '#15100d',
@@ -30,7 +30,7 @@ export const HEROES = [
     // 照着一张黑白照片捏的：瘦瘦的男生，刚把一罐水举过头顶往自己头上浇，短短的刺猬头湿成一撮一撮往上支棱，
     //   眼睛使劲闭着、眉头拧成一团，嘴张得老大哇哇地哭；黑色长袖运动衫，胸口一块白色印花，左手腕上一块黑色电子表
     key: 'neptune',
-    name: 'neptune',
+    name: '阿淋',
     laugh: 'sob', // 招牌动作的声音（见 game._onHeroLaugh）
     look: {
       outfit: 'sport', print: 'trident', pants: '#5d6068', watch: true, can: true, signature: 'pour',
