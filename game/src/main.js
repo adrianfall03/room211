@@ -37,7 +37,7 @@ const faceUrl = import.meta.env.MODE === 'production' ? null
 
 // ---------- 设置（本地记忆，失败时用默认值）----------
 const isMobile = matchMedia('(pointer: coarse)').matches;
-const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game', hero: 'denim' };
+const settings = { sens: 1, vol: 0.8, quality: isMobile ? 'low' : 'high', invertY: false, name: '', mode: 'game', hero: 'bingo' };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('dorm404') || '{}')); } catch (e) { /* 忽略 */ }
 // 存档升级：原来的第四章（太空舱）挪到了第五章，中间插进来一章「冰封 211」——以前打到第四章的，第四、五章都算解锁
 if ((settings.v || 1) < 2) { if (settings.unlocked >= 4) settings.unlocked += 1; if (settings.chapter >= 4) settings.chapter += 1; settings.v = 2; }

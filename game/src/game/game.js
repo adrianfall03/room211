@@ -167,7 +167,7 @@ export class Game {
     this.setHero(key);
     this.ctrl.setMode(this.ctrl.mode);
   }
-  // Hee-Haw 笑出声来：标题画面、游戏里、出门的时候才笑；结局的仪式、彩蛋的过场里不笑
+  // jigo 笑出声来（Hee-Haw!）：标题画面、游戏里、出门的时候才笑；结局的仪式、彩蛋的过场里不笑
   _onHeroLaugh() {
     if (!['title', 'play', 'outro', 'cut'].includes(this.state)) return false;
     this.audio.heeHaw();

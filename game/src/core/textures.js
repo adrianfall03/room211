@@ -1404,7 +1404,7 @@ export function genTee(vAt, rAt, DZ, { base = '#e8e6e0', print = null } = {}) {
   return toTex(c, { wrap: false });
 }
 
-// abs：瘦出来的一点腹肌（Hee-Haw 那张涂鸦上画了三道横线）
+// abs：瘦出来的一点腹肌（jigo 那张涂鸦上画了三道横线）
 export function genBareTorso(vAt, rAt, DZ, { skin = '#c8906e', abs = false } = {}) {
   const W = 1024, H = 1024;
   const c = makeCanvas(W, H), ctx = c.getContext('2d');

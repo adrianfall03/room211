@@ -301,7 +301,7 @@ export class Audio {
     g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.05, t0 + 0.05); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.95);
     o.connect(f).connect(g); this._out(g); o.start(t0); lfo.start(t0); o.stop(t0 + 1); lfo.stop(t0 + 1);
   }
-  // Hee-Haw 的笑声：学驴叫——吸气时尖着嗓子"嘿——"，呼气时粗着嗓子"哈——"，来两遍。
+  // jigo 的笑声（Hee-Haw!）：学驴叫——吸气时尖着嗓子"嘿——"，呼气时粗着嗓子"哈——"，来两遍。
   // 锯齿波过几个共振峰带通（"i" 和 "ɔ" 两个元音），"哈"再加一点颤动，听着更糙
   heeHaw() {
     const c = this.ctx; if (!c) return;
