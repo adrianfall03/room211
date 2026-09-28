@@ -1,6 +1,6 @@
 // 主角：根据照片"捏"出来的程序化 3D 人物 + 程序化骨骼动画
 // 特征：瘦高、短碎发（两侧推短渐变）、浓眉、笑起来眼睛眯成月牙+露齿大笑、深色牛仔夹克、黑色牛仔裤、灰白运动鞋
-// 可以换的另一个主角（jigo，见 heroes.js）也是这里捏的：outfit 'shorts' 光膀子 + 扎染大裤衩 + 光脚，pose 'pockets' 两手插在裤腰里
+// 可以换的另一个主角（jigo，见 heroes.js）也是这里捏的：outfit 'shorts' 光膀子 + 扎染大裤衩 + 光脚，pose 'crotch' 两只手从裤腰前面插进裤裆里
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -437,9 +437,10 @@ const IK_L1 = 0.285, IK_L2 = 0.31;
 const IK_DOWN = new THREE.Vector3(0, -1, 0), IK_POLE_R = new THREE.Vector3(-1, -0.2, -0.4).normalize(), IK_POLE_L = new THREE.Vector3(1, -0.2, -0.4).normalize();
 const _ia = new THREE.Vector3(), _ib = new THREE.Vector3(), _ic = new THREE.Vector3(), _id = new THREE.Vector3(), _ie = new THREE.Vector3();
 const _iq = new THREE.Quaternion(), _iq2 = new THREE.Quaternion(), _iq3 = new THREE.Quaternion(), _ieu = new THREE.Euler(), _pk = new THREE.Vector3();
-// 手插裤兜：手肘往外、稍微往前撑，小臂从胯两侧斜着插进裤兜口（这组数是在躯干坐标系里搜出来的：小臂整段在身体外面、手腕卡在兜口、手心和指尖都在裤子里）
-const POCKET_POLE_R = new THREE.Vector3(-0.941, -0.282, 0.188).normalize(), POCKET_POLE_L = new THREE.Vector3(0.941, -0.282, 0.188).normalize();
-const _pq = new THREE.Quaternion(), _ax = new THREE.Vector3(), _wq = new THREE.Quaternion(), _wd = new THREE.Vector3();
+// 两只手插进裤裆（照片上那个姿势）：手肘往外、稍微往前撑，小臂斜着搭过肚子前面，手腕从裤腰正前方插进去。
+// 这组数是在躯干坐标系里数值搜出来的：小臂整段在身体（连小肚子）外面、手腕卡在裤腰上、手心和指尖都在裤子里
+const TUCK_POLE_R = new THREE.Vector3(-0.981, -0.163, 0.109).normalize(), TUCK_POLE_L = new THREE.Vector3(0.981, -0.163, 0.109).normalize();
+const _pq = new THREE.Quaternion(), _wq = new THREE.Quaternion(), _wd = new THREE.Vector3();
 function solveArmIK(sh, el, target, pole, w) {
   const S = sh.position;
   const d = _ia.subVectors(target, S);
@@ -462,7 +463,7 @@ function solveArmIK(sh, el, target, pole, w) {
 //   'shorts' 光膀子 + 蓝白扎染大裤衩 + 光脚（jigo）、
 //   tee T 恤颜色、print 胸前印的字（'tuss' / 'coco'）、hairStyle 发型（见 HAIR）、glasses 眼镜（见 buildGlasses）、
 //   headScale 头型 [宽, 高, 深]、necklace 项链、earring 耳钉、mustache 小胡子、name 名牌、abs 腹肌、
-//   pose：'pockets' 站着 / 走路时两只手插在裤腰里、expr 改几种表情的画法（{ grin: {...} }）、
+//   pose：'crotch' 站着 / 走路时两只手从裤腰前面插进裤裆里、expr 改几种表情的画法（{ grin: {...} }）、
 //   bubble 咧嘴大笑时头顶冒出来的那句话（'Hee-Haw!'）、face 脸型（见 FACE）、
 //   build 身材（见下面的 B；关节的位置、胳膊腿的长短不变，只改粗细和宽窄，所有动画、IK、挂在身上的东西都照样能用）
 export function createCharacter(opts = {}) {
@@ -528,7 +529,8 @@ export function createCharacter(opts = {}) {
   const HIPS_Y = 0.92;
   const hips = grp('hips', root, 0, HIPS_Y, 0);
   // 胯部（牛仔裤）：上宽下收，接大腿
-  const pelvisPts = [[0.0, -0.1], [0.07, -0.098], [0.11, -0.085], [0.135, -0.06], [0.145, -0.02], [0.148, 0.02], [0.146, 0.07]].map(([r, y]) => new THREE.Vector2(r, y));
+  // 大裤衩比牛仔裤松、前后更厚，上沿要收在裤腰底下（不然从背后看会从裤腰上面露出来一截）
+  const pelvisPts = [[0.0, -0.1], [0.07, -0.098], [0.11, -0.085], [0.135, -0.06], [0.145, -0.02], [0.148, 0.02], [0.146, shorts ? 0.034 : 0.07]].map(([r, y]) => new THREE.Vector2(r, y));
   // 大裤衩松松垮垮，比牛仔裤宽一圈
   addMesh(new THREE.LatheGeometry(pelvisPts, 24), jeansMat, hips, 0, 0, 0, 0, 0, 0, (shorts ? 1.05 : 1) * B.hip, 1, (shorts ? 0.68 : 0.62) * B.hip);
 
@@ -567,7 +569,7 @@ export function createCharacter(opts = {}) {
       const x = tp.getX(i), h = tp.getY(i), z = tp.getZ(i);
       if (z <= 0) continue;
       const c = z / Math.max(1e-4, Math.hypot(x, z));
-      tp.setZ(i, z + B.belly * gauss(h, 0.15, 0.08) * c * c / DZ);
+      tp.setZ(i, z + B.belly * gauss(h, 0.15, 0.08) * smoothstep(0.02, 0.09, h) * c * c / DZ); // 裤腰以下不鼓，免得肚皮从裤腰底下顶出来
     }
     torsoGeo.computeVertexNormals();
   }
@@ -579,7 +581,7 @@ export function createCharacter(opts = {}) {
       addMesh(new THREE.TorusGeometry(0.058, 0.007, 6, 28), sleeveMat, torso, 0, 0.552, 0.006, Math.PI / 2 - 0.12, 0, 0, 1, 0.9, 1);
     } else if (shorts) {
       // 大裤衩的松紧裤腰（手插在里面，撑得鼓鼓的）+ 前面垂下来两根白抽绳
-      addMesh(new THREE.TorusGeometry(0.161 * B.waist, 0.02, 8, 40), jeansMat, torso, 0, 0.03, 0, Math.PI / 2, 0, 0, 1, DZ + 0.05, 1);
+      addMesh(new THREE.TorusGeometry(0.161 * B.waist, 0.023, 8, 40), jeansMat, torso, 0, 0.021, 0, Math.PI / 2, 0, 0, 1, DZ + 0.05, 1); // 往下盖住躯干的下沿
       const cord = new THREE.MeshStandardMaterial({ color: '#eceae4', roughness: 0.8 });
       const fz = 0.161 * B.waist * (DZ + 0.05) + 0.012;
       addMesh(new THREE.SphereGeometry(0.009, 10, 8), cord, torso, 0, 0.024, fz);
@@ -587,15 +589,15 @@ export function createCharacter(opts = {}) {
         const cp = [new THREE.Vector3(0, 0.024, fz), new THREE.Vector3(s2 * 0.01, -0.01, fz + 0.004), new THREE.Vector3(s2 * 0.014, -0.05 - (s2 > 0 ? 0.012 : 0), fz + 0.002)];
         addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 12, 0.0032, 5), cord, torso);
       }
-      // 两侧的斜插袋：兜口一道深色的缝线，从裤腰斜着往下、往里走（手就是从这儿插进去的）
-      const seam = new THREE.MeshStandardMaterial({ color: '#3d6f86', roughness: 0.9 });
-      const pr = (y) => pelvisPts.reduce((r, v, i, a) => (i && y >= a[i - 1].y && y <= v.y ? lerp(a[i - 1].x, v.x, (y - a[i - 1].y) / (v.y - a[i - 1].y)) : r), 0);
-      for (const s2 of [-1, 1]) {
-        const cp = [0.028, 0.0, -0.035, -0.07].map((y, i) => {
-          const rx = pr(y) * 1.05 * B.hip, rz = pr(y) * 0.68 * B.hip, x = Math.min(lerp(0.145, 0.118, i / 3) * B.hip, rx * 0.93);
-          return new THREE.Vector3(s2 * x, y, rz * Math.sqrt(1 - (x / rx) ** 2) + 0.004);
-        });
-        addMesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(cp), 12, 0.0028, 5), seam, hips);
+      if (O.pose === 'crotch') {
+        // 两只手插在裤裆里：裤腰前面被手腕撑出来一截，裤裆前面被两只手撑出两个鼓包（手抽出来就瘪下去，见 update）
+        for (const s2 of [-1, 1]) {
+          const side = s2 > 0 ? 'L' : 'R', bumps = [];
+          bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, torso, s2 * 0.058 * B.waist, 0.03, 0.106 * B.waist, 0, s2 * 0.3, 0, 0.034, 0.024, 0.02));
+          bumps.push(addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, hips, s2 * 0.038 * B.hip, -0.04, 0.083 * B.hip, -0.45, 0, s2 * 0.3, 0.03, 0.058, 0.02));
+          for (const b of bumps) b.userData.base = b.scale.clone();
+          J[`tuck${side}`] = bumps;
+        }
       }
     } else {
       // 光膀子：只剩裤腰
@@ -720,7 +722,7 @@ export function createCharacter(opts = {}) {
       addMesh(new THREE.CylinderGeometry(0.006, 0.006, 0.004, 10), btnMat, el, s * 0.035 * A, -0.225, 0.036 * A, Math.PI / 2, 0, 0);
     }
     const wr = grp(`wr${side}`, el, 0, -0.255, 0);
-    addMesh(new THREE.CylinderGeometry(0.03 * wa, 0.033 * wa, 0.04, 12), skinMat, wr, 0, 0.01, 0, 0, 0, 0, 1, 1, 0.8);
+    J[`wrist${side}`] = addMesh(new THREE.CylinderGeometry(0.03 * wa, 0.033 * wa, 0.04, 12), skinMat, wr, 0, 0.01, 0, 0, 0, 0, 1, 1, 0.8);
     // 手掌朝向大腿（自然下垂）；胳膊细的人手也小一号
     const hand = new THREE.Group(); hand.rotation.y = -s * Math.PI / 2; hand.scale.setScalar(lerp(1, A, 0.4)); wr.add(hand); J[`hand${side}`] = hand;
     addMesh(new RoundedBoxGeometry(0.066, 0.08, 0.028, 2, 0.012), skinMat, hand, 0, -0.045, 0.002);
@@ -762,12 +764,6 @@ export function createCharacter(opts = {}) {
     addMesh(new THREE.CylinderGeometry(0.086 * P, 0.094 * P, 0.33, 18, 1, true), jeansMat, hp, s * 0.008, -0.165, 0.004);
     addMesh(new THREE.TorusGeometry(0.093 * P, 0.0055, 5, 22), jeansMat, hp, s * 0.008, -0.33, 0.004, Math.PI / 2);
     addMesh(new THREE.CylinderGeometry(0.07 * L, 0.054 * L, 0.4, 14), skinMat, hp, 0, -0.2, 0);
-    if (O.pose === 'pockets') {
-      // 手揣在兜里：裤子前面被手撑出来的一个鼓包（跟着大腿走；手抽出来就瘪下去，见 update）
-      const bump = addMesh(new THREE.SphereGeometry(1, 14, 10), jeansMat, hp, s * 0.044, -0.09, 0.066 * P, -0.2, s * 0.45, 0, 0.04, 0.062, 0.029);
-      bump.userData.base = bump.scale.clone();
-      J[`pocket${side}`] = bump;
-    }
     const kn = grp(`kn${side}`, hp, 0, -0.41, 0);
     addMesh(new THREE.SphereGeometry(0.052 * L, 14, 10), skinMat, kn, 0, 0.0, 0.004, 0, 0, 0, 1, 1.05, 1);
     addMesh(calfGeo, skinMat, kn, 0, 0, -0.004, 0, 0, 0, L, 1, L);
@@ -1013,29 +1009,26 @@ export function createCharacter(opts = {}) {
       if (j === 'fingL' || j === 'fingR') obj.rotation.set(-p.x, p.y, p.z);
       else obj.rotation.set(p.x, p.y, p.z);
     }
-    // 两只手插在裤腰里（jigo）：站着、走路时一直插着，跑起来、蹲下、坐下、伸手拿东西 / 拿手电、失重、欢呼、立正时才抽出来。
-    // 手心的位置比裤腰表面再往里一点，整只手就"揣"进了裤兜
-    if (O.pose === 'pockets') {
+    // 两只手插进裤裆（jigo，照片上那个姿势）：站着、走路时一直插着，跑起来、蹲下、坐下、伸手拿东西 / 拿手电、失重、欢呼、立正时才抽出来
+    if (O.pose === 'crotch') {
       const base = (1 - W.run) * (1 - W.crouch) * (1 - W.sit) * (1 - W.sleep) * (1 - W.float) * (1 - W.cheer) * (1 - W.stretch) * (1 - W.attention);
+      _pq.setFromEuler(J.torso.rotation).invert(); // 胯部坐标 → 躯干坐标
       for (const side of ['L', 'R']) {
         const w = base * (side === 'R' ? (1 - W.reach) * (1 - W.hold) : 1);
-        const bump = J[`pocket${side}`];
-        if (bump) { const k = smoothstep(0.35, 0.9, w); bump.scale.copy(bump.userData.base).multiplyScalar(Math.max(0.001, k)); bump.visible = k > 0.01; }
-        // 手整只揣在兜里，外面只看得见手腕和裤子上撑起来的鼓包；手快抽出来了才露出来
-        J[`hand${side}`].visible = w < 0.75;
+        const k = smoothstep(0.35, 0.9, w);
+        for (const b of J[`tuck${side}`] || []) { b.scale.copy(b.userData.base).multiplyScalar(Math.max(0.001, k)); b.visible = k > 0.01; }
+        // 手（连手腕那一小截）整只插在裤子里：外面只看得见小臂钻进裤腰、裤子上撑起来的鼓包；手快抽出来了才露出来
+        J[`hand${side}`].visible = J[`wrist${side}`].visible = w < 0.75;
         if (w < 0.001) continue;
         const sd = side === 'L' ? 1 : -1;
-        // 手心在裤兜里（胯部坐标）；走路时手跟着大腿一起前后摆（兜在大腿上），再换算到躯干坐标系里解 IK
-        const hp = J[`hip${side}`];
-        _pk.set(sd * 0.098 * B.hip, -0.085 + 0.003 * Math.sin(t * 1.7), 0.075 * B.hip).sub(hp.position)
-          .applyAxisAngle(_ax.set(1, 0, 0), hp.rotation.x * 0.8).add(hp.position)
-          .applyQuaternion(_pq.setFromEuler(J.torso.rotation).invert());
-        solveArmIK(J[`sh${side}`], J[`el${side}`], _pk, side === 'R' ? POCKET_POLE_R : POCKET_POLE_L, w);
-        // 手腕一折：手掌顺着大腿往下、稍微往里往后插进兜里（不折的话手指头顺着小臂从裤裆前面戳出来）
-        _wd.set(-sd * 0.15, -1, -0.35).normalize().applyAxisAngle(_ax.set(1, 0, 0), hp.rotation.x * 0.8).applyQuaternion(_pq);
+        // IK 目标是"手腕不折时"手心的位置（胯部坐标）：解出来手腕正好卡在裤腰正前方
+        _pk.set(sd * 0.01, -0.015 + 0.003 * Math.sin(t * 1.7), 0.109 * B.waist).applyQuaternion(_pq);
+        solveArmIK(J[`sh${side}`], J[`el${side}`], _pk, side === 'R' ? TUCK_POLE_R : TUCK_POLE_L, w);
+        // 手腕一折：手掌往下、往中间、往里插进裤裆（不折的话手顺着小臂从裤腰上面伸出去）
+        _wd.set(-sd * 0.2, -1, -0.45).normalize().applyQuaternion(_pq);
         _wq.copy(J[`sh${side}`].quaternion).multiply(J[`el${side}`].quaternion).invert().multiply(_iq.setFromUnitVectors(IK_DOWN, _wd));
         J[`wr${side}`].quaternion.slerp(_wq, w);
-        J[`fing${side}`].rotation.x = lerp(J[`fing${side}`].rotation.x, -0.2, w);
+        J[`fing${side}`].rotation.x = lerp(J[`fing${side}`].rotation.x, -0.25, w);
       }
     }
     // 手臂 IK：prm.ikR / prm.ikL = { p: 躯干坐标系里的手心位置, pole, w }
@@ -1082,7 +1075,7 @@ export function createCharacter(opts = {}) {
   // 后来挂到关节上的东西（不是人物自己的零件）：[关节, 物体]
   const attachments = () => {
     const out = [];
-    for (const [name, j] of Object.entries(J)) for (const c of j.children) if (!own.has(c)) out.push([name, c]);
+    for (const [name, j] of Object.entries(J)) if (j.isObject3D) for (const c of j.children) if (!own.has(c)) out.push([name, c]);
     for (const c of helmetSlot.children) if (!own.has(c)) out.push(['helmetSlot', c]);
     return out;
   };

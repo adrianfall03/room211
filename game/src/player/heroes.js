@@ -9,14 +9,14 @@ export const HEROES = [
   },
   {
     // 照着一张课本上的涂鸦和一张宿舍里的照片捏的：
-    //   涂鸦：头发往一边堆起一大蓬，眯着眼张大嘴笑，手插在画满星星的大裤衩里，嘴边写着 "Hee-Haw"；
+    //   涂鸦：头发往一边堆起一大蓬，眯着眼张大嘴笑，两只手插在画满星星的大裤衩里，嘴边写着 "Hee-Haw"；
     //   照片：光着膀子光着脚站在宿舍里，皮肤晒得偏黑（小麦色），稍微有点胖、有点小肚子，
-    //         蓝白扎染的大裤衩松松垮垮，两只手插在裤兜里
+    //         蓝白扎染的大裤衩松松垮垮，两只手从裤腰前面插进裤裆里
     key: 'jigo',
     name: 'jigo',
-    desc: '小麦色皮肤、稍微有点胖；光膀子光脚、蓝白扎染大裤衩，两只手插在裤兜里，一笑就 Hee-Haw',
+    desc: '小麦色皮肤、稍微有点胖；光膀子光脚、蓝白扎染大裤衩，两只手插在裤裆里，一笑就 Hee-Haw',
     look: {
-      outfit: 'shorts', pose: 'pockets', bubble: 'Hee-Haw!',
+      outfit: 'shorts', pose: 'crotch', bubble: 'Hee-Haw!',
       skin: [200, 148, 112], skinColor: '#c79270', hair: [18, 15, 14], hairColor: '#120e0c', brow: '#15100d',
       hairStyle: 'fringe',
       // 脸：比 bingo 圆一点，腮帮子有肉，下巴不尖
