@@ -73,6 +73,7 @@ export const HAIR = {
   fringe: { cap: [1.1, 0.18, 0.26], thick: 0.03, edge: 0.002, front: 0.016, ripple: 0.002, n: 280, len: [0.017, 0.01], rad: [0.013, 0.007], lift: [0.02, 0.05], sweep: [0.85, -0.2, 0.6], side: 0.12, jit: [0.1, 0.06], buzz: 0.85, burn: 0.3, ride: 0.8, heap: 0.016, heapAt: -0.75, hat: 1.1, seed: 41 },
   // neptune（照片上刚把一罐水浇在头上）：短短的刺猬头，湿了以后一撮一撮往上支棱，乱七八糟；两侧推短
   spiky: { cap: [1.0, 0.2, 0.26], thick: 0.016, edge: 0, front: 0.005, ripple: 0.003, n: 480, len: [0.014, 0.013], rad: [0.0072, 0.005], lift: [0.5, 0.3], sweep: [0, 1, 0.35], side: 0.35, jit: [0.75, 0.55], buzz: 0.9, ride: 0.5, hat: 1.05, seed: 43 },
+  wetCrop: { cap: [0.94, 0.31, 0.3], thick: 0.006, edge: 0, front: 0.002, ripple: 0.0015, n: 850, len: [0.006, 0.017], rad: [0.0013, 0.0018], lift: [0.66, 0.16], sweep: [0.15, 1, -0.15], side: 0.18, jit: [0.65, 0.42], buzz: 0.8, burn: 0.35, ride: 0.25, hat: 1, seed: 43 },
 };
 
 // 头发发型分界：返回某方位角（0=正前）处，头发盖到的最低极角
@@ -179,10 +180,28 @@ function buildGlasses({ color = '#161412', rim = 0.003, top = rim, w = 0.045, h 
 }
 
 // ---------------- 面部贴图 ----------------
-function faceMeta(yTop, yBot, F = FACE) {
+function faceMeta(yTop, yBot, F = FACE, precise = false) {
   const W = 1024, H = 512;
   const rxAt = (y) => HX * (1 - F.jaw * smoothstep(-0.05, -0.95, y / HY));
+  // Invert the actual sculpted surface at this latitude. A constant equatorial
+  // radius pinches features toward the chin and places the mouth off the face.
+  const surface = new THREE.Vector3(), direction = new THREE.Vector3();
   const X = (s, y) => {
+    if (precise) {
+      let lo = 0, hi = Math.PI / 2;
+      for (let i = 0; i < 20; i++) {
+        const phi = (lo + hi) / 2;
+        let top = 0, bottom = Math.PI;
+        for (let j = 0; j < 20; j++) {
+          const theta = (top + bottom) / 2;
+          direction.set(Math.sin(phi) * Math.sin(theta), Math.cos(theta), Math.cos(phi) * Math.sin(theta));
+          headShape(direction, surface, F);
+          if (surface.y > y) top = theta; else bottom = theta;
+        }
+        if (surface.x < Math.abs(s)) lo = phi; else hi = phi;
+      }
+      return W / 2 + Math.sign(s) * ((lo + hi) / 2) / (Math.PI * 2) * W;
+    }
     const rx = rxAt(y);
     const zf = HZ * Math.sqrt(Math.max(0.04, 1 - (s / rx) ** 2));
     return W / 2 + (Math.atan2(s, zf) / (Math.PI * 2)) * W;
@@ -256,7 +275,7 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   const ctx = c.getContext('2d');
   ctx.drawImage(base, 0, 0);
   // 半写实风格：五官整体放大一点，远处也能看清表情
-  const FS = 1.18, FC = 0.004;
+  const FS = O.featureScale ?? 1.18, FC = 0.004;
   const P = (s, y) => [X(s * FS, (y - FC) * FS + FC), Y((y - FC) * FS + FC)];
   const path = (pts, close = false) => {
     ctx.beginPath();
@@ -269,7 +288,9 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
   const browLift = brows === 'raised' ? 0.008 : brows === 'relaxed' ? -0.002 : brows === 'worried' ? 0.002 : 0;
   // 眉头（靠鼻梁那一端）往上挑：着急、难过的时候
   const browTilt = brows === 'worried' ? 0.009 : 0;
-  const BT = (x, y) => [x, y + browTilt * (1 - clamp((Math.abs(x) - 0.011) / 0.04, 0, 1))];
+  const BT = (x, y) => [x * (O.browWidth ?? 1),
+    0.029 + (y - 0.029) * (O.browThickness ?? 1) + (O.browY ?? 0)
+    + browTilt * (1 - clamp((Math.abs(x) - 0.011) / 0.04, 0, 1))];
   for (const s of [-1, 1]) {
     const y0 = 0.029 + browLift;
     ctx.fillStyle = O.brow;
@@ -459,6 +480,33 @@ function paintFeatures(base, meta, { eyes = 'open', mouth = 'grin', brows = 'nor
     ctx.beginPath(); ctx.moveTo(...P(-mw, my + 0.005)); ctx.quadraticCurveTo(...P(-mw * 0.95, my - 0.031), ...P(0, my - 0.034)); ctx.quadraticCurveTo(...P(mw * 0.95, my - 0.031), ...P(mw, my + 0.005)); ctx.stroke();
     ctx.fillStyle = 'rgba(120,60,50,0.45)';
     for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(...P(s * (mw + 0.003), my + 0.006), 3.2, 0, Math.PI * 2); ctx.fill(); }
+  } else if (mouth === 'wince') {
+    // Photo reference: broad uneven opening, raised centre of the upper lip,
+    // downturned corners and a visible lower lip; leave room for the chin.
+    const outline = () => {
+      ctx.beginPath(); ctx.moveTo(...P(-0.033, -0.06));
+      ctx.bezierCurveTo(...P(-0.026, -0.047), ...P(-0.012, -0.043), ...P(0.002, -0.048));
+      ctx.bezierCurveTo(...P(0.018, -0.05), ...P(0.027, -0.047), ...P(0.032, -0.061));
+      ctx.bezierCurveTo(...P(0.029, -0.076), ...P(0.014, -0.077), ...P(0, -0.073));
+      ctx.bezierCurveTo(...P(-0.014, -0.072), ...P(-0.029, -0.083), ...P(-0.033, -0.06));
+      ctx.closePath();
+    };
+    ctx.fillStyle = '#321d1b'; outline(); ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.fillStyle = '#e8e2d6';
+    ctx.beginPath(); curve([-0.031, -0.048], [0, -0.037], [0.033, -0.05]);
+    ctx.lineTo(...P(0.026, -0.058)); ctx.quadraticCurveTo(...P(0, -0.052), ...P(-0.03, -0.057)); ctx.fill();
+    ctx.strokeStyle = 'rgba(116,105,96,0.32)'; ctx.lineWidth = 0.8;
+    for (let i = -3; i <= 3; i++) { ctx.beginPath(); ctx.moveTo(...P(i * 0.007, -0.047)); ctx.lineTo(...P(i * 0.007, -0.056)); ctx.stroke(); }
+    ctx.strokeStyle = '#dad0c2'; ctx.lineWidth = 3;
+    ctx.beginPath(); curve([-0.023, -0.072], [0, -0.065], [0.024, -0.072]); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = '#9c736a'; ctx.lineWidth = 2.8; outline(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(103,77,66,0.35)'; ctx.lineWidth = 1.5;
+    for (const side of [-1, 1]) {
+      ctx.beginPath(); curve([side * 0.014, -0.031], [side * 0.026, -0.041], [side * 0.035, -0.067]); ctx.stroke();
+    }
+    ctx.beginPath(); curve([-0.018, -0.086], [0, -0.081], [0.019, -0.085]); ctx.stroke();
   } else if (mouth === 'cry') {
     // 哇地一声哭出来（neptune）：嘴张成一个下宽上窄的大口子，嘴角往下耷拉，露出上排牙和舌头，下巴皱成一团
     ctx.strokeStyle = 'rgba(130,75,62,0.5)'; ctx.lineWidth = 2.8; ctx.lineCap = 'round';
@@ -537,6 +585,7 @@ function solveArmIK(sh, el, target, pole, w) {
 //   bubble 咧嘴大笑时头顶冒出来的那句话（'Hee-Haw!'）、face 脸型（见 FACE）、
 //   build 身材（见下面的 B；关节的位置、胳膊腿的长短不变，只改粗细和宽窄，所有动画、IK、挂在身上的东西都照样能用）、
 //   pants 运动裤的颜色（不给就是黑色牛仔裤）、watch 左手腕上一块黑色电子表、hairGloss 头发的粗糙度（湿头发亮一点）、
+//   preciseFace 按头部曲面映射五官；featureScale、browWidth、browThickness、browY 微调五官；
 //   can 左手攥着一罐饮料；signature 'pour'：咧嘴笑（grin）的时候把那罐水举过头顶浇下去（neptune 那张照片）
 export function createCharacter(opts = {}) {
   const O = { skin: [212, 160, 126], skinColor: '#d09a7a', hair: [34, 30, 30], hairColor: '#16110f', brow: '#1a1411', outfit: 'denim', mustache: false, name: 'SMITH', ...opts };
@@ -737,7 +786,7 @@ export function createCharacter(opts = {}) {
   const hs = O.headScale || [1, 1, 1];
   head.scale.set(1.12 * hs[0], 1.12 * hs[1], 1.12 * hs[2]);
   const { geo: headGeo, yTop, yBot } = buildHeadGeometry(F);
-  const meta = faceMeta(yTop, yBot, F);
+  const meta = faceMeta(yTop, yBot, F, O.preciseFace);
   const skinBase = paintSkinBase(meta, O);
   const faceCache = new Map();
   const faceTex = (key, spec) => {
@@ -950,7 +999,7 @@ export function createCharacter(opts = {}) {
     if ((bubble || pour) && name === 'grin' && was !== 'grin' && st.t - st.laughAt > (pour ? 7 : 5) && (!api.onLaugh || api.onLaugh() !== false)) {
       st.laughAt = st.t;
       if (bubble) { st.bubbleT = 1.8; bubble.visible = true; }
-      if (pour) st.pourT = 0;
+      if (pour) { st.pourT = 0; st.exprHold = Math.max(st.exprHold, 3.6); }
     }
   }
   function blinkTex(on) {
@@ -1120,7 +1169,7 @@ export function createCharacter(opts = {}) {
     if (can && st.pourT > 0.5) {
       const sob = (1 - smoothstep(2.8, 3.4, st.pourT)) * (0.6 + 0.4 * Math.sin(t * 2.3));
       addp('torso', 0.018 * Math.sin(t * 15) * sob, 0, 0.01 * Math.sin(t * 7.5) * sob);
-      addp('head', -0.06 * sob + 0.03 * Math.sin(t * 15 + 1) * sob);
+      addp('head', -0.06 * sob + 0.03 * Math.sin(t * 15 + 1) * sob, 0, (O.pourHeadTilt || 0) * sob);
     }
     // 应用
     J.hips.position.y = hipsY;

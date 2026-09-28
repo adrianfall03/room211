@@ -37,17 +37,19 @@ export const HEROES = [
     laugh: 'sob', // 招牌动作的声音（见 game._onHeroLaugh）
     look: {
       outfit: 'sport', print: 'trident', pants: '#5d6068', watch: true, can: true, signature: 'pour',
-      skin: [218, 168, 138], skinColor: '#d6a386', hair: [22, 19, 18], hairColor: '#141011', brow: '#17110e',
-      hairStyle: 'spiky', hairGloss: 0.32, // 刚浇过水，头发湿亮
-      // 脸：比 bingo 瘦长一点，下巴窄
-      headScale: [0.97, 1.02, 1],
-      face: { jaw: 0.33, chin: 0.13, drop: 0.007, cheek: 0.004, long: 0.03, full: 0 },
+      skin: [193, 169, 151], skinColor: '#c1a997', hair: [22, 19, 18], hairColor: '#141011', brow: '#17110e',
+      hairStyle: 'wetCrop', hairGloss: 0.64, // 刚浇过水，头发湿亮
+      // 单张黑白照片的近似：颞部较宽、下颌收窄但不尖；颜色和侧脸无法由参考确定。
+      headScale: [1.04, 1.02, 1.02],
+      preciseFace: true, featureScale: 1, pourHeadTilt: 0.13,
+      browWidth: 0.88, browThickness: 0.48, browY: -0.006,
+      face: { jaw: 0.16, chin: 0.06, drop: 0.003, cheek: 0.002, long: 0.01, full: 0 },
       // 身材：比 bingo 单薄一圈
-      build: { shoulder: 0.96, chest: 0.94, waist: 0.92, hip: 0.95, arm: 0.92, leg: 0.93, neck: 0.01, neckR: 0.95 },
-      // 平时眉头也有点往上挑（一副要哭不哭的样子）；"笑"起来就是照片上那样：眼睛挤成一条缝、嘴张得老大，两道眼泪
+      build: { shoulder: 0.96, chest: 0.94, waist: 0.92, hip: 0.95, arm: 0.92, leg: 0.93, neck: 0.035, neckR: 0.86 },
+      // 招牌表情：挤眼、横向张嘴、嘴角下拉；照片没有清晰的泪痕，不画卡通眼泪。
       expr: {
-        neutral: { brows: 'worried' },
-        grin: { eyes: 'squeeze', mouth: 'cry', brows: 'worried', tears: true },
+        neutral: { eyes: 'squint', mouth: 'neutral', brows: 'normal' },
+        grin: { eyes: 'squeeze', mouth: 'wince', brows: 'worried' },
       },
     },
   },
