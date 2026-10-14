@@ -120,6 +120,8 @@ export const GRADES = {
   jungle: { saturation: 0.86, contrast: 1.12, brightness: -0.01, tint: [1, 1, 1], sepia: 0, vignette: 0.58, grain: 0.055, scratch: 0, aberration: 0.0012, lowTint: [0.88, 1.03, 1.0], highTint: [1.08, 1.0, 0.86] },
   // 冰封 211：暴风雪夜——暗部压成冷蓝、亮部（炉火、熔炉的光）偏橘，压饱和，胶片颗粒 + 重暗角（《冰汽时代》那种冷暖对撞）
   frost: { saturation: 0.8, contrast: 1.13, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.6, grain: 0.05, scratch: 0, aberration: 0.0013, lowTint: [0.85, 0.96, 1.12], highTint: [1.07, 1.0, 0.92] },
+  // 地堡：火光和月光——暗部偏冷的蓝灰（月光）、亮部偏暖橘（炉火、火把、蜡烛），压一点饱和，颗粒 + 重暗角（《天国：拯救》夜里那种调子）
+  castle: { saturation: 0.84, contrast: 1.14, brightness: -0.01, tint: [1, 1, 1], sepia: 0.04, vignette: 0.62, grain: 0.05, scratch: 0, aberration: 0.0012, lowTint: [0.86, 0.95, 1.1], highTint: [1.1, 0.98, 0.84] },
   // 太空舱：写实电影感——暗部偏青、亮部偏暖，压一点饱和，胶片颗粒 + 暗角 + 一丝镜头色散
   space: { saturation: 0.88, contrast: 1.1, brightness: -0.012, tint: [1, 1, 1], sepia: 0, vignette: 0.52, grain: 0.05, scratch: 0, aberration: 0.0014, lowTint: [0.9, 1.02, 1.05], highTint: [1.06, 1.0, 0.9] },
   // 书架背后"那天晚上的 211"：深夜里只有屏幕和台灯——暗部偏冷蓝、亮部偏暖，胶片颗粒，和太空舱那边是一套调子
@@ -137,6 +139,7 @@ export const CSS_GRADES = {
   metro: 'saturate(0.72) contrast(1.16) brightness(0.94) sepia(0.12)',
   jungle: 'saturate(0.86) contrast(1.12) brightness(0.96)',
   frost: 'saturate(0.78) contrast(1.13) brightness(0.95) hue-rotate(-6deg)',
+  castle: 'saturate(0.84) contrast(1.14) brightness(0.95) sepia(0.08)',
   space: 'saturate(0.88) contrast(1.1) brightness(0.97)',
   past: 'saturate(0.9) contrast(1.1) brightness(0.97)',
   finale: 'saturate(0.92) contrast(1.08)',

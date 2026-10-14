@@ -115,6 +115,12 @@ export class Audio {
       this.tone({ f: 180 * p, f2: 120, dur: 0.12, gain: run ? 0.12 : 0.08, type: 'triangle', rev: false });
       return;
     }
+    if (this.stepKind === 'stone') {
+      // 地堡的石板地：一声短而硬的"嗒"，拱顶里带一点回声
+      this.noise({ dur: 0.05, gain: run ? 0.2 : 0.13, type: 'bandpass', freq: 1700 * p, Q: 1.4 });
+      this.tone({ f: 110 * p, f2: 70, dur: 0.08, gain: run ? 0.17 : 0.11, type: 'sine', rev: false });
+      return;
+    }
     if (this.stepKind === 'grit') {
       for (let i = 0; i < 3; i++) this.noise({ dur: 0.04, gain: (run ? 0.14 : 0.09) * (1 - i * 0.25), type: 'highpass', freq: 2600 + Math.random() * 1800, delay: i * 0.018, rev: false });
       this.tone({ f: 90 * p, f2: 55, dur: 0.08, gain: run ? 0.16 : 0.1, type: 'sine', rev: false });
@@ -656,6 +662,7 @@ export class Audio {
     if (theme === 'metro') return this._musicMetro();
     if (theme === 'jungle') return this._musicJungle();
     if (theme === 'frost') return this._musicFrost();
+    if (theme === 'castle') return this._musicCastle();
     if (theme === 'space') return this._musicSpace();
     if (theme === 'finale') return this._musicFinale();
     const chords = [[220, 261.6, 329.6], [196, 246.9, 293.7], [174.6, 220, 261.6], [196, 233.1, 293.7]];
@@ -998,6 +1005,124 @@ export class Audio {
   startRain(gain = 1) {
     this.startLoop('rain', { type: 'bandpass', freq: 2400, Q: 0.35, gain: 0.07 * gain, brown: false });
     this.startLoop('rainLow', { type: 'lowpass', freq: 420, Q: 0.5, gain: 0.1 * gain, brown: true });
+  }
+  // ----- 第七章：地堡 211（1403 年的波希米亚）-----
+  // 狗叫："汪、汪"
+  dogBark(p = 1) {
+    for (const d of [0, 0.24]) {
+      this.noise({ dur: 0.12, gain: 0.32, type: 'bandpass', freq: 900 * p, Q: 1.2, delay: d });
+      this.tone({ f: 430 * p, f2: 250 * p, dur: 0.13, type: 'sawtooth', gain: 0.055, delay: d });
+      this.tone({ f: 860 * p, f2: 480 * p, dur: 0.1, type: 'square', gain: 0.018, delay: d });
+    }
+  }
+  // 狗哼唧："嗯——嗯"
+  dogWhine(k = 1) {
+    this.tone({ f: 900, f2: 1250, dur: 0.35, type: 'sine', gain: 0.035 * k });
+    this.tone({ f: 1150, f2: 820, dur: 0.45, type: 'sine', gain: 0.03 * k, delay: 0.38 });
+    this.noise({ dur: 0.3, gain: 0.03 * k, type: 'highpass', freq: 3000, delay: 0.1 });
+  }
+  // 狗吃东西：吧唧吧唧
+  chomp() { for (let i = 0; i < 6; i++) { this.noise({ dur: 0.06, gain: 0.22, type: 'lowpass', freq: 900 + Math.random() * 500, delay: i * 0.19 }); this.noise({ dur: 0.03, gain: 0.08, type: 'bandpass', freq: 2400, Q: 2, delay: i * 0.19 + 0.04 }); } }
+  // 狗钻在床底下翻东西：扒拉、嗅、稻草沙沙响
+  dogRummage(sec = 2) {
+    for (let t = 0; t < sec; t += 0.09 + Math.random() * 0.08) this.noise({ dur: 0.05, gain: 0.09, type: 'bandpass', freq: 1800 + Math.random() * 1600, Q: 1.5, delay: t });
+    for (let t = 0.2; t < sec; t += 0.55) { this.noise({ dur: 0.07, gain: 0.08, type: 'highpass', freq: 2600, delay: t }); this.noise({ dur: 0.07, gain: 0.08, type: 'highpass', freq: 2600, delay: t + 0.12 }); }
+  }
+  // 远处修道院的钟：低沉、拖着长长的余音
+  churchBell(n = 3) {
+    for (let i = 0; i < n; i++) {
+      const d = i * 1.7;
+      for (const [m, g, len] of [[1, 0.06, 4.2], [2.0, 0.025, 3], [2.4, 0.02, 2.6], [3.0, 0.014, 2], [4.2, 0.008, 1.4]]) this.tone({ f: 174.6 * m, dur: len, type: 'sine', gain: g, delay: d, attack: 0.004 });
+      this.noise({ dur: 0.08, gain: 0.05, type: 'bandpass', freq: 1200, Q: 3, delay: d });
+    }
+  }
+  // 库曼人的号角：两声又低又长的"呜——"，第二声高一点
+  warHorn() {
+    const c = this.ctx; if (!c) return;
+    for (const [d, f, len] of [[0, 98, 2.4], [2.7, 110, 3.0]]) {
+      const t0 = this.t + d, lp = c.createBiquadFilter(), g = c.createGain();
+      lp.type = 'lowpass'; lp.frequency.setValueAtTime(300, t0); lp.frequency.linearRampToValueAtTime(900, t0 + 0.5); lp.frequency.linearRampToValueAtTime(500, t0 + len);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.07, t0 + 0.35); g.gain.setValueAtTime(0.07, t0 + len - 0.5); g.gain.linearRampToValueAtTime(0.0001, t0 + len);
+      for (const [m, det] of [[1, -5], [1, 6], [1.5, 0]]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.setValueAtTime(f * m * 0.96, t0); o.frequency.linearRampToValueAtTime(f * m, t0 + 0.4); o.detune.value = det; o.connect(lp); o.start(t0); o.stop(t0 + len + 0.1); }
+      lp.connect(g); g.connect(this.reverb); this._out(g);
+    }
+  }
+  // 城墙上远远的一片喊声
+  shouts(sec = 3) {
+    this.noise({ dur: sec, gain: 0.1, type: 'bandpass', freq: 650, Q: 0.8, curve: [[0.15, 1], [0.5, 0.6], [0.7, 0.9], [1, 0]] });
+    for (let i = 0; i < 7; i++) { const d = Math.random() * sec * 0.8, f = 180 + Math.random() * 160; this.tone({ f, f2: f * 0.8, dur: 0.4 + Math.random() * 0.4, type: 'sawtooth', gain: 0.008, delay: d }); }
+  }
+  // 水："哗啦"一下（舀水 / 倒进锅里）、倒水、一滴滴
+  splash(k = 1) { this.noise({ dur: 0.6, gain: 0.25 * k, type: 'bandpass', freq: 700, freq2: 2400, Q: 0.8, curve: [[0.08, 1], [1, 0]] }); for (let i = 0; i < 4; i++) this.tone({ f: 500 + Math.random() * 500, f2: 1200, dur: 0.08, type: 'sine', gain: 0.04 * k, delay: 0.1 + i * 0.07 }); }
+  pour() { this.noise({ dur: 1.4, gain: 0.2, type: 'bandpass', freq: 900, freq2: 600, Q: 1.1, curve: [[0.1, 1], [0.8, 0.8], [1, 0]] }); for (let i = 0; i < 9; i++) this.tone({ f: 300 + Math.random() * 400, f2: 700 + Math.random() * 300, dur: 0.07, type: 'sine', gain: 0.035, delay: 0.1 + i * 0.13 }); }
+  drips(sec = 2) { for (let t = 0; t < sec; t += 0.28 + Math.random() * 0.15) this.tone({ f: 1500 + Math.random() * 400, f2: 700, dur: 0.1, type: 'sine', gain: 0.04, delay: t }); }
+  // 磨刀：砂轮"呼呼"转 + 剑刃刮在石头上"嚓——嚓——"
+  grind(sec = 3) {
+    this.noise({ dur: sec, gain: 0.06, type: 'lowpass', freq: 220, brown: true, curve: [[0.1, 1], [0.9, 1], [1, 0]] });
+    for (let t = 0; t < sec - 0.2; t += 0.3) this.noise({ dur: 0.26, gain: 0.12, type: 'bandpass', freq: 2800 + Math.random() * 1500, Q: 2.2, delay: t, curve: [[0.2, 1], [1, 0]] });
+  }
+  // 磨亮的剑"噌"地一声
+  shing() { this.tone({ f: 2600, dur: 1.2, type: 'sine', gain: 0.045 }); this.tone({ f: 3920, dur: 0.8, type: 'sine', gain: 0.025 }); this.noise({ dur: 0.25, gain: 0.12, type: 'highpass', freq: 5000, curve: [[0.05, 1], [1, 0]] }); }
+  // 撬锁：锁芯里"咔、咔"，开锁器断了"啪"，开了"咔哒"
+  lockTick(k = 0.5) { this.noise({ dur: 0.015, gain: 0.08 * k, type: 'highpass', freq: 4000, rev: false }); this.tone({ f: 3000 + Math.random() * 800, dur: 0.02, type: 'square', gain: 0.006 * k, rev: false }); }
+  pickBreak() { this.noise({ dur: 0.04, gain: 0.4, type: 'highpass', freq: 3500, rev: false }); this.tone({ f: 4200, f2: 2600, dur: 0.3, type: 'sine', gain: 0.05 }); this.tone({ f: 5600, dur: 0.15, type: 'sine', gain: 0.02, delay: 0.05 }); }
+  lockOpen() { this.noise({ dur: 0.05, gain: 0.35, type: 'bandpass', freq: 1800, Q: 2, rev: false }); this.tone({ f: 220, f2: 120, dur: 0.15, type: 'square', gain: 0.05 }); this.noise({ dur: 0.04, gain: 0.25, type: 'bandpass', freq: 2600, Q: 3, delay: 0.12, rev: false }); }
+  // 骰子：在皮骰盅里哗啦哗啦摇、撒在木盘上嗒嗒嗒
+  diceShake() { for (let i = 0; i < 12; i++) this.noise({ dur: 0.025, gain: 0.12, type: 'bandpass', freq: 2200 + Math.random() * 1400, Q: 3, delay: i * 0.04 + Math.random() * 0.02 }); }
+  diceClatter() { for (let i = 0; i < 16; i++) { const d = Math.pow(i / 16, 1.6) * 1.0; this.noise({ dur: 0.02, gain: 0.2 * (1 - i / 20), type: 'bandpass', freq: 1600 + Math.random() * 2400, Q: 4, delay: d }); this.tone({ f: 900 + Math.random() * 700, dur: 0.03, type: 'sine', gain: 0.02, delay: d }); } }
+  gulp() { for (let i = 0; i < 3; i++) { this.noise({ dur: 0.12, gain: 0.22, type: 'lowpass', freq: 500, brown: true, delay: i * 0.32 }); this.tone({ f: 220, f2: 140, dur: 0.1, type: 'sine', gain: 0.08, delay: i * 0.32 + 0.03 }); } }
+  // 炼金：研钵"笃"、沙漏翻过来、风箱"呼——"、锅里咕嘟咕嘟、糊了"嗤——"
+  pestle() { this.tone({ f: 280 + Math.random() * 60, f2: 200, dur: 0.08, type: 'triangle', gain: 0.07 }); this.noise({ dur: 0.05, gain: 0.12, type: 'bandpass', freq: 1500, Q: 1.5 }); }
+  hourglass() { this.noise({ dur: 0.05, gain: 0.2, type: 'bandpass', freq: 900, Q: 2 }); this.tone({ f: 330, f2: 250, dur: 0.1, type: 'triangle', gain: 0.05 }); this.noise({ dur: 0.5, gain: 0.03, type: 'highpass', freq: 5000, delay: 0.1 }); }
+  bellows() { this.noise({ dur: 0.36, gain: 0.2, type: 'bandpass', freq: 400, freq2: 1300, Q: 0.8, curve: [[0.3, 1], [1, 0]] }); this.noise({ dur: 0.5, gain: 0.12, type: 'lowpass', freq: 350, brown: true, delay: 0.12, curve: [[0.2, 1], [1, 0]] }); }
+  bubble(sec = 2) { for (let t = 0; t < sec; t += 0.07 + Math.random() * 0.12) this.tone({ f: 200 + Math.random() * 300, f2: 500 + Math.random() * 400, dur: 0.06, type: 'sine', gain: 0.035, delay: t }); }
+  fizzle() { this.noise({ dur: 1.4, gain: 0.25, type: 'highpass', freq: 2000, curve: [[0.05, 1], [0.6, 0.5], [1, 0]] }); this.crackle(1.5); this.tone({ f: 90, f2: 50, dur: 0.6, type: 'sawtooth', gain: 0.04 }); }
+  // 存档：一声清亮的钟 + 一个很轻的大三和弦（D 大调）
+  saveChime() {
+    for (const [f, d] of [[587.3, 0], [740, 0.12], [880, 0.24], [1174.7, 0.36]]) { this.tone({ f, dur: 2.4, type: 'sine', gain: 0.05, delay: d }); this.tone({ f: f * 2.76, dur: 1, type: 'sine', gain: 0.012, delay: d }); }
+    for (const f of [146.8, 220, 293.7]) this.tone({ f, dur: 3, type: 'triangle', gain: 0.03, attack: 0.6, delay: 0.3 });
+  }
+  // 地堡：中世纪的调子——摇弦琴一样的持续低音（D、A 空五度）、一把鲁特琴拨着 D 多利亚调式的小曲，
+  //   隔一段一声低低的合唱；紧张起来是手鼓
+  _lute(f, delay, gain = 0.018) {
+    this.tone({ f, dur: 1.5, type: 'triangle', gain, delay, attack: 0.003, dest: this.mus });
+    this.tone({ f: f * 2, dur: 0.6, type: 'sine', gain: gain * 0.4, delay, attack: 0.003, dest: this.mus });
+    this.tone({ f: f * 3.01, dur: 0.25, type: 'sine', gain: gain * 0.2, delay, attack: 0.002, dest: this.mus });
+  }
+  _musicCastle() {
+    const D4 = 293.7, E4 = 329.6, F4 = 349.2, G4 = 392, A4 = 440, B4 = 493.9, C5 = 523.3, D5 = 587.3, C4 = 261.6;
+    const tunes = [
+      [[D4, 0.4], [F4, 0.4], [G4, 0.4], [A4, 0.8], [A4, 0.4], [C5, 0.4], [A4, 0.4], [G4, 0.8], [F4, 0.4], [G4, 0.4], [F4, 0.4], [E4, 0.4], [D4, 1.6]],
+      [[A4, 0.4], [B4, 0.4], [C5, 0.4], [D5, 0.8], [C5, 0.4], [A4, 0.4], [G4, 0.8], [A4, 0.4], [F4, 0.4], [E4, 0.8], [D4, 1.6]],
+      [[D5, 0.6], [C5, 0.2], [A4, 0.4], [G4, 0.4], [A4, 0.8], [F4, 0.4], [G4, 0.4], [E4, 0.4], [C4, 0.4], [D4, 1.6]],
+    ];
+    const chords = [[73.4, 110, 146.8], [65.4, 98, 130.8], [73.4, 110, 146.8], [58.3, 87.3, 116.5]];
+    let i = 0;
+    const play = () => {
+      const c = this.ctx, t0 = this.t, T = 9.6, ch = chords[i % chords.length];
+      // 摇弦琴的持续低音：两个略微走调的锯齿波，低通慢慢开合，带一点颤
+      for (const f of [ch[0], ch[1]]) {
+        for (const det of [-6, 5]) {
+          const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter(), v = c.createOscillator(), vg = c.createGain();
+          o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det;
+          v.frequency.value = 4.8; vg.gain.value = f * 0.003; v.connect(vg).connect(o.frequency);
+          fl.type = 'lowpass'; fl.Q.value = 1.2;
+          fl.frequency.setValueAtTime(260 + this.tension * 300, t0); fl.frequency.linearRampToValueAtTime(520 + this.tension * 600, t0 + T * 0.5); fl.frequency.linearRampToValueAtTime(260 + this.tension * 250, t0 + T);
+          g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.02, t0 + 2); g.gain.linearRampToValueAtTime(0.0001, t0 + T);
+          o.connect(fl).connect(g).connect(this.mus); g.connect(this.reverb);
+          o.start(t0); v.start(t0); o.stop(t0 + T + 0.1); v.stop(t0 + T + 0.1);
+        }
+      }
+      // 鲁特琴：隔一段弹一句
+      if (i % 2 === 0) { let d = 0.8; for (const [f, len] of tunes[(i / 2) % tunes.length]) { this._lute(f, d, 0.016 + this.tension * 0.006); d += len; } }
+      // 低低的合唱："啊——"
+      if (i % 2 === 1) for (const f of ch.map((x) => x * 2)) for (const det of [-8, 0, 7]) this.tone({ f: f * Math.pow(2, det / 1200), dur: 6, type: 'triangle', gain: 0.007, attack: 2.2, delay: 1, dest: this.mus });
+      // 紧张起来：手鼓
+      if (this.tension > 0.3) for (let n = 0; n < 8; n++) { this.tone({ f: 70, f2: 50, dur: 0.25, type: 'sine', gain: 0.05 * this.tension, delay: n * 1.2, dest: this.mus }); if (n % 2) this.noise({ dur: 0.05, gain: 0.03 * this.tension, type: 'bandpass', freq: 900, Q: 1, delay: n * 1.2 + 0.6, rev: false }); }
+      i++;
+    };
+    play();
+    this._musicTimer = setInterval(play, 9600);
   }
   // 太空：空灵的合成器长音 + 慢慢的琶音（动画里宇宙场景的配乐）
   // 第五章：太空舱 —— 电影配乐式的氛围音：低沉的弦乐铺底、舱里空气循环的底噪、偶尔一声很远的金属回响；越紧张滤波开得越大，还有心跳一样的低音
